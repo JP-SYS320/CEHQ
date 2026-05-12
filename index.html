@@ -455,14 +455,14 @@ grid-template-columns: 1fr 1fr;
   <div class="stat-pill">
     <span>🌑</span>
     <span>Nouv. lune</span>
-    <span class="stat-val">16 mai</span>
-    <span style="font-size:0.55rem;color:var(--muted)">· 4j</span>
+    <span class="stat-val" id="nextNew">—</span>
+    <span style="font-size:0.55rem;color:var(--muted)" id="nextNewDays"></span>
   </div>
   <div class="stat-pill" style="border-left:1px solid var(--border);padding-left:16px">
     <span>🌕</span>
     <span>Pleine lune</span>
-    <span class="stat-val">31 mai</span>
-    <span style="font-size:0.55rem;color:var(--muted)">· 19j</span>
+    <span class="stat-val" id="nextFull">—</span>
+    <span style="font-size:0.55rem;color:var(--muted)" id="nextFullDays"></span>
   </div>
 </div>
 
@@ -479,6 +479,41 @@ grid-template-columns: 1fr 1fr;
 </footer>
 
 <script>
+// ─── Phases lunaires 2026-2027 (dates UTC, source NASA) ──────────────────────
+const MOON_PHASES = {
+  new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
+         '2026-06-15','2026-07-14','2026-08-12','2026-09-11','2026-10-10',
+         '2026-11-09','2026-12-09','2027-01-07','2027-02-06','2027-03-08'],
+  full: ['2026-01-13','2026-02-12','2026-03-13','2026-04-12','2026-05-01',
+         '2026-05-31','2026-06-30','2026-07-29','2026-08-28','2026-09-26',
+         '2026-10-26','2026-11-24','2026-12-24','2027-01-22','2027-02-20'],
+};
+
+const MOIS_FR = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
+
+function nextMoonDate(type) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  for (const dateStr of MOON_PHASES[type]) {
+    const d = new Date(dateStr + 'T12:00:00');
+    if (d >= today) {
+      const diff = Math.round((d - today) / 86400000);
+      const label = `${d.getDate()} ${MOIS_FR[d.getMonth()]}`;
+      return { label, diff };
+    }
+  }
+  return { label: '—', diff: 0 };
+}
+
+function updateMoonDisplay() {
+  const newMoon  = nextMoonDate('new');
+  const fullMoon = nextMoonDate('full');
+  document.getElementById('nextNew').textContent      = newMoon.label;
+  document.getElementById('nextNewDays').textContent  = newMoon.diff === 0 ? '· auj.' : `· ${newMoon.diff}j`;
+  document.getElementById('nextFull').textContent     = fullMoon.label;
+  document.getElementById('nextFullDays').textContent = fullMoon.diff === 0 ? '· auj.' : `· ${fullMoon.diff}j`;
+}
+
 // ─── Station data ───────────────────────────────────────────────────────────
 const STATIONS = [
   { id: '010802', name: 'Bonaventure',       color: '--bonaventure', region: 'gaspesie',     typique: [18, 22, 35, 28, 20, 15, 12] },
@@ -831,6 +866,7 @@ function buildCards() {
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 buildCards();
+updateMoonDisplay();
 // Filtre par défaut : Gaspésie
 filterStations('gaspesie', document.querySelector('.filter-btn'));
 // Auto-load on startup
