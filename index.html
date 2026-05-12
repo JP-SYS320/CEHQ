@@ -548,10 +548,10 @@ async function fetchDebit(stationId) {
   const timestamp = props.dern_date_prise_valeur_utc
     ? (() => {
         const d = new Date(props.dern_date_prise_valeur_utc);
-        d.setHours(d.getHours() - 5);
+        d.setHours(d.getHours() - 4);
         const date = d.toISOString().substring(0, 10);
         const time = d.toISOString().substring(11, 16);
-        return `${date} ${time} HNE`;
+        return `${date} ${time} HAE`;
       })()
     : '—';
 
