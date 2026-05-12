@@ -31,6 +31,10 @@
 
 - { margin: 0; padding: 0; box-sizing: border-box; }
 
+html {
+background: #0a0e0f;
+}
+
 body {
 background: var(–bg);
 color: var(–text);
@@ -471,10 +475,8 @@ grid-template-columns: 1fr 1fr;
 </div>
 
 <div class="filters">
-  <button class="filter-btn active" onclick="filterStations('all', this)">Toutes</button>
-  <button class="filter-btn" onclick="filterStations('gaspesie', this)">Gaspésie</button>
+  <button class="filter-btn active" onclick="filterStations('gaspesie', this)">Gaspésie</button>
   <button class="filter-btn" onclick="filterStations('bas-st-laurent', this)">Bas-St-Laurent</button>
-
 </div>
 
 <div class="grid" id="stationGrid"></div>
@@ -835,6 +837,8 @@ function buildCards() {
 // ─── Init ────────────────────────────────────────────────────────────────────
 buildCards();
 updateSummary();
+// Filtre par défaut : Gaspésie
+filterStations('gaspesie', document.querySelector('.filter-btn'));
 // Auto-load on startup
 refreshAll();
 </script>
