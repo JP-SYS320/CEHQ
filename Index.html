@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Débits CEHQ — Rivières à Saumon</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e0f;
+    --surface: #111618;
+    --border: #1e2628;
+    --text: #d4cfc8;
+    --muted: #5a6366;
+    --accent: #3ecfb2;
+    --up: #4ade9a;
+    --down: #f06260;
+    --warn: #f0c060;
+    --bonaventure: #6ac7a0;
+    --york: #7ec8e3;
+    --matane: #a891d4;
+    --matapedia: #e8a56a;
+    --cascapedia: #e87a9a;
+    --nouvelle: #88c878;
+    --rimouski: #78aed4;
+    --dartmouth: #d4c068;
+    --petite: #c8a0d4;
+    --ste-anne: #88b8d4;
+  }
+
+- { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+background: var(–bg);
+color: var(–text);
+font-family: ‘Space Mono’, monospace;
+min-height: 100vh;
+padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Header */
+header {
+padding: 20px 16px 12px;
+border-bottom: 1px solid var(–border);
+position: sticky;
+top: 0;
+background: var(–bg);
+z-index: 100;
+backdrop-filter: blur(10px);
+}
+
+.header-top {
+display: flex;
+align-items: flex-start;
+justify-content: space-between;
+gap: 12px;
+}
+
+.site-title {
+font-family: ‘Libre Baskerville’, serif;
+font-size: 1.1rem;
+font-style: italic;
+color: var(–accent);
+letter-spacing: 0.02em;
+line-height: 1.2;
+}
+
+.site-subtitle {
+font-size: 0.6rem;
+color: var(–muted);
+letter-spacing: 0.12em;
+text-transform: uppercase;
+margin-top: 3px;
+}
+
+.refresh-btn {
+background: none;
+border: 1px solid var(–border);
+color: var(–muted);
+font-family: ‘Space Mono’, monospace;
+font-size: 0.65rem;
+padding: 6px 10px;
+border-radius: 4px;
+cursor: pointer;
+letter-spacing: 0.08em;
+white-space: nowrap;
+transition: all 0.2s;
+flex-shrink: 0;
+}
+
+.refresh-btn:hover, .refresh-btn:active {
+border-color: var(–accent);
+color: var(–accent);
+}
+
+.refresh-btn.loading {
+animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+0%, 100% { opacity: 1; }
+50% { opacity: 0.4; }
+}
+
+.last-update {
+font-size: 0.58rem;
+color: var(–muted);
+margin-top: 8px;
+letter-spacing: 0.06em;
+}
+
+/* Status bar */
+.status-bar {
+display: flex;
+gap: 16px;
+padding: 10px 16px;
+border-bottom: 1px solid var(–border);
+overflow-x: auto;
+scrollbar-width: none;
+}
+.status-bar::-webkit-scrollbar { display: none; }
+
+.stat-pill {
+display: flex;
+align-items: center;
+gap: 6px;
+flex-shrink: 0;
+font-size: 0.6rem;
+letter-spacing: 0.08em;
+color: var(–muted);
+}
+
+.stat-dot {
+width: 6px;
+height: 6px;
+border-radius: 50%;
+}
+
+.stat-val {
+color: var(–text);
+font-weight: 700;
+}
+
+/* Region filters */
+.filters {
+display: flex;
+gap: 8px;
+padding: 12px 16px;
+overflow-x: auto;
+scrollbar-width: none;
+border-bottom: 1px solid var(–border);
+}
+.filters::-webkit-scrollbar { display: none; }
+
+.filter-btn {
+background: none;
+border: 1px solid var(–border);
+color: var(–muted);
+font-family: ‘Space Mono’, monospace;
+font-size: 0.6rem;
+padding: 5px 10px;
+border-radius: 20px;
+cursor: pointer;
+white-space: nowrap;
+letter-spacing: 0.08em;
+transition: all 0.2s;
+flex-shrink: 0;
+}
+
+.filter-btn.active {
+background: var(–accent);
+border-color: var(–accent);
+color: var(–bg);
+}
+
+/* Main grid */
+.grid {
+padding: 12px 16px;
+display: flex;
+flex-direction: column;
+gap: 8px;
+}
+
+/* Station card */
+.card {
+background: var(–surface);
+border: 1px solid var(–border);
+border-radius: 8px;
+padding: 14px;
+cursor: pointer;
+transition: border-color 0.2s, transform 0.15s;
+position: relative;
+overflow: hidden;
+}
+
+.card::before {
+content: ‘’;
+position: absolute;
+left: 0;
+top: 0;
+bottom: 0;
+width: 3px;
+border-radius: 8px 0 0 8px;
+}
+
+.card:active { transform: scale(0.99); }
+.card.expanded { border-color: #2a3436; }
+
+.card-header {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 8px;
+}
+
+.river-name {
+font-family: ‘Libre Baskerville’, serif;
+font-size: 1rem;
+font-weight: 700;
+line-height: 1.1;
+}
+
+.station-id {
+font-size: 0.55rem;
+color: var(–muted);
+letter-spacing: 0.1em;
+margin-top: 2px;
+}
+
+.debit-main {
+text-align: right;
+flex-shrink: 0;
+}
+
+.debit-value {
+font-size: 1.4rem;
+font-weight: 700;
+line-height: 1;
+letter-spacing: -0.02em;
+}
+
+.debit-unit {
+font-size: 0.55rem;
+color: var(–muted);
+letter-spacing: 0.06em;
+}
+
+.trend-badge {
+display: inline-flex;
+align-items: center;
+gap: 3px;
+font-size: 0.6rem;
+padding: 2px 6px;
+border-radius: 3px;
+margin-top: 3px;
+letter-spacing: 0.06em;
+}
+
+.trend-up { background: rgba(74, 222, 154, 0.12); color: var(–up); }
+.trend-down { background: rgba(240, 98, 96, 0.12); color: var(–down); }
+.trend-stable { background: rgba(90, 99, 102, 0.2); color: var(–muted); }
+
+/* Mini sparkline */
+.sparkline-row {
+margin-top: 12px;
+display: flex;
+align-items: flex-end;
+gap: 2px;
+height: 28px;
+}
+
+.spark-bar {
+flex: 1;
+border-radius: 2px 2px 0 0;
+min-height: 2px;
+transition: height 0.4s ease;
+}
+
+/* Expanded detail */
+.detail {
+display: none;
+margin-top: 12px;
+padding-top: 12px;
+border-top: 1px solid var(–border);
+}
+
+.card.expanded .detail { display: block; }
+
+.detail-grid {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 8px;
+margin-bottom: 12px;
+}
+
+.detail-item {
+background: rgba(255,255,255,0.03);
+border-radius: 6px;
+padding: 8px 10px;
+}
+
+.detail-label {
+font-size: 0.55rem;
+color: var(–muted);
+letter-spacing: 0.1em;
+text-transform: uppercase;
+margin-bottom: 3px;
+}
+
+.detail-val {
+font-size: 0.85rem;
+font-weight: 700;
+}
+
+.fetch-btn {
+width: 100%;
+background: none;
+border: 1px solid var(–border);
+color: var(–accent);
+font-family: ‘Space Mono’, monospace;
+font-size: 0.65rem;
+padding: 8px;
+border-radius: 6px;
+cursor: pointer;
+letter-spacing: 0.1em;
+transition: all 0.2s;
+text-transform: uppercase;
+}
+
+.fetch-btn:hover, .fetch-btn:active {
+background: rgba(62, 207, 178, 0.08);
+border-color: var(–accent);
+}
+
+.fetch-btn.loading {
+color: var(–muted);
+animation: pulse 1s infinite;
+}
+
+/* 7-day chart */
+.chart-container {
+margin-top: 12px;
+}
+
+.chart-title {
+font-size: 0.58rem;
+color: var(–muted);
+letter-spacing: 0.1em;
+text-transform: uppercase;
+margin-bottom: 8px;
+}
+
+.chart-wrap {
+height: 60px;
+position: relative;
+}
+
+svg.linechart {
+width: 100%;
+height: 100%;
+overflow: visible;
+}
+
+/* Alert level indicator */
+.level-bar {
+margin-top: 10px;
+height: 4px;
+background: var(–border);
+border-radius: 2px;
+overflow: hidden;
+position: relative;
+}
+
+.level-fill {
+height: 100%;
+border-radius: 2px;
+transition: width 0.6s ease;
+}
+
+.level-label {
+display: flex;
+justify-content: space-between;
+margin-top: 4px;
+font-size: 0.5rem;
+color: var(–muted);
+letter-spacing: 0.06em;
+}
+
+/* Loading skeleton */
+.skeleton {
+background: linear-gradient(90deg, var(–surface) 25%, var(–border) 50%, var(–surface) 75%);
+background-size: 200% 100%;
+animation: shimmer 1.5s infinite;
+border-radius: 4px;
+}
+
+@keyframes shimmer {
+0% { background-position: 200% 0; }
+100% { background-position: -200% 0; }
+}
+
+/* Status message */
+.status-msg {
+font-size: 0.62rem;
+color: var(–muted);
+padding: 4px 0;
+letter-spacing: 0.06em;
+min-height: 18px;
+}
+
+.status-msg.ok { color: var(–up); }
+.status-msg.err { color: var(–down); }
+.status-msg.warn { color: var(–warn); }
+
+/* Footer */
+footer {
+padding: 20px 16px;
+text-align: center;
+font-size: 0.55rem;
+color: var(–muted);
+letter-spacing: 0.1em;
+border-top: 1px solid var(–border);
+margin-top: 8px;
+}
+
+/* Responsive wider screens */
+@media (min-width: 600px) {
+.grid {
+display: grid;
+grid-template-columns: 1fr 1fr;
+}
+}
+</style>
+
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div>
+      <div class="site-title">Rivières à Saumon</div>
+      <div class="site-subtitle">Débits CEHQ — Québec</div>
+    </div>
+    <button class="refresh-btn" id="refreshAll" onclick="refreshAll()">↻ Actualiser</button>
+  </div>
+  <div class="last-update" id="lastUpdate">Dernière mise à jour : —</div>
+</header>
+
+<div class="status-bar">
+  <div class="stat-pill">
+    <div class="stat-dot" style="background:var(--up)"></div>
+    <span>Montante</span>
+    <span class="stat-val" id="countUp">—</span>
+  </div>
+  <div class="stat-pill">
+    <div class="stat-dot" style="background:var(--down)"></div>
+    <span>Descendante</span>
+    <span class="stat-val" id="countDown">—</span>
+  </div>
+  <div class="stat-pill">
+    <div class="stat-dot" style="background:var(--muted)"></div>
+    <span>Stable</span>
+    <span class="stat-val" id="countStable">—</span>
+  </div>
+  <div class="stat-pill">
+    <div class="stat-dot" style="background:var(--warn)"></div>
+    <span>Non chargé</span>
+    <span class="stat-val" id="countPending">10</span>
+  </div>
+</div>
+
+<div class="filters">
+  <button class="filter-btn active" onclick="filterStations('all', this)">Toutes</button>
+  <button class="filter-btn" onclick="filterStations('gaspesie', this)">Gaspésie</button>
+  <button class="filter-btn" onclick="filterStations('bas-st-laurent', this)">Bas-St-Laurent</button>
+
+</div>
+
+<div class="grid" id="stationGrid"></div>
+
+<footer>
+  SOURCE : CEHQ — CENTRE D'EXPERTISE HYDRIQUE DU QUÉBEC<br>
+  DONNÉES EN TEMPS QUASI-RÉEL · PROXY REQUIS EN PRODUCTION
+</footer>
+
+<script>
+// ─── Station data ───────────────────────────────────────────────────────────
+const STATIONS = [
+  { id: '010802', name: 'Bonaventure',       color: '--bonaventure', region: 'gaspesie',     typique: [18, 22, 35, 28, 20, 15, 12] },
+  { id: '010902', name: 'Petite Cascapédia', color: '--petite',      region: 'gaspesie',     typique: [8, 10, 16, 13, 9, 7, 6] },
+  { id: '011003', name: 'Cascapédia',        color: '--cascapedia',  region: 'gaspesie',     typique: [45, 55, 88, 70, 50, 38, 32] },
+  { id: '011204', name: 'Nouvelle',          color: '--nouvelle',    region: 'gaspesie',     typique: [12, 15, 24, 19, 14, 10, 8] },
+  { id: '011509', name: 'Matapédia',         color: '--matapedia',   region: 'gaspesie',     typique: [55, 68, 110, 88, 62, 46, 40] },
+  { id: '020404', name: 'York',              color: '--york',        region: 'gaspesie',     typique: [10, 12, 20, 16, 11, 8, 7] },
+  { id: '021407', name: 'Sainte-Anne',       color: '--ste-anne',    region: 'gaspesie',     typique: [14, 17, 28, 22, 16, 12, 10] },
+  { id: '021601', name: 'Matane',            color: '--matane',      region: 'bas-st-laurent', typique: [22, 28, 45, 36, 25, 19, 16] },
+  { id: '022003', name: 'Rimouski',          color: '--rimouski',    region: 'bas-st-laurent', typique: [18, 22, 35, 28, 20, 15, 12] },
+  { id: '020602', name: 'Dartmouth',         color: '--dartmouth',   region: 'gaspesie',     typique: [6, 8, 13, 10, 7, 5, 4] },
+];
+
+// ─── State ──────────────────────────────────────────────────────────────────
+const state = {};
+STATIONS.forEach(s => {
+  state[s.id] = {
+    debit: null,
+    trend: null,
+    history: null,
+    status: 'idle', // idle | loading | ok | error
+    msg: '',
+    expanded: false,
+  };
+});
+
+// ─── Real CEHQ fetch via allorigins proxy ────────────────────────────────────
+// ─── API WFS MSP — données temps réel, pas de CORS ───────────────────────────
+// Source: geoegl.msp.gouv.qc.ca (Ministère Sécurité Publique, données CEHQ)
+const WFS_URL = 'https://geoegl.msp.gouv.qc.ca/apis/mapserver-vigilance/ws/vigilance.fcgi?service=wfs&version=1.1.0&request=getfeature&typename=stations_igo2_public&outputformat=geojson&epsg:4326';
+
+let wfsCache = null;
+let wfsCacheTime = 0;
+
+async function fetchAllStations() {
+  const now = Date.now();
+  // Rafraîchir le cache toutes les 5 minutes max
+  if (wfsCache && (now - wfsCacheTime) < 5 * 60 * 1000) return wfsCache;
+
+  const res = await fetch(WFS_URL, { cache: 'no-store' });
+  if (!res.ok) throw new Error('API MSP indisponible');
+  const json = await res.json();
+  wfsCache = json;
+  wfsCacheTime = now;
+  return json;
+}
+
+async function fetchDebit(stationId) {
+  const geojson = await fetchAllStations();
+
+  // Chercher la station par son numéro dans les propriétés
+  const feature = geojson.features.find(f => {
+    const props = f.properties;
+    return props.station && props.station.toString().trim() === stationId.toString().trim();
+  });
+
+  if (!feature) throw new Error(`Station ${stationId} non trouvée`);
+
+  const props = feature.properties;
+
+  const debit = parseFloat(props.dern_valeur_deb);
+  if (isNaN(debit) || debit < 0) throw new Error('Débit non disponible');
+
+  const timestamp = props.dern_date_prise_valeur_utc
+    ? props.dern_date_prise_valeur_utc.replace('T', ' ').substring(0, 16) + ' UTC'
+    : '—';
+
+  return {
+    debit,
+    history: [debit], // API temps réel = valeur instantanée seulement
+    trend: 'stable',  // On ne peut pas calculer la tendance sans historique
+    timestamp,
+    raw: props        // Garder pour debug
+  };
+}
+
+// ─── Load a single station ───────────────────────────────────────────────────
+async function loadStation(stationId) {
+  state[stationId].status = 'loading';
+  state[stationId].msg = 'Chargement...';
+  renderCard(stationId);
+
+  try {
+    const data = await fetchDebit(stationId);
+    state[stationId].debit = data.debit;
+    state[stationId].history = data.history;
+    state[stationId].trend = data.trend;
+    state[stationId].status = 'ok';
+    state[stationId].msg = data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues';
+  } catch(e) {
+    state[stationId].status = 'error';
+    state[stationId].msg = 'Erreur — ' + (e.message || 'inconnu');
+  }
+
+  renderCard(stationId);
+  updateSummary();
+}
+
+// ─── Refresh all ────────────────────────────────────────────────────────────
+function refreshAll() {
+  const btn = document.getElementById('refreshAll');
+  btn.classList.add('loading');
+  btn.textContent = '↻ Chargement...';
+
+  const promises = STATIONS.map(s => loadStation(s.id));
+  Promise.all(promises).then(() => {
+    btn.classList.remove('loading');
+    btn.textContent = '↻ Actualiser';
+    const now = new Date();
+    document.getElementById('lastUpdate').textContent =
+      `Dernière mise à jour : ${now.toLocaleDateString('fr-CA')} ${now.toLocaleTimeString('fr-CA', {hour:'2-digit', minute:'2-digit'})}`;
+  });
+}
+
+// ─── Summary stats ──────────────────────────────────────────────────────────
+function updateSummary() {
+  let up=0, down=0, stable=0, pending=0;
+  STATIONS.forEach(s => {
+    const st = state[s.id];
+    if (st.status === 'idle' || st.status === 'loading') pending++;
+    else if (st.trend === 'up') up++;
+    else if (st.trend === 'down') down++;
+    else stable++;
+  });
+  document.getElementById('countUp').textContent = up;
+  document.getElementById('countDown').textContent = down;
+  document.getElementById('countStable').textContent = stable;
+  document.getElementById('countPending').textContent = pending;
+}
+
+// ─── Sparkline SVG ──────────────────────────────────────────────────────────
+function buildSparkline(history, color) {
+  if (!history) return '<div style="height:60px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--muted)">—</div>';
+
+  const W = 300, H = 60;
+  const min = Math.min(...history);
+  const max = Math.max(...history);
+  const range = max - min || 1;
+  const pts = history.map((v, i) => {
+    const x = (i / (history.length - 1)) * W;
+    const y = H - ((v - min) / range) * (H - 6) - 3;
+    return `${x},${y}`;
+  }).join(' ');
+
+  const lastX = W;
+  const lastY = H - ((history[history.length-1] - min) / range) * (H - 6) - 3;
+
+  return `
+    <svg class="linechart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="grad_${color.replace('--','')}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${getCSSVar(color)}" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="${getCSSVar(color)}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points="0,${H} ${pts} ${W},${H}" fill="url(#grad_${color.replace('--','')})" />
+      <polyline points="${pts}" fill="none" stroke="${getCSSVar(color)}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${lastX}" cy="${lastY}" r="3" fill="${getCSSVar(color)}"/>
+    </svg>`;
+}
+
+function getCSSVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// ─── Mini spark bars ─────────────────────────────────────────────────────────
+function buildMiniSpark(history, color) {
+  if (!history) return '';
+  const max = Math.max(...history);
+  return history.map((v, i) => {
+    const pct = Math.max(10, (v / max) * 100);
+    const isLast = i === history.length - 1;
+    const c = isLast ? getCSSVar(color) : 'var(--border)';
+    return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
+  }).join('');
+}
+
+// ─── Render a single card ────────────────────────────────────────────────────
+function renderCard(stationId) {
+  const s = STATIONS.find(x => x.id === stationId);
+  const st = state[stationId];
+  const card = document.getElementById(`card-${stationId}`);
+  if (!card) return;
+
+  const colorVal = getCSSVar(s.color);
+  card.style.setProperty('--card-color', colorVal);
+  card.querySelector('.card-color-bar').style.background = colorVal;
+
+  // Debit value
+  const debitEl = card.querySelector('.debit-value');
+  if (st.status === 'loading') {
+    debitEl.innerHTML = '<span class="skeleton" style="display:inline-block;width:60px;height:1.2rem"></span>';
+  } else if (st.debit !== null) {
+    debitEl.textContent = st.debit.toFixed(1);
+    debitEl.style.color = colorVal;
+  } else {
+    debitEl.textContent = '—';
+    debitEl.style.color = 'var(--muted)';
+  }
+
+  // Trend badge
+  const trendEl = card.querySelector('.trend-badge');
+  if (st.trend === 'up') {
+    trendEl.className = 'trend-badge trend-up';
+    trendEl.textContent = '↑ Montante';
+  } else if (st.trend === 'down') {
+    trendEl.className = 'trend-badge trend-down';
+    trendEl.textContent = '↓ Descendante';
+  } else if (st.trend === 'stable') {
+    trendEl.className = 'trend-badge trend-stable';
+    trendEl.textContent = '→ Stable';
+  } else {
+    trendEl.className = 'trend-badge trend-stable';
+    trendEl.textContent = '— N/D';
+  }
+
+  // Mini spark
+  card.querySelector('.sparkline-row').innerHTML = buildMiniSpark(st.history || s.typique.map(()=>1), s.color);
+
+  // Status msg
+  const msgEl = card.querySelector('.status-msg');
+  msgEl.textContent = st.msg || '';
+  msgEl.className = 'status-msg' + (st.status === 'ok' ? ' ok' : st.status === 'error' ? ' err' : '');
+
+  // Expanded detail
+  if (st.expanded && st.history) {
+    card.querySelector('.chart-wrap').innerHTML = buildSparkline(st.history, s.color);
+
+    // Detail vals
+    const hist = st.history;
+    const avg7 = (hist.reduce((a,b)=>a+b,0)/hist.length).toFixed(1);
+    const maxV = Math.max(...hist).toFixed(1);
+    const minV = Math.min(...hist).toFixed(1);
+    card.querySelector('.dv-current').textContent = st.debit ? st.debit.toFixed(2) + ' m³/s' : '—';
+    card.querySelector('.dv-avg').textContent = avg7 + ' m³/s';
+    card.querySelector('.dv-max').textContent = maxV + ' m³/s';
+    card.querySelector('.dv-min').textContent = minV + ' m³/s';
+
+    // Level bar
+    const pct = Math.min(100, Math.round((st.debit / (parseFloat(maxV) * 1.5)) * 100));
+    const fill = card.querySelector('.level-fill');
+    fill.style.width = pct + '%';
+    fill.style.background = pct > 75 ? 'var(--down)' : pct > 45 ? 'var(--warn)' : 'var(--up)';
+  }
+}
+
+// ─── Toggle card expansion ───────────────────────────────────────────────────
+function toggleCard(stationId) {
+  const st = state[stationId];
+  st.expanded = !st.expanded;
+  const card = document.getElementById(`card-${stationId}`);
+  if (st.expanded) {
+    card.classList.add('expanded');
+    if (st.status === 'idle') loadStation(stationId);
+    else renderCard(stationId);
+  } else {
+    card.classList.remove('expanded');
+  }
+}
+
+// ─── Filter ──────────────────────────────────────────────────────────────────
+function filterStations(filter, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  document.querySelectorAll('.card').forEach(card => {
+    const id = card.dataset.id;
+    const s = STATIONS.find(x => x.id === id);
+    const st = state[id];
+    let show = true;
+
+    if (filter === 'gaspesie') show = s.region === 'gaspesie';
+    else if (filter === 'bas-st-laurent') show = s.region === 'bas-st-laurent';
+    else if (filter === 'up') show = st.trend === 'up';
+    else if (filter === 'down') show = st.trend === 'down';
+
+    card.style.display = show ? '' : 'none';
+  });
+}
+
+// ─── Build all cards ──────────────────────────────────────────────────────────
+function buildCards() {
+  const grid = document.getElementById('stationGrid');
+  grid.innerHTML = '';
+
+  STATIONS.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.id = `card-${s.id}`;
+    div.dataset.id = s.id;
+    div.dataset.region = s.region;
+    div.onclick = () => toggleCard(s.id);
+
+    div.innerHTML = `
+      <div class="card-color-bar" style="position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:8px 0 0 8px"></div>
+      <div class="card-header" style="padding-left:8px">
+        <div>
+          <div class="river-name">${s.name}</div>
+          <div class="station-id">STATION ${s.id}</div>
+        </div>
+        <div class="debit-main">
+          <div class="debit-value" style="color:var(--muted)">—</div>
+          <div class="debit-unit">m³/s</div>
+          <div class="trend-badge trend-stable">— N/D</div>
+        </div>
+      </div>
+      <div class="sparkline-row"></div>
+      <div class="status-msg"></div>
+      <div class="detail">
+        <div class="detail-grid">
+          <div class="detail-item">
+            <div class="detail-label">Débit actuel</div>
+            <div class="detail-val dv-current">—</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Moy. 7 jours</div>
+            <div class="detail-val dv-avg">—</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Max 7 jours</div>
+            <div class="detail-val dv-max">—</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Min 7 jours</div>
+            <div class="detail-val dv-min">—</div>
+          </div>
+        </div>
+        <div class="chart-title">Historique 7 jours</div>
+        <div class="chart-wrap"></div>
+        <div class="level-bar" style="margin-top:10px">
+          <div class="level-fill" style="width:0%"></div>
+        </div>
+        <div class="level-label">
+          <span>Étiage</span>
+          <span>Niveau actuel</span>
+          <span>Crue</span>
+        </div>
+        <button class="fetch-btn" style="margin-top:10px" onclick="event.stopPropagation(); loadStation('${s.id}')">
+          ↻ Recharger cette station
+        </button>
+      </div>`;
+
+    grid.appendChild(div);
+  });
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+buildCards();
+updateSummary();
+// Auto-load on startup
+refreshAll();
+</script>
+
+</body>
+</html>
