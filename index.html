@@ -453,24 +453,16 @@ grid-template-columns: 1fr 1fr;
 
 <div class="status-bar">
   <div class="stat-pill">
-    <div class="stat-dot" style="background:var(--up)"></div>
-    <span>Montante</span>
-    <span class="stat-val" id="countUp">—</span>
+    <span>🌑</span>
+    <span>Nouvelle lune</span>
+    <span class="stat-val">16 mai</span>
+    <span style="font-size:0.55rem;color:var(--muted)">— 4 jours</span>
   </div>
-  <div class="stat-pill">
-    <div class="stat-dot" style="background:var(--down)"></div>
-    <span>Descendante</span>
-    <span class="stat-val" id="countDown">—</span>
-  </div>
-  <div class="stat-pill">
-    <div class="stat-dot" style="background:var(--muted)"></div>
-    <span>Stable</span>
-    <span class="stat-val" id="countStable">—</span>
-  </div>
-  <div class="stat-pill">
-    <div class="stat-dot" style="background:var(--warn)"></div>
-    <span>Non chargé</span>
-    <span class="stat-val" id="countPending">10</span>
+  <div class="stat-pill" style="border-left:1px solid var(--border);padding-left:16px">
+    <span>🌕</span>
+    <span>Pleine lune</span>
+    <span class="stat-val">31 mai</span>
+    <span style="font-size:0.55rem;color:var(--muted)">— 19 jours</span>
   </div>
 </div>
 
@@ -601,7 +593,6 @@ async function loadStation(stationId) {
   }
 
   renderCard(stationId);
-  updateSummary();
 }
 
 // ─── Refresh all ────────────────────────────────────────────────────────────
@@ -620,21 +611,7 @@ function refreshAll() {
   });
 }
 
-// ─── Summary stats ──────────────────────────────────────────────────────────
-function updateSummary() {
-  let up=0, down=0, stable=0, pending=0;
-  STATIONS.forEach(s => {
-    const st = state[s.id];
-    if (st.status === 'idle' || st.status === 'loading') pending++;
-    else if (st.trend === 'up') up++;
-    else if (st.trend === 'down') down++;
-    else stable++;
-  });
-  document.getElementById('countUp').textContent = up;
-  document.getElementById('countDown').textContent = down;
-  document.getElementById('countStable').textContent = stable;
-  document.getElementById('countPending').textContent = pending;
-}
+// ─── (summary retiré) ────────────────────────────────────────────────────────
 
 // ─── Sparkline SVG ──────────────────────────────────────────────────────────
 function buildSparkline(history, color) {
@@ -854,7 +831,6 @@ function buildCards() {
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 buildCards();
-updateSummary();
 // Filtre par défaut : Gaspésie
 filterStations('gaspesie', document.querySelector('.filter-btn'));
 // Auto-load on startup
