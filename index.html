@@ -575,38 +575,46 @@ async function fetchDebit(stationId) {
     ? props.dern_date_prise_valeur_utc.replace('T', ' ').substring(0, 16) + ' UTC'
     : '—';
 
-  // Tendance : historique local de 12 valeurs max avec timestamps
+  // Historique local 24h : stocker jusqu'à 96 entrées (24h à 15min)
   let trend = 'stable';
+  let var24h = null, max24h = null, min24h = null;
   const storageKey = `hist_${stationId}`;
   try {
     let hist = JSON.parse(localStorage.getItem(storageKey) || '[]');
 
-    // Ajouter la valeur actuelle seulement si le timestamp est nouveau
+    // Ajouter seulement si timestamp nouveau
     const alreadyStored = hist.some(e => e.ts === timestamp);
     if (!alreadyStored) {
       hist.push({ debit, ts: timestamp });
-      // Garder seulement les 12 dernières entrées
-      if (hist.length > 12) hist = hist.slice(-12);
+      if (hist.length > 96) hist = hist.slice(-96);
       localStorage.setItem(storageKey, JSON.stringify(hist));
     }
 
-    // Calculer la tendance si on a au moins 6 entrées
+    // Tendance : 3 dernières vs 3 d'avant (min 6 entrées)
     if (hist.length >= 6) {
-      // 3 dernières vs 3 d'il y a ~1h30 (entrées 3-6 en partant de la fin)
       const recent = hist.slice(-3).map(e => e.debit);
       const older  = hist.slice(-6, -3).map(e => e.debit);
-      const avgRecent = recent.reduce((a, b) => a + b, 0) / recent.length;
-      const avgOlder  = older.reduce((a, b) => a + b, 0) / older.length;
-      const pct = (avgRecent - avgOlder) / (avgOlder || 1);
+      const avgR = recent.reduce((a,b) => a+b,0) / recent.length;
+      const avgO = older.reduce((a,b) => a+b,0) / older.length;
+      const pct  = (avgR - avgO) / (avgO || 1);
       if (pct > 0.03) trend = 'up';
       else if (pct < -0.03) trend = 'down';
       else trend = 'stable';
     } else {
-      trend = null; // Pas assez de données encore
+      trend = null;
+    }
+
+    // Stats 24h : max, min, variation (première vs dernière valeur des 96 entrées)
+    if (hist.length >= 2) {
+      const vals = hist.map(e => e.debit);
+      max24h = Math.max(...vals);
+      min24h = Math.min(...vals);
+      const oldest = hist[0].debit;
+      var24h = ((debit - oldest) / (oldest || 1)) * 100;
     }
   } catch(e) { /* localStorage non disponible */ }
 
-  return { debit, history: [debit], trend, timestamp };
+  return { debit, history: [debit], trend, timestamp, var24h, max24h, min24h };
 }
 
 // ─── Load a single station ───────────────────────────────────────────────────
@@ -620,6 +628,9 @@ async function loadStation(stationId) {
     state[stationId].debit = data.debit;
     state[stationId].history = data.history;
     state[stationId].trend = data.trend;
+    state[stationId].var24h = data.var24h;
+    state[stationId].max24h = data.max24h;
+    state[stationId].min24h = data.min24h;
     state[stationId].status = 'ok';
     state[stationId].msg = data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues';
   } catch(e) {
@@ -743,24 +754,21 @@ function renderCard(stationId) {
   msgEl.className = 'status-msg' + (st.status === 'ok' ? ' ok' : st.status === 'error' ? ' err' : '');
 
   // Expanded detail
-  if (st.expanded && st.history) {
-    card.querySelector('.chart-wrap').innerHTML = buildSparkline(st.history, s.color);
+  if (st.expanded) {
+    const varEl  = card.querySelector('.dv-var');
+    const maxEl  = card.querySelector('.dv-max24');
+    const minEl  = card.querySelector('.dv-min24');
 
-    // Detail vals
-    const hist = st.history;
-    const avg7 = (hist.reduce((a,b)=>a+b,0)/hist.length).toFixed(1);
-    const maxV = Math.max(...hist).toFixed(1);
-    const minV = Math.min(...hist).toFixed(1);
-    card.querySelector('.dv-current').textContent = st.debit ? st.debit.toFixed(2) + ' m³/s' : '—';
-    card.querySelector('.dv-avg').textContent = avg7 + ' m³/s';
-    card.querySelector('.dv-max').textContent = maxV + ' m³/s';
-    card.querySelector('.dv-min').textContent = minV + ' m³/s';
-
-    // Level bar
-    const pct = Math.min(100, Math.round((st.debit / (parseFloat(maxV) * 1.5)) * 100));
-    const fill = card.querySelector('.level-fill');
-    fill.style.width = pct + '%';
-    fill.style.background = pct > 75 ? 'var(--down)' : pct > 45 ? 'var(--warn)' : 'var(--up)';
+    if (st.var24h !== null) {
+      const sign = st.var24h >= 0 ? '+' : '';
+      varEl.textContent = `${sign}${st.var24h.toFixed(1)} %`;
+      varEl.style.color = st.var24h > 3 ? 'var(--up)' : st.var24h < -3 ? 'var(--down)' : 'var(--muted)';
+    } else {
+      varEl.textContent = 'N/D';
+      varEl.style.color = 'var(--muted)';
+    }
+    maxEl.textContent = st.max24h !== null ? st.max24h.toFixed(1) + ' m³/s' : 'N/D';
+    minEl.textContent = st.min24h !== null ? st.min24h.toFixed(1) + ' m³/s' : 'N/D';
   }
 }
 
@@ -827,22 +835,18 @@ function buildCards() {
       <div class="sparkline-row"></div>
       <div class="status-msg"></div>
       <div class="detail">
-        <div class="detail-grid">
+        <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr">
           <div class="detail-item">
-            <div class="detail-label">Débit actuel</div>
-            <div class="detail-val dv-current">—</div>
+            <div class="detail-label">Variation 24h</div>
+            <div class="detail-val dv-var">—</div>
           </div>
           <div class="detail-item">
-            <div class="detail-label">Moy. 7 jours</div>
-            <div class="detail-val dv-avg">—</div>
+            <div class="detail-label">Max 24h</div>
+            <div class="detail-val dv-max24">—</div>
           </div>
           <div class="detail-item">
-            <div class="detail-label">Max 7 jours</div>
-            <div class="detail-val dv-max">—</div>
-          </div>
-          <div class="detail-item">
-            <div class="detail-label">Min 7 jours</div>
-            <div class="detail-val dv-min">—</div>
+            <div class="detail-label">Min 24h</div>
+            <div class="detail-val dv-min24">—</div>
           </div>
         </div>
         <button class="fetch-btn" style="margin-top:10px" onclick="event.stopPropagation(); loadStation('${s.id}')">
