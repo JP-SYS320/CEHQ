@@ -536,7 +536,7 @@ async function fetchAllStations() {
 }
 
 async function fetchDebit(stationId) {
-  // Étape 1 : débit actuel via API MSP (fiable, pas de CORS)
+  // Débit actuel via API MSP uniquement (rapide, pas de CORS)
   const geojson = await fetchAllStations();
   const feature = geojson.features.find(f =>
     f.properties.station && f.properties.station.toString().trim() === stationId.toString().trim()
@@ -549,45 +549,38 @@ async function fetchDebit(stationId) {
     ? props.dern_date_prise_valeur_utc.replace('T', ' ').substring(0, 16) + ' UTC'
     : '—';
 
-  // Étape 2 : tendance via fichier txt CEHQ (50 dernières lignes)
+  // Tendance : historique local de 12 valeurs max avec timestamps
   let trend = 'stable';
-  let history = [debit];
+  const storageKey = `hist_${stationId}`;
   try {
-    const year = new Date().getFullYear();
-    const bust = Date.now();
-    const txtUrl = `https://www.cehq.gouv.qc.ca/depot/historique_donnees_instantanees/${stationId}_Q_${year}.txt?_=${bust}`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(txtUrl)}`;
-    const res = await fetch(proxyUrl, { cache: 'no-store' });
-    if (res.ok) {
-      const text = await res.text();
-      // Parser les lignes valides (4 colonnes, valeur numérique)
-      const lines = text.trim().split('\n');
-      const values = [];
-      for (const line of lines) {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length < 4) continue;
-        const val = parseFloat(parts[3]);
-        if (!isNaN(val) && val >= 0) values.push(val);
-      }
-      if (values.length >= 12) {
-        // 6 dernières mesures (1h30) vs 6 précédentes (1h30 avant)
-        const recent = values.slice(-6);
-        const previous = values.slice(-12, -6);
-        const avgRecent = recent.reduce((a, b) => a + b, 0) / recent.length;
-        const avgPrev = previous.reduce((a, b) => a + b, 0) / previous.length;
-        const pct = (avgRecent - avgPrev) / (avgPrev || 1);
-        if (pct > 0.03) trend = 'up';
-        else if (pct < -0.03) trend = 'down';
-        else trend = 'stable';
-        // Historique pour le graphique : dernières 7 valeurs
-        history = values.slice(-7);
-      }
-    }
-  } catch(e) {
-    // Tendance non disponible — on garde 'stable' sans bloquer le débit
-  }
+    let hist = JSON.parse(localStorage.getItem(storageKey) || '[]');
 
-  return { debit, history, trend, timestamp };
+    // Ajouter la valeur actuelle seulement si le timestamp est nouveau
+    const alreadyStored = hist.some(e => e.ts === timestamp);
+    if (!alreadyStored) {
+      hist.push({ debit, ts: timestamp });
+      // Garder seulement les 12 dernières entrées
+      if (hist.length > 12) hist = hist.slice(-12);
+      localStorage.setItem(storageKey, JSON.stringify(hist));
+    }
+
+    // Calculer la tendance si on a au moins 6 entrées
+    if (hist.length >= 6) {
+      // 3 dernières vs 3 d'il y a ~1h30 (entrées 3-6 en partant de la fin)
+      const recent = hist.slice(-3).map(e => e.debit);
+      const older  = hist.slice(-6, -3).map(e => e.debit);
+      const avgRecent = recent.reduce((a, b) => a + b, 0) / recent.length;
+      const avgOlder  = older.reduce((a, b) => a + b, 0) / older.length;
+      const pct = (avgRecent - avgOlder) / (avgOlder || 1);
+      if (pct > 0.03) trend = 'up';
+      else if (pct < -0.03) trend = 'down';
+      else trend = 'stable';
+    } else {
+      trend = null; // Pas assez de données encore
+    }
+  } catch(e) { /* localStorage non disponible */ }
+
+  return { debit, history: [debit], trend, timestamp };
 }
 
 // ─── Load a single station ───────────────────────────────────────────────────
