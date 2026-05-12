@@ -515,9 +515,9 @@ STATIONS.forEach(s => {
 });
 
 // ─── Real CEHQ fetch via allorigins proxy ────────────────────────────────────
-// ─── API WFS MSP — données temps réel, pas de CORS ───────────────────────────
-// Source: geoegl.msp.gouv.qc.ca (Ministère Sécurité Publique, données CEHQ)
-const WFS_URL = 'https://geoegl.msp.gouv.qc.ca/apis/mapserver-vigilance/ws/vigilance.fcgi?service=wfs&version=1.1.0&request=getfeature&typename=stations_igo2_public&outputformat=geojson&epsg:4326';
+// ─── API WFS MSP — filtrée sur nos 10 stations seulement ─────────────────────
+const STATION_IDS = STATIONS.map(s => `'${s.id}'`).join(',');
+const WFS_URL = `https://geoegl.msp.gouv.qc.ca/apis/mapserver-vigilance/ws/vigilance.fcgi?service=wfs&version=1.1.0&request=getfeature&typename=stations_igo2_public&outputformat=geojson&CQL_FILTER=station IN (${STATION_IDS})`;
 
 let wfsCache = null;
 let wfsCacheTime = 0;
