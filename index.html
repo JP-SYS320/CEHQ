@@ -516,16 +516,16 @@ function updateMoonDisplay() {
 
 // ─── Station data ───────────────────────────────────────────────────────────
 const STATIONS = [
-  { id: '010802', name: 'Bonaventure',       color: '--bonaventure', region: 'gaspesie',     typique: [18, 22, 35, 28, 20, 15, 12] },
-  { id: '010902', name: 'Petite Cascapédia', color: '--petite',      region: 'gaspesie',     typique: [8, 10, 16, 13, 9, 7, 6] },
-  { id: '011003', name: 'Cascapédia',        color: '--cascapedia',  region: 'gaspesie',     typique: [45, 55, 88, 70, 50, 38, 32] },
-  { id: '011204', name: 'Nouvelle',          color: '--nouvelle',    region: 'gaspesie',     typique: [12, 15, 24, 19, 14, 10, 8] },
-  { id: '011509', name: 'Matapédia',         color: '--matapedia',   region: 'gaspesie',     typique: [55, 68, 110, 88, 62, 46, 40] },
-  { id: '020404', name: 'York',              color: '--york',        region: 'gaspesie',     typique: [10, 12, 20, 16, 11, 8, 7] },
-  { id: '021407', name: 'Sainte-Anne',       color: '--ste-anne',    region: 'gaspesie',     typique: [14, 17, 28, 22, 16, 12, 10] },
-  { id: '021601', name: 'Matane',            color: '--matane',      region: 'bas-st-laurent', typique: [22, 28, 45, 36, 25, 19, 16] },
-  { id: '022003', name: 'Rimouski',          color: '--rimouski',    region: 'bas-st-laurent', typique: [18, 22, 35, 28, 20, 15, 12] },
-  { id: '020602', name: 'Dartmouth',         color: '--dartmouth',   region: 'gaspesie',     typique: [6, 8, 13, 10, 7, 5, 4] },
+  { id: '010802', name: 'Bonaventure',       color: '--bonaventure', region: 'gaspesie',     lat: 48.0667, lng: -65.4833 },
+  { id: '010902', name: 'Petite Cascapédia', color: '--petite',      region: 'gaspesie',     lat: 48.0833, lng: -65.6667 },
+  { id: '011003', name: 'Cascapédia',        color: '--cascapedia',  region: 'gaspesie',     lat: 48.1000, lng: -65.8500 },
+  { id: '011204', name: 'Nouvelle',          color: '--nouvelle',    region: 'gaspesie',     lat: 48.1167, lng: -66.3167 },
+  { id: '011509', name: 'Matapédia',         color: '--matapedia',   region: 'gaspesie',     lat: 48.0000, lng: -66.9833 },
+  { id: '020404', name: 'York',              color: '--york',        region: 'gaspesie',     lat: 48.8333, lng: -64.6667 },
+  { id: '021407', name: 'Sainte-Anne',       color: '--ste-anne',    region: 'gaspesie',     lat: 49.0000, lng: -66.7000 },
+  { id: '021601', name: 'Matane',            color: '--matane',      region: 'bas-st-laurent', lat: 48.8500, lng: -67.5333 },
+  { id: '022003', name: 'Rimouski',          color: '--rimouski',    region: 'bas-st-laurent', lat: 48.4500, lng: -68.5333 },
+  { id: '020602', name: 'Dartmouth',         color: '--dartmouth',   region: 'gaspesie',     lat: 48.7000, lng: -64.8000 },
 ];
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -535,9 +535,14 @@ STATIONS.forEach(s => {
     debit: null,
     trend: null,
     history: null,
-    status: 'idle', // idle | loading | ok | error
+    status: 'idle',
     msg: '',
     expanded: false,
+    sunrise: null,
+    sunset: null,
+    var24h: null,
+    max24h: null,
+    min24h: null,
   };
 });
 
@@ -624,13 +629,20 @@ async function loadStation(stationId) {
   renderCard(stationId);
 
   try {
-    const data = await fetchDebit(stationId);
+    const [data, sun] = await Promise.all([
+      fetchDebit(stationId),
+      fetchSunTimes(stationId)
+    ]);
     state[stationId].debit = data.debit;
     state[stationId].history = data.history;
     state[stationId].trend = data.trend;
     state[stationId].var24h = data.var24h;
     state[stationId].max24h = data.max24h;
     state[stationId].min24h = data.min24h;
+    if (sun) {
+      state[stationId].sunrise = sun.sunrise;
+      state[stationId].sunset  = sun.sunset;
+    }
     state[stationId].status = 'ok';
     state[stationId].msg = data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues';
   } catch(e) {
@@ -655,6 +667,23 @@ function refreshAll() {
     document.getElementById('lastUpdate').textContent =
       `Dernière mise à jour : ${now.toLocaleDateString('fr-CA')} ${now.toLocaleTimeString('fr-CA', {hour:'2-digit', minute:'2-digit'})}`;
   });
+}
+
+// ─── Sunrise / Sunset — sunrisesunset.io (gratuit, sans clé) ─────────────────
+async function fetchSunTimes(stationId) {
+  const s = STATIONS.find(x => x.id === stationId);
+  if (!s) return null;
+  try {
+    const res = await fetch(
+      `https://api.sunrisesunset.io/json?lat=${s.lat}&lng=${s.lng}&timezone=America/Toronto&time_format=HH:mm`,
+      { cache: 'no-store' }
+    );
+    const json = await res.json();
+    if (json.status === 'OK') {
+      return { sunrise: json.results.sunrise, sunset: json.results.sunset };
+    }
+  } catch(e) {}
+  return null;
 }
 
 // ─── (summary retiré) ────────────────────────────────────────────────────────
@@ -769,6 +798,9 @@ function renderCard(stationId) {
     }
     maxEl.textContent = st.max24h !== null ? st.max24h.toFixed(1) + ' m³/s' : 'N/D';
     minEl.textContent = st.min24h !== null ? st.min24h.toFixed(1) + ' m³/s' : 'N/D';
+
+    card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
+    card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
   }
 }
 
@@ -847,6 +879,16 @@ function buildCards() {
           <div class="detail-item">
             <div class="detail-label">Min 24h</div>
             <div class="detail-val dv-min24">—</div>
+          </div>
+        </div>
+        <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:8px">
+          <div class="detail-item">
+            <div class="detail-label">🌅 Lever</div>
+            <div class="detail-val dv-sunrise">—</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">🌇 Coucher</div>
+            <div class="detail-val dv-sunset">—</div>
           </div>
         </div>
         <button class="fetch-btn" style="margin-top:10px" onclick="event.stopPropagation(); loadStation('${s.id}')">
