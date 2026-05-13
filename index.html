@@ -5,7 +5,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Débits CEHQ — Rivières à Saumon</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #f0f2f3;
@@ -14,9 +13,8 @@
     --text: #1a2022;
     --muted: #6a7679;
     --accent: #3ecfb2;
-    --up: #4ade9a;
-    --down: #f06260;
-    --warn: #f0c060;
+    --up: #27a862;
+    --down: #d94f4d;
     --bonaventure: #6ac7a0;
     --york: #7ec8e3;
     --matane: #a891d4;
@@ -30,28 +28,22 @@
   }
 
 - { margin: 0; padding: 0; box-sizing: border-box; }
-
-html {
-background: #f0f2f3;
-}
+  html, body { background: var(–bg); }
 
 body {
-background: var(–bg);
 color: var(–text);
-font-family: ‘Space Mono’, monospace;
+font-family: ‘SF Mono’, ‘Fira Mono’, ‘Courier New’, monospace;
 min-height: 100vh;
 padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* Header */
 header {
-padding: 20px 16px 12px;
+padding: 16px 16px 10px;
 border-bottom: 1px solid var(–border);
 position: sticky;
 top: 0;
 background: var(–bg);
 z-index: 100;
-backdrop-filter: blur(10px);
 }
 
 .header-top {
@@ -62,7 +54,7 @@ gap: 12px;
 }
 
 .site-title {
-font-family: ‘Libre Baskerville’, serif;
+font-family: Georgia, serif;
 font-size: 1.1rem;
 font-style: italic;
 color: var(–accent);
@@ -71,7 +63,7 @@ line-height: 1.2;
 }
 
 .site-subtitle {
-font-size: 0.6rem;
+font-size: 0.58rem;
 color: var(–muted);
 letter-spacing: 0.12em;
 text-transform: uppercase;
@@ -82,134 +74,101 @@ margin-top: 3px;
 background: none;
 border: 1px solid var(–border);
 color: var(–muted);
-font-family: ‘Space Mono’, monospace;
+font-family: inherit;
 font-size: 0.65rem;
 padding: 6px 10px;
 border-radius: 4px;
 cursor: pointer;
 letter-spacing: 0.08em;
 white-space: nowrap;
-transition: all 0.2s;
+transition: border-color 0.2s, color 0.2s;
 flex-shrink: 0;
 }
 
-.refresh-btn:hover, .refresh-btn:active {
-border-color: var(–accent);
-color: var(–accent);
-}
-
-.refresh-btn.loading {
-animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-0%, 100% { opacity: 1; }
-50% { opacity: 0.4; }
-}
+.refresh-btn:active { border-color: var(–accent); color: var(–accent); }
+.refresh-btn.loading { animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
 .last-update {
-font-size: 0.58rem;
+font-size: 0.56rem;
 color: var(–muted);
-margin-top: 8px;
+margin-top: 6px;
 letter-spacing: 0.06em;
 }
 
-/* Status bar */
 .status-bar {
 display: flex;
-gap: 16px;
-padding: 10px 16px;
+padding: 9px 16px;
 border-bottom: 1px solid var(–border);
-overflow-x: auto;
-scrollbar-width: none;
 }
-.status-bar::-webkit-scrollbar { display: none; }
 
 .stat-pill {
 display: flex;
 align-items: center;
-gap: 6px;
-flex-shrink: 0;
+gap: 5px;
 font-size: 0.6rem;
-letter-spacing: 0.08em;
+letter-spacing: 0.06em;
 color: var(–muted);
 }
 
-.stat-dot {
-width: 6px;
-height: 6px;
-border-radius: 50%;
-}
+.stat-val { color: var(–text); font-weight: 700; }
 
-.stat-val {
-color: var(–text);
-font-weight: 700;
-}
-
-/* Region filters */
 .filters {
 display: flex;
 gap: 8px;
-padding: 12px 16px;
-overflow-x: auto;
-scrollbar-width: none;
+padding: 10px 16px;
 border-bottom: 1px solid var(–border);
 }
-.filters::-webkit-scrollbar { display: none; }
 
 .filter-btn {
 background: none;
 border: 1px solid var(–border);
 color: var(–muted);
-font-family: ‘Space Mono’, monospace;
+font-family: inherit;
 font-size: 0.6rem;
-padding: 5px 10px;
+padding: 5px 12px;
 border-radius: 20px;
 cursor: pointer;
-white-space: nowrap;
 letter-spacing: 0.08em;
 transition: all 0.2s;
-flex-shrink: 0;
 }
 
 .filter-btn.active {
 background: var(–accent);
 border-color: var(–accent);
-color: var(–bg);
+color: #fff;
 }
 
-/* Main grid */
 .grid {
-padding: 12px 16px;
+padding: 10px 16px;
 display: flex;
 flex-direction: column;
 gap: 8px;
 }
 
-/* Station card */
+@media (min-width: 600px) {
+.grid { display: grid; grid-template-columns: 1fr 1fr; }
+}
+
 .card {
 background: var(–surface);
 border: 1px solid var(–border);
 border-radius: 8px;
-padding: 14px;
+padding: 12px 12px 12px 16px;
 cursor: pointer;
-transition: border-color 0.2s, transform 0.15s;
+transition: border-color 0.2s, transform 0.12s;
 position: relative;
-overflow: hidden;
-}
-
-.card::before {
-content: ‘’;
-position: absolute;
-left: 0;
-top: 0;
-bottom: 0;
-width: 3px;
-border-radius: 8px 0 0 8px;
 }
 
 .card:active { transform: scale(0.99); }
-.card.expanded { border-color: #2a3436; }
+.card.expanded { border-color: var(–accent); }
+
+.card-color-bar {
+position: absolute;
+left: 0; top: 0; bottom: 0;
+width: 4px;
+border-radius: 8px 0 0 8px;
+}
 
 .card-header {
 display: flex;
@@ -219,23 +178,20 @@ gap: 8px;
 }
 
 .river-name {
-font-family: ‘Libre Baskerville’, serif;
+font-family: Georgia, serif;
 font-size: 1rem;
 font-weight: 700;
 line-height: 1.1;
 }
 
 .station-id {
-font-size: 0.55rem;
+font-size: 0.52rem;
 color: var(–muted);
 letter-spacing: 0.1em;
 margin-top: 2px;
 }
 
-.debit-main {
-text-align: right;
-flex-shrink: 0;
-}
+.debit-main { text-align: right; flex-shrink: 0; }
 
 .debit-value {
 font-size: 1.4rem;
@@ -244,48 +200,48 @@ line-height: 1;
 letter-spacing: -0.02em;
 }
 
-.debit-unit {
-font-size: 0.55rem;
-color: var(–muted);
-letter-spacing: 0.06em;
-}
+.debit-unit { font-size: 0.52rem; color: var(–muted); letter-spacing: 0.06em; }
 
 .trend-badge {
 display: inline-flex;
 align-items: center;
 gap: 3px;
-font-size: 0.6rem;
+font-size: 0.58rem;
 padding: 2px 6px;
 border-radius: 3px;
 margin-top: 3px;
-letter-spacing: 0.06em;
+letter-spacing: 0.04em;
 }
 
-.trend-up { background: rgba(74, 222, 154, 0.12); color: var(–up); }
-.trend-down { background: rgba(240, 98, 96, 0.12); color: var(–down); }
-.trend-stable { background: rgba(90, 99, 102, 0.2); color: var(–muted); }
+.trend-up   { background: rgba(39,168,98,0.12);   color: var(–up); }
+.trend-down { background: rgba(217,79,77,0.12);   color: var(–down); }
+.trend-nd   { background: rgba(106,118,121,0.15); color: var(–muted); }
 
-/* Mini sparkline */
 .sparkline-row {
-margin-top: 12px;
+margin-top: 10px;
 display: flex;
 align-items: flex-end;
 gap: 2px;
-height: 28px;
+height: 24px;
 }
 
-.spark-bar {
-flex: 1;
-border-radius: 2px 2px 0 0;
-min-height: 2px;
-transition: height 0.4s ease;
+.spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
+
+.status-msg {
+font-size: 0.58rem;
+color: var(–muted);
+padding: 4px 0 0;
+letter-spacing: 0.04em;
+min-height: 16px;
 }
 
-/* Expanded detail */
+.status-msg.ok  { color: var(–accent); }
+.status-msg.err { color: var(–down); }
+
 .detail {
 display: none;
-margin-top: 12px;
-padding-top: 12px;
+margin-top: 10px;
+padding-top: 10px;
 border-top: 1px solid var(–border);
 }
 
@@ -293,147 +249,50 @@ border-top: 1px solid var(–border);
 
 .detail-grid {
 display: grid;
-grid-template-columns: 1fr 1fr;
-gap: 8px;
-margin-bottom: 12px;
+gap: 6px;
+margin-bottom: 8px;
 }
 
 .detail-item {
-background: rgba(255,255,255,0.03);
+background: #f7f8f9;
 border-radius: 6px;
-padding: 8px 10px;
+padding: 7px 9px;
 }
 
 .detail-label {
-font-size: 0.55rem;
+font-size: 0.52rem;
 color: var(–muted);
-letter-spacing: 0.1em;
+letter-spacing: 0.08em;
 text-transform: uppercase;
 margin-bottom: 3px;
 }
 
-.detail-val {
-font-size: 0.85rem;
-font-weight: 700;
-}
+.detail-val { font-size: 0.82rem; font-weight: 700; color: var(–text); }
 
-.fetch-btn {
+.reload-btn {
 width: 100%;
 background: none;
 border: 1px solid var(–border);
 color: var(–accent);
-font-family: ‘Space Mono’, monospace;
-font-size: 0.65rem;
-padding: 8px;
+font-family: inherit;
+font-size: 0.62rem;
+padding: 7px;
 border-radius: 6px;
 cursor: pointer;
-letter-spacing: 0.1em;
-transition: all 0.2s;
+letter-spacing: 0.08em;
 text-transform: uppercase;
 }
 
-.fetch-btn:hover, .fetch-btn:active {
-background: rgba(62, 207, 178, 0.08);
-border-color: var(–accent);
-}
+.reload-btn:active { background: rgba(62,207,178,0.08); }
 
-.fetch-btn.loading {
-color: var(–muted);
-animation: pulse 1s infinite;
-}
-
-/* 7-day chart */
-.chart-container {
-margin-top: 12px;
-}
-
-.chart-title {
-font-size: 0.58rem;
-color: var(–muted);
-letter-spacing: 0.1em;
-text-transform: uppercase;
-margin-bottom: 8px;
-}
-
-.chart-wrap {
-height: 60px;
-position: relative;
-}
-
-svg.linechart {
-width: 100%;
-height: 100%;
-overflow: visible;
-}
-
-/* Alert level indicator */
-.level-bar {
-margin-top: 10px;
-height: 4px;
-background: var(–border);
-border-radius: 2px;
-overflow: hidden;
-position: relative;
-}
-
-.level-fill {
-height: 100%;
-border-radius: 2px;
-transition: width 0.6s ease;
-}
-
-.level-label {
-display: flex;
-justify-content: space-between;
-margin-top: 4px;
-font-size: 0.5rem;
-color: var(–muted);
-letter-spacing: 0.06em;
-}
-
-/* Loading skeleton */
-.skeleton {
-background: linear-gradient(90deg, var(–surface) 25%, var(–border) 50%, var(–surface) 75%);
-background-size: 200% 100%;
-animation: shimmer 1.5s infinite;
-border-radius: 4px;
-}
-
-@keyframes shimmer {
-0% { background-position: 200% 0; }
-100% { background-position: -200% 0; }
-}
-
-/* Status message */
-.status-msg {
-font-size: 0.62rem;
-color: var(–muted);
-padding: 4px 0;
-letter-spacing: 0.06em;
-min-height: 18px;
-}
-
-.status-msg.ok { color: var(–up); }
-.status-msg.err { color: var(–down); }
-.status-msg.warn { color: var(–warn); }
-
-/* Footer */
 footer {
-padding: 20px 16px;
+padding: 16px;
 text-align: center;
-font-size: 0.55rem;
+font-size: 0.52rem;
 color: var(–muted);
-letter-spacing: 0.1em;
+letter-spacing: 0.08em;
 border-top: 1px solid var(–border);
 margin-top: 8px;
-}
-
-/* Responsive wider screens */
-@media (min-width: 600px) {
-.grid {
-display: grid;
-grid-template-columns: 1fr 1fr;
-}
 }
 </style>
 
@@ -453,16 +312,10 @@ grid-template-columns: 1fr 1fr;
 
 <div class="status-bar">
   <div class="stat-pill">
-    <span>🌑</span>
-    <span>Nouv. lune</span>
-    <span class="stat-val" id="nextNew">—</span>
-    <span style="font-size:0.55rem;color:var(--muted)" id="nextNewDays"></span>
+    🌑 Nouv. lune&nbsp;<span class="stat-val" id="nextNew">—</span>&nbsp;<span id="nextNewDays"></span>
   </div>
-  <div class="stat-pill" style="border-left:1px solid var(--border);padding-left:16px">
-    <span>🌕</span>
-    <span>Pleine lune</span>
-    <span class="stat-val" id="nextFull">—</span>
-    <span style="font-size:0.55rem;color:var(--muted)" id="nextFullDays"></span>
+  <div class="stat-pill" style="margin-left:20px;padding-left:20px;border-left:1px solid var(--border)">
+    🌕 Pleine lune&nbsp;<span class="stat-val" id="nextFull">—</span>&nbsp;<span id="nextFullDays"></span>
   </div>
 </div>
 
@@ -473,14 +326,11 @@ grid-template-columns: 1fr 1fr;
 
 <div class="grid" id="stationGrid"></div>
 
-<footer>
-  SOURCE : CEHQ — CENTRE D'EXPERTISE HYDRIQUE DU QUÉBEC<br>
-  DONNÉES EN TEMPS QUASI-RÉEL · PROXY REQUIS EN PRODUCTION
-</footer>
+<footer>SOURCE : CEHQ — CENTRE D'EXPERTISE HYDRIQUE DU QUÉBEC</footer>
 
 <script>
-// ─── Phases lunaires 2026-2027 (dates UTC, source NASA) ──────────────────────
-const MOON_PHASES = {
+// ─── Phases lunaires 2026-2027 (NASA) ────────────────────────────────────────
+const MOON = {
   new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
          '2026-06-15','2026-07-14','2026-08-12','2026-09-11','2026-10-10',
          '2026-11-09','2026-12-09','2027-01-07','2027-02-06','2027-03-08'],
@@ -488,141 +338,125 @@ const MOON_PHASES = {
          '2026-05-31','2026-06-30','2026-07-29','2026-08-28','2026-09-26',
          '2026-10-26','2026-11-24','2026-12-24','2027-01-22','2027-02-20'],
 };
+const MOIS = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
 
-const MOIS_FR = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
-
-function nextMoonDate(type) {
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  for (const dateStr of MOON_PHASES[type]) {
-    const d = new Date(dateStr + 'T12:00:00');
+function nextMoon(type) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  for (const s of MOON[type]) {
+    const d = new Date(s + 'T12:00:00');
     if (d >= today) {
       const diff = Math.round((d - today) / 86400000);
-      const label = `${d.getDate()} ${MOIS_FR[d.getMonth()]}`;
-      return { label, diff };
+      return { label: `${d.getDate()} ${MOIS[d.getMonth()]}`, diff };
     }
   }
   return { label: '—', diff: 0 };
 }
 
-function updateMoonDisplay() {
-  const newMoon  = nextMoonDate('new');
-  const fullMoon = nextMoonDate('full');
-  document.getElementById('nextNew').textContent      = newMoon.label;
-  document.getElementById('nextNewDays').textContent  = newMoon.diff === 0 ? '· auj.' : `· ${newMoon.diff}j`;
-  document.getElementById('nextFull').textContent     = fullMoon.label;
-  document.getElementById('nextFullDays').textContent = fullMoon.diff === 0 ? '· auj.' : `· ${fullMoon.diff}j`;
+function updateMoon() {
+  const n = nextMoon('new'), f = nextMoon('full');
+  document.getElementById('nextNew').textContent     = n.label;
+  document.getElementById('nextNewDays').textContent = n.diff === 0 ? '· auj.' : `· ${n.diff}j`;
+  document.getElementById('nextFull').textContent    = f.label;
+  document.getElementById('nextFullDays').textContent= f.diff === 0 ? '· auj.' : `· ${f.diff}j`;
 }
 
-// ─── Station data ───────────────────────────────────────────────────────────
+// ─── Stations ────────────────────────────────────────────────────────────────
 const STATIONS = [
-  { id: '010802', name: 'Bonaventure',       color: '--bonaventure', region: 'gaspesie',     lat: 48.0667, lng: -65.4833 },
-  { id: '010902', name: 'Petite Cascapédia', color: '--petite',      region: 'gaspesie',     lat: 48.0833, lng: -65.6667 },
-  { id: '011003', name: 'Cascapédia',        color: '--cascapedia',  region: 'gaspesie',     lat: 48.1000, lng: -65.8500 },
-  { id: '011204', name: 'Nouvelle',          color: '--nouvelle',    region: 'gaspesie',     lat: 48.1167, lng: -66.3167 },
-  { id: '011509', name: 'Matapédia',         color: '--matapedia',   region: 'gaspesie',     lat: 48.0000, lng: -66.9833 },
-  { id: '020404', name: 'York',              color: '--york',        region: 'gaspesie',     lat: 48.8333, lng: -64.6667 },
-  { id: '021407', name: 'Sainte-Anne',       color: '--ste-anne',    region: 'gaspesie',     lat: 49.0000, lng: -66.7000 },
-  { id: '021601', name: 'Matane',            color: '--matane',      region: 'bas-st-laurent', lat: 48.8500, lng: -67.5333 },
-  { id: '022003', name: 'Rimouski',          color: '--rimouski',    region: 'bas-st-laurent', lat: 48.4500, lng: -68.5333 },
-  { id: '020602', name: 'Dartmouth',         color: '--dartmouth',   region: 'gaspesie',     lat: 48.7000, lng: -64.8000 },
+  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',      lat:48.0667, lng:-65.4833 },
+  { id:'010902', name:'Petite Cascapédia', color:'--petite',      region:'gaspesie',      lat:48.0833, lng:-65.6667 },
+  { id:'011003', name:'Cascapédia',        color:'--cascapedia',  region:'gaspesie',      lat:48.1000, lng:-65.8500 },
+  { id:'011204', name:'Nouvelle',          color:'--nouvelle',    region:'gaspesie',      lat:48.1167, lng:-66.3167 },
+  { id:'011509', name:'Matapédia',         color:'--matapedia',   region:'gaspesie',      lat:48.0000, lng:-66.9833 },
+  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',      lat:48.8333, lng:-64.6667 },
+  { id:'021407', name:'Sainte-Anne',       color:'--ste-anne',    region:'gaspesie',      lat:49.0000, lng:-66.7000 },
+  { id:'021601', name:'Matane',            color:'--matane',      region:'bas-st-laurent', lat:48.8500, lng:-67.5333 },
+  { id:'022003', name:'Rimouski',          color:'--rimouski',    region:'bas-st-laurent', lat:48.4500, lng:-68.5333 },
+  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',      lat:48.7000, lng:-64.8000 },
 ];
 
-// ─── State ──────────────────────────────────────────────────────────────────
+// ─── État ────────────────────────────────────────────────────────────────────
 const state = {};
 STATIONS.forEach(s => {
-  state[s.id] = {
-    debit: null,
-    trend: null,
-    history: null,
-    status: 'idle',
-    msg: '',
-    expanded: false,
-    sunrise: null,
-    sunset: null,
-    var24h: null,
-    max24h: null,
-    min24h: null,
-  };
+  state[s.id] = { debit:null, trend:null, status:'idle', msg:'', expanded:false,
+                  sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null };
 });
 
-// ─── Real CEHQ fetch via allorigins proxy ────────────────────────────────────
-// ─── API WFS MSP — filtrée sur nos 10 stations seulement ─────────────────────
-const WFS_URL = `https://geoegl.msp.gouv.qc.ca/apis/mapserver-vigilance/ws/vigilance.fcgi?service=wfs&version=1.1.0&request=getfeature&typename=stations_igo2_public&outputformat=geojson`;
-
-let wfsCache = null;
-let wfsCacheTime = 0;
+// ─── API MSP ─────────────────────────────────────────────────────────────────
+const WFS_URL = 'https://geoegl.msp.gouv.qc.ca/apis/mapserver-vigilance/ws/vigilance.fcgi?service=wfs&version=1.1.0&request=getfeature&typename=stations_igo2_public&outputformat=geojson';
+let wfsCache = null, wfsCacheTime = 0;
 
 async function fetchAllStations() {
   const now = Date.now();
-  // Rafraîchir le cache toutes les 5 minutes max
   if (wfsCache && (now - wfsCacheTime) < 5 * 60 * 1000) return wfsCache;
-
   const res = await fetch(WFS_URL, { cache: 'no-store' });
   if (!res.ok) throw new Error('API MSP indisponible');
-  const json = await res.json();
-  wfsCache = json;
+  wfsCache = await res.json();
   wfsCacheTime = now;
-  return json;
+  return wfsCache;
 }
 
 async function fetchDebit(stationId) {
-  // Débit actuel via API MSP uniquement (rapide, pas de CORS)
   const geojson = await fetchAllStations();
-  const feature = geojson.features.find(f =>
-    f.properties.station && f.properties.station.toString().trim() === stationId.toString().trim()
+  const feat = geojson.features.find(f =>
+    f.properties.station && f.properties.station.toString().trim() === stationId
   );
-  if (!feature) throw new Error(`Station ${stationId} non trouvée`);
-  const props = feature.properties;
-  const debit = parseFloat(props.dern_valeur_deb);
+  if (!feat) throw new Error(`Station ${stationId} non trouvée`);
+  const p = feat.properties;
+  const debit = parseFloat(p.dern_valeur_deb);
   if (isNaN(debit) || debit < 0) throw new Error('Débit non disponible');
-  const timestamp = props.dern_date_prise_valeur_utc
-    ? props.dern_date_prise_valeur_utc.replace('T', ' ').substring(0, 16) + ' UTC'
+  const timestamp = p.dern_date_prise_valeur_utc
+    ? p.dern_date_prise_valeur_utc.replace('T',' ').substring(0,16) + ' UTC'
     : '—';
 
-  // Historique local 24h : stocker jusqu'à 96 entrées (24h à 15min)
-  let trend = 'stable';
-  let var24h = null, max24h = null, min24h = null;
-  const storageKey = `hist_${stationId}`;
+  let trend = null, var24h = null, max24h = null, min24h = null;
   try {
-    let hist = JSON.parse(localStorage.getItem(storageKey) || '[]');
-
-    // Ajouter seulement si timestamp nouveau
-    const alreadyStored = hist.some(e => e.ts === timestamp);
-    if (!alreadyStored) {
+    let hist = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
+    if (!hist.some(e => e.ts === timestamp)) {
       hist.push({ debit, ts: timestamp });
       if (hist.length > 96) hist = hist.slice(-96);
-      localStorage.setItem(storageKey, JSON.stringify(hist));
+      localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
     }
-
-    // Tendance : 3 dernières vs 3 d'avant (min 6 entrées)
     if (hist.length >= 6) {
-      const recent = hist.slice(-3).map(e => e.debit);
-      const older  = hist.slice(-6, -3).map(e => e.debit);
-      const avgR = recent.reduce((a,b) => a+b,0) / recent.length;
-      const avgO = older.reduce((a,b) => a+b,0) / older.length;
-      const pct  = (avgR - avgO) / (avgO || 1);
-      if (pct > 0.03) trend = 'up';
-      else if (pct < -0.03) trend = 'down';
-      else trend = 'stable';
-    } else {
-      trend = null;
+      const r = hist.slice(-3).map(e=>e.debit), o = hist.slice(-6,-3).map(e=>e.debit);
+      const avgR = r.reduce((a,b)=>a+b,0)/r.length, avgO = o.reduce((a,b)=>a+b,0)/o.length;
+      const pct = (avgR - avgO) / (avgO || 1);
+      trend = pct > 0.03 ? 'up' : pct < -0.03 ? 'down' : 'stable';
     }
-
-    // Stats 24h : max, min, variation (première vs dernière valeur des 96 entrées)
     if (hist.length >= 2) {
-      const vals = hist.map(e => e.debit);
+      const vals = hist.map(e=>e.debit);
       max24h = Math.max(...vals);
       min24h = Math.min(...vals);
-      const oldest = hist[0].debit;
-      var24h = ((debit - oldest) / (oldest || 1)) * 100;
+      var24h = ((debit - hist[0].debit) / (hist[0].debit || 1)) * 100;
     }
-  } catch(e) { /* localStorage non disponible */ }
+  } catch(e) {}
 
-  return { debit, history: [debit], trend, timestamp, var24h, max24h, min24h };
+  return { debit, trend, timestamp, var24h, max24h, min24h };
 }
 
-// ─── Load a single station ───────────────────────────────────────────────────
+// ─── Sunrise/Sunset — cache localStorage par jour ────────────────────────────
+async function fetchSunTimes(stationId) {
+  const s = STATIONS.find(x => x.id === stationId);
+  if (!s) return null;
+  const today = new Date().toISOString().substring(0,10);
+  const key = `sun_${stationId}_${today}`;
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) return JSON.parse(cached);
+    const res = await fetch(
+      `https://api.sunrisesunset.io/json?lat=${s.lat}&lng=${s.lng}&timezone=America/Toronto&time_format=HH:mm`,
+      { cache: 'no-store' }
+    );
+    const json = await res.json();
+    if (json.status === 'OK') {
+      const sun = { sunrise: json.results.sunrise, sunset: json.results.sunset };
+      localStorage.setItem(key, JSON.stringify(sun));
+      return sun;
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ─── Charger une station ──────────────────────────────────────────────────────
 async function loadStation(stationId) {
   state[stationId].status = 'loading';
   state[stationId].msg = 'Chargement...';
@@ -630,17 +464,14 @@ async function loadStation(stationId) {
 
   try {
     const data = await fetchDebit(stationId);
-    state[stationId].debit = data.debit;
-    state[stationId].history = data.history;
-    state[stationId].trend = data.trend;
-    state[stationId].var24h = data.var24h;
-    state[stationId].max24h = data.max24h;
-    state[stationId].min24h = data.min24h;
-    state[stationId].status = 'ok';
-    state[stationId].msg = data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues';
+    Object.assign(state[stationId], {
+      debit: data.debit, trend: data.trend,
+      var24h: data.var24h, max24h: data.max24h, min24h: data.min24h,
+      status: 'ok', msg: data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues'
+    });
     renderCard(stationId);
 
-    // Sunrise/sunset en arrière-plan — n'affecte pas le débit
+    // Sunrise/sunset en arrière-plan (caché par jour)
     fetchSunTimes(stationId).then(sun => {
       if (sun) {
         state[stationId].sunrise = sun.sunrise;
@@ -648,6 +479,7 @@ async function loadStation(stationId) {
         renderCard(stationId);
       }
     }).catch(() => {});
+
   } catch(e) {
     state[stationId].status = 'error';
     state[stationId].msg = 'Erreur — ' + (e.message || 'inconnu');
@@ -655,209 +487,129 @@ async function loadStation(stationId) {
   }
 }
 
-// ─── Refresh all ────────────────────────────────────────────────────────────
+// ─── Actualiser tout ──────────────────────────────────────────────────────────
 function refreshAll() {
   const btn = document.getElementById('refreshAll');
   btn.classList.add('loading');
   btn.textContent = '↻ Chargement...';
-
-  const timeout = new Promise(resolve => setTimeout(resolve, 15000));
-  const promises = STATIONS.map(s => loadStation(s.id));
-
-  Promise.race([Promise.all(promises), timeout]).then(() => {
+  const done = () => {
     btn.classList.remove('loading');
     btn.textContent = '↻ Actualiser';
     const now = new Date();
     document.getElementById('lastUpdate').textContent =
-      `Dernière mise à jour : ${now.toLocaleDateString('fr-CA')} ${now.toLocaleTimeString('fr-CA', {hour:'2-digit', minute:'2-digit'})}`;
-  });
+      `Dernière mise à jour : ${now.toLocaleDateString('fr-CA')} ${now.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})}`;
+  };
+  Promise.race([
+    Promise.all(STATIONS.map(s => loadStation(s.id))),
+    new Promise(r => setTimeout(r, 12000))
+  ]).then(done);
 }
 
-// ─── Sunrise / Sunset — sunrisesunset.io (gratuit, sans clé) ─────────────────
-async function fetchSunTimes(stationId) {
-  const s = STATIONS.find(x => x.id === stationId);
-  if (!s) return null;
-  try {
-    const res = await fetch(
-      `https://api.sunrisesunset.io/json?lat=${s.lat}&lng=${s.lng}&timezone=America/Toronto&time_format=HH:mm`,
-      { cache: 'no-store' }
-    );
-    const json = await res.json();
-    if (json.status === 'OK') {
-      return { sunrise: json.results.sunrise, sunset: json.results.sunset };
-    }
-  } catch(e) {}
-  return null;
-}
-
-// ─── (summary retiré) ────────────────────────────────────────────────────────
-
-// ─── Sparkline SVG ──────────────────────────────────────────────────────────
-function buildSparkline(history, color) {
-  if (!history) return '<div style="height:60px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--muted)">—</div>';
-
-  const W = 300, H = 60;
-  const min = Math.min(...history);
-  const max = Math.max(...history);
-  const range = max - min || 1;
-  const pts = history.map((v, i) => {
-    const x = (i / (history.length - 1)) * W;
-    const y = H - ((v - min) / range) * (H - 6) - 3;
-    return `${x},${y}`;
-  }).join(' ');
-
-  const lastX = W;
-  const lastY = H - ((history[history.length-1] - min) / range) * (H - 6) - 3;
-
-  return `
-    <svg class="linechart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="grad_${color.replace('--','')}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="${getCSSVar(color)}" stop-opacity="0.3"/>
-          <stop offset="100%" stop-color="${getCSSVar(color)}" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <polygon points="0,${H} ${pts} ${W},${H}" fill="url(#grad_${color.replace('--','')})" />
-      <polyline points="${pts}" fill="none" stroke="${getCSSVar(color)}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
-      <circle cx="${lastX}" cy="${lastY}" r="3" fill="${getCSSVar(color)}"/>
-    </svg>`;
-}
-
+// ─── CSS var cache ────────────────────────────────────────────────────────────
+const cssCache = {};
 function getCSSVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (!cssCache[name])
+    cssCache[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return cssCache[name];
 }
 
-// ─── Mini spark bars ─────────────────────────────────────────────────────────
-function buildMiniSpark(history, color) {
-  if (!history) return '';
+// ─── Mini sparkline ───────────────────────────────────────────────────────────
+function buildSpark(history, color) {
+  if (!history || !history.length) return '';
   const max = Math.max(...history);
   return history.map((v, i) => {
     const pct = Math.max(10, (v / max) * 100);
-    const isLast = i === history.length - 1;
-    const c = isLast ? getCSSVar(color) : 'var(--border)';
+    const c = i === history.length-1 ? getCSSVar(color) : 'var(--border)';
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
 }
 
-// ─── Render a single card ────────────────────────────────────────────────────
+// ─── Rendu carte ──────────────────────────────────────────────────────────────
 function renderCard(stationId) {
   const s = STATIONS.find(x => x.id === stationId);
   const st = state[stationId];
   const card = document.getElementById(`card-${stationId}`);
   if (!card) return;
 
-  const colorVal = getCSSVar(s.color);
-  card.style.setProperty('--card-color', colorVal);
-  card.querySelector('.card-color-bar').style.background = colorVal;
+  const col = getCSSVar(s.color);
+  card.querySelector('.card-color-bar').style.background = col;
 
-  // Debit value
   const debitEl = card.querySelector('.debit-value');
   if (st.status === 'loading') {
-    debitEl.innerHTML = '<span class="skeleton" style="display:inline-block;width:60px;height:1.2rem"></span>';
+    debitEl.textContent = '···';
+    debitEl.style.color = 'var(--muted)';
   } else if (st.debit !== null) {
     debitEl.textContent = st.debit.toFixed(1);
-    debitEl.style.color = colorVal;
+    debitEl.style.color = col;
   } else {
     debitEl.textContent = '—';
     debitEl.style.color = 'var(--muted)';
   }
 
-  // Trend badge
-  const trendEl = card.querySelector('.trend-badge');
-  if (st.trend === 'up') {
-    trendEl.className = 'trend-badge trend-up';
-    trendEl.textContent = '↑ Montante';
-  } else if (st.trend === 'down') {
-    trendEl.className = 'trend-badge trend-down';
-    trendEl.textContent = '↓ Descendante';
-  } else if (st.trend === 'stable') {
-    trendEl.className = 'trend-badge trend-stable';
-    trendEl.textContent = '→ Stable';
-  } else {
-    trendEl.className = 'trend-badge trend-stable';
-    trendEl.textContent = '— N/D';
-  }
+  const tb = card.querySelector('.trend-badge');
+  if (st.trend === 'up')      { tb.className='trend-badge trend-up';   tb.textContent='↑ Montante'; }
+  else if (st.trend==='down') { tb.className='trend-badge trend-down'; tb.textContent='↓ Descendante'; }
+  else if (st.trend==='stable'){tb.className='trend-badge trend-nd';   tb.textContent='→ Stable'; }
+  else                         { tb.className='trend-badge trend-nd';   tb.textContent='— N/D'; }
 
-  // Mini spark
-  card.querySelector('.sparkline-row').innerHTML = buildMiniSpark(st.history || [1], s.color);
+  card.querySelector('.sparkline-row').innerHTML = buildSpark(st.debit ? [st.debit] : [1], s.color);
 
-  // Status msg
-  const msgEl = card.querySelector('.status-msg');
-  msgEl.textContent = st.msg || '';
-  msgEl.className = 'status-msg' + (st.status === 'ok' ? ' ok' : st.status === 'error' ? ' err' : '');
+  const msg = card.querySelector('.status-msg');
+  msg.textContent = st.msg || '';
+  msg.className = 'status-msg' + (st.status==='ok' ? ' ok' : st.status==='error' ? ' err' : '');
 
-  // Expanded detail
   if (st.expanded) {
-    const varEl  = card.querySelector('.dv-var');
-    const maxEl  = card.querySelector('.dv-max24');
-    const minEl  = card.querySelector('.dv-min24');
-
+    const fmt = v => v !== null ? v.toFixed(1) + ' m³/s' : 'N/D';
+    const varEl = card.querySelector('.dv-var');
     if (st.var24h !== null) {
       const sign = st.var24h >= 0 ? '+' : '';
       varEl.textContent = `${sign}${st.var24h.toFixed(1)} %`;
       varEl.style.color = st.var24h > 3 ? 'var(--up)' : st.var24h < -3 ? 'var(--down)' : 'var(--muted)';
-    } else {
-      varEl.textContent = 'N/D';
-      varEl.style.color = 'var(--muted)';
-    }
-    maxEl.textContent = st.max24h !== null ? st.max24h.toFixed(1) + ' m³/s' : 'N/D';
-    minEl.textContent = st.min24h !== null ? st.min24h.toFixed(1) + ' m³/s' : 'N/D';
-
+    } else { varEl.textContent = 'N/D'; varEl.style.color = 'var(--muted)'; }
+    card.querySelector('.dv-max24').textContent  = fmt(st.max24h);
+    card.querySelector('.dv-min24').textContent  = fmt(st.min24h);
     card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
     card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
   }
 }
 
-// ─── Toggle card expansion ───────────────────────────────────────────────────
-function toggleCard(stationId) {
-  const st = state[stationId];
+// ─── Toggle ───────────────────────────────────────────────────────────────────
+function toggleCard(id) {
+  const st = state[id];
   st.expanded = !st.expanded;
-  const card = document.getElementById(`card-${stationId}`);
+  const card = document.getElementById(`card-${id}`);
   if (st.expanded) {
     card.classList.add('expanded');
-    if (st.status === 'idle') loadStation(stationId);
-    else renderCard(stationId);
+    if (st.status === 'idle') loadStation(id);
+    else renderCard(id);
   } else {
     card.classList.remove('expanded');
   }
 }
 
-// ─── Filter ──────────────────────────────────────────────────────────────────
+// ─── Filtre ───────────────────────────────────────────────────────────────────
 function filterStations(filter, btn) {
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-
   document.querySelectorAll('.card').forEach(card => {
-    const id = card.dataset.id;
-    const s = STATIONS.find(x => x.id === id);
-    const st = state[id];
-    let show = true;
-
-    if (filter === 'gaspesie') show = s.region === 'gaspesie';
-    else if (filter === 'bas-st-laurent') show = s.region === 'bas-st-laurent';
-    else if (filter === 'up') show = st.trend === 'up';
-    else if (filter === 'down') show = st.trend === 'down';
-
-    card.style.display = show ? '' : 'none';
+    const s = STATIONS.find(x => x.id === card.dataset.id);
+    card.style.display = s.region === filter ? '' : 'none';
   });
 }
 
-// ─── Build all cards ──────────────────────────────────────────────────────────
+// ─── Construction cartes ──────────────────────────────────────────────────────
 function buildCards() {
   const grid = document.getElementById('stationGrid');
   grid.innerHTML = '';
-
   STATIONS.forEach(s => {
     const div = document.createElement('div');
     div.className = 'card';
     div.id = `card-${s.id}`;
     div.dataset.id = s.id;
-    div.dataset.region = s.region;
     div.onclick = () => toggleCard(s.id);
-
     div.innerHTML = `
-      <div class="card-color-bar" style="position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:8px 0 0 8px"></div>
-      <div class="card-header" style="padding-left:8px">
+      <div class="card-color-bar"></div>
+      <div class="card-header">
         <div>
           <div class="river-name">${s.name}</div>
           <div class="station-id">STATION ${s.id}</div>
@@ -865,7 +617,7 @@ function buildCards() {
         <div class="debit-main">
           <div class="debit-value" style="color:var(--muted)">—</div>
           <div class="debit-unit">m³/s</div>
-          <div class="trend-badge trend-stable">— N/D</div>
+          <div class="trend-badge trend-nd">— N/D</div>
         </div>
       </div>
       <div class="sparkline-row"></div>
@@ -885,7 +637,7 @@ function buildCards() {
             <div class="detail-val dv-min24">—</div>
           </div>
         </div>
-        <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:8px">
+        <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:6px">
           <div class="detail-item">
             <div class="detail-label">🌅 Lever</div>
             <div class="detail-val dv-sunrise">—</div>
@@ -895,21 +647,18 @@ function buildCards() {
             <div class="detail-val dv-sunset">—</div>
           </div>
         </div>
-        <button class="fetch-btn" style="margin-top:10px" onclick="event.stopPropagation(); loadStation('${s.id}')">
+        <button class="reload-btn" style="margin-top:8px" onclick="event.stopPropagation();loadStation('${s.id}')">
           ↻ Recharger cette station
         </button>
       </div>`;
-
     grid.appendChild(div);
   });
 }
 
-// ─── Init ────────────────────────────────────────────────────────────────────
+// ─── Init ─────────────────────────────────────────────────────────────────────
 buildCards();
-updateMoonDisplay();
-// Filtre par défaut : Gaspésie
+updateMoon();
 filterStations('gaspesie', document.querySelector('.filter-btn'));
-// Auto-load on startup
 refreshAll();
 </script>
 
