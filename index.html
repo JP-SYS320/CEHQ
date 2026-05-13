@@ -629,28 +629,30 @@ async function loadStation(stationId) {
   renderCard(stationId);
 
   try {
-    const [data, sun] = await Promise.all([
-      fetchDebit(stationId),
-      fetchSunTimes(stationId)
-    ]);
+    const data = await fetchDebit(stationId);
     state[stationId].debit = data.debit;
     state[stationId].history = data.history;
     state[stationId].trend = data.trend;
     state[stationId].var24h = data.var24h;
     state[stationId].max24h = data.max24h;
     state[stationId].min24h = data.min24h;
-    if (sun) {
-      state[stationId].sunrise = sun.sunrise;
-      state[stationId].sunset  = sun.sunset;
-    }
     state[stationId].status = 'ok';
     state[stationId].msg = data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues';
+    renderCard(stationId);
+
+    // Sunrise/sunset en arrière-plan — n'affecte pas le débit
+    fetchSunTimes(stationId).then(sun => {
+      if (sun) {
+        state[stationId].sunrise = sun.sunrise;
+        state[stationId].sunset  = sun.sunset;
+        renderCard(stationId);
+      }
+    }).catch(() => {});
   } catch(e) {
     state[stationId].status = 'error';
     state[stationId].msg = 'Erreur — ' + (e.message || 'inconnu');
+    renderCard(stationId);
   }
-
-  renderCard(stationId);
 }
 
 // ─── Refresh all ────────────────────────────────────────────────────────────
