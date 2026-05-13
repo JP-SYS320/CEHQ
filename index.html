@@ -25,6 +25,7 @@
     --dartmouth: #d4c068;
     --petite: #c8a0d4;
     --ste-anne: #88b8d4;
+    --mitis: #f0a070;
   }
 
 - { margin: 0; padding: 0; box-sizing: border-box; }
@@ -382,6 +383,7 @@ const STATIONS = [
   { id:'021407', name:'Sainte-Anne',       color:'--ste-anne',    region:'gaspesie',      lat:49.0000, lng:-66.7000 },
   { id:'021601', name:'Matane',            color:'--matane',      region:'bas-st-laurent', lat:48.8500, lng:-67.5333 },
   { id:'022003', name:'Rimouski',          color:'--rimouski',    region:'bas-st-laurent', lat:48.4500, lng:-68.5333 },
+  { id:'MITIS',  name:'Mitis',             color:'--mitis',       region:'bas-st-laurent', lat:48.5833, lng:-68.1833 },
   { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',      lat:48.7000, lng:-64.8000 },
 ];
 
@@ -407,6 +409,11 @@ async function fetchAllStations() {
 }
 
 async function fetchDebit(stationId) {
+  // Stations sans données CEHQ
+  if (stationId === 'MITIS') {
+    return { debit: null, trend: null, timestamp: null, var24h: null, max24h: null, min24h: null };
+  }
+
   const geojson = await fetchAllStations();
   const feat = geojson.features.find(f =>
     f.properties.station && f.properties.station.toString().trim() === stationId
