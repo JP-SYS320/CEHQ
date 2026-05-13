@@ -288,9 +288,7 @@ letter-spacing: 0.08em;
 text-transform: uppercase;
 }
 
-.reload-btn:active { background: rgba(62,207,178,0.08); }
-
-.reload-btn:active { background: rgba(62,207,178,0.08); }
+.reload-btn:active { background: rgba(62,207,178,0.08); border-color: var(–accent); }
 
 footer {
 padding: 16px;
@@ -321,7 +319,7 @@ margin-top: 8px;
   <div class="stat-pill">
     🌑 Nouv. lune&nbsp;<span class="stat-val" id="nextNew">—</span>&nbsp;<span id="nextNewDays"></span>
   </div>
-  <div class="stat-pill" style="margin-left:20px;padding-left:20px;border-left:1px solid var(--border)">
+  <div class="stat-pill" style="margin-left:10px;padding-left:10px;border-left:1px solid var(--border)">
     🌕 Pleine lune&nbsp;<span class="stat-val" id="nextFull">—</span>&nbsp;<span id="nextFullDays"></span>
   </div>
 </div>
@@ -654,7 +652,7 @@ function buildCards() {
             <div class="detail-val dv-sunset">—</div>
           </div>
         </div>
-        <button class="reload-btn" style="margin-top:8px" onclick="event.stopPropagation();loadStation('${s.id}')">
+        <button class="reload-btn" style="margin-top:8px;display:block" onclick="event.stopPropagation();loadStation('${s.id}')">
           ↻ Recharger cette station
         </button>
       </div>`;
