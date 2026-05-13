@@ -661,8 +661,10 @@ function refreshAll() {
   btn.classList.add('loading');
   btn.textContent = '↻ Chargement...';
 
+  const timeout = new Promise(resolve => setTimeout(resolve, 15000));
   const promises = STATIONS.map(s => loadStation(s.id));
-  Promise.all(promises).then(() => {
+
+  Promise.race([Promise.all(promises), timeout]).then(() => {
     btn.classList.remove('loading');
     btn.textContent = '↻ Actualiser';
     const now = new Date();
@@ -777,7 +779,7 @@ function renderCard(stationId) {
   }
 
   // Mini spark
-  card.querySelector('.sparkline-row').innerHTML = buildMiniSpark(st.history || s.typique.map(()=>1), s.color);
+  card.querySelector('.sparkline-row').innerHTML = buildMiniSpark(st.history || [1], s.color);
 
   // Status msg
   const msgEl = card.querySelector('.status-msg');
