@@ -316,7 +316,7 @@ margin-top: 8px;
       <div class="site-title">Rivières à Saumon</div>
       <div class="site-subtitle">Débits CEHQ — Québec</div>
     </div>
-    <button class="refresh-btn" id="refreshAll" onclick="refreshAll()">↻ Actualiser</button>
+    <div class="refresh-btn" id="refreshAll" onclick="refreshAll()">↻ Actualiser</div>
   </div>
   <div class="last-update" id="lastUpdate">Dernière mise à jour : —</div>
 </header>
@@ -331,8 +331,8 @@ margin-top: 8px;
 </div>
 
 <div class="filters">
-  <button class="filter-btn active" onclick="filterStations('gaspesie', this)">Gaspésie</button>
-  <button class="filter-btn" onclick="filterStations('bas-st-laurent', this)">Bas-St-Laurent</button>
+  <div class="filter-btn active" onclick="filterStations('gaspesie', this)">Gaspésie</div>
+  <div class="filter-btn" onclick="filterStations('bas-st-laurent', this)">Bas-St-Laurent</div>
 </div>
 
 <div class="grid" id="stationGrid"></div>
@@ -658,9 +658,9 @@ function buildCards() {
             <div class="detail-val dv-sunset">—</div>
           </div>
         </div>
-        <button class="reload-btn" style="margin-top:8px;display:block" onclick="event.stopPropagation();loadStation('${s.id}')">
+        <div class="reload-btn" style="margin-top:8px" onclick="event.stopPropagation();loadStation('${s.id}')">
           ↻ Recharger cette station
-        </button>
+        </div>
       </div>`;
     grid.appendChild(div);
   });
