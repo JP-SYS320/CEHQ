@@ -10,7 +10,7 @@
     --surface: #ffffff;
     --border: #d8dee0;
     --text: #1a2022;
-    --muted: #4a5568;
+    --muted: #3d4a52;
     --accent: #3ecfb2;
     --up: #27a862;
     --down: #d94f4d;
@@ -318,6 +318,7 @@
     <div class="refresh-btn" id="refreshAll" onclick="refreshAll()">↻ Actualiser</div>
   </div>
   <div class="last-update" id="lastUpdate">Dernière mise à jour : —</div>
+  <div style="font-size:0.55rem;color:#d94f4d;cursor:pointer;margin-top:4px;letter-spacing:0.06em" onclick="localStorage.clear();location.reload()">⚠ Vider le cache (une fois seulement)</div>
 </header>
 
 <div class="status-bar">
