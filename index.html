@@ -644,11 +644,11 @@ function renderCard(stationId) {
     if (tidesEl) {
       if (st.tides && st.tides.length > 0) {
         tidesEl.innerHTML = st.tides.map(t =>
-          `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
-            <span style="color:var(--muted);font-size:0.6rem">${t.day}</span>
-            <span style="font-weight:700;color:${t.type==='HM' ? 'var(--up)' : 'var(--down)'}">${t.type}</span>
-            <span>${t.time}</span>
-            <span style="color:var(--muted)">${t.value} m</span>
+          `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #d8dee0">
+            <span style="color:#4a5568;font-size:0.6rem">${t.day}</span>
+            <span style="font-weight:700;color:${t.type==='HM' ? '#27a862' : '#d94f4d'}">${t.type}</span>
+            <span style="color:#1a2022">${t.time}</span>
+            <span style="color:#4a5568">${t.value} m</span>
           </div>`
         ).join('');
       } else if (st.status === 'ok' && st.tides === null) {
