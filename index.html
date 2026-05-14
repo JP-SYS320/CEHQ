@@ -702,7 +702,7 @@ function buildCards() {
           <div class="station-id">STATION ${s.id}</div>
         </div>
         <div class="debit-main">
-          <div class="debit-value" style="color:var(--muted)">—</div>
+          <div class="debit-value" style="color:#4a5568">—</div>
           <div class="debit-unit">m³/s</div>
           <div class="trend-badge trend-nd">— N/D</div>
         </div>
@@ -736,9 +736,9 @@ function buildCards() {
         </div>
         ${s.iwls ? `<div class="detail-item dv-tides" style="margin-top:6px">
           <div class="detail-label">🌊 Marées — Bonaventure</div>
-          <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:var(--muted)">Chargement...</div>
+          <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:#4a5568">···</div>
         </div>` : ''}
-        <div class="reload-btn" style="margin-top:8px;border:1.5px solid var(--accent);border-radius:6px;padding:7px;text-align:center;color:var(--accent);font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;" onclick="event.stopPropagation();loadStation('${s.id}')">
+        <div class="reload-btn" style="margin-top:8px;border:1.5px solid #3ecfb2;border-radius:6px;padding:7px;text-align:center;color:#3ecfb2;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;" onclick="event.stopPropagation();loadStation('${s.id}')">
           ↻ Recharger cette station
         </div>
       </div>`;
@@ -747,6 +747,12 @@ function buildCards() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+// Purger les vieilles clés de marées (autre que aujourd'hui)
+const today = new Date().toISOString().substring(0,10);
+Object.keys(localStorage).forEach(k => {
+  if (k.startsWith('tides_') && !k.endsWith(today)) localStorage.removeItem(k);
+});
+
 buildCards();
 updateMoon();
 filterStations('gaspesie', document.querySelector('.filter-btn'));
