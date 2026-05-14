@@ -10,7 +10,7 @@
     --surface: #ffffff;
     --border: #d8dee0;
     --text: #1a2022;
-    --muted: #6a7679;
+    --muted: #4a5568;
     --accent: #3ecfb2;
     --up: #27a862;
     --down: #d94f4d;
@@ -509,7 +509,7 @@ async function fetchTides(stationId) {
         type: t.value > 1.0 ? 'HM' : 'BM',
         day: dayLabel
       };
-    });
+    }).filter(t => t.day === 'Auj.');
 
     localStorage.setItem(key, JSON.stringify(tides));
     return tides;
