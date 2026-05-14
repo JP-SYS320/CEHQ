@@ -372,17 +372,17 @@ function updateMoon() {
 
 // ─── Stations ────────────────────────────────────────────────────────────────
 const STATIONS = [
-  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',      lat:48.0667, lng:-65.4833, iwls:'5cebf1e13d0f4a073c4bbf21' },
-  { id:'010902', name:'Petite Cascapédia', color:'--petite',      region:'gaspesie',      lat:48.0833, lng:-65.6667 },
-  { id:'011003', name:'Cascapédia',        color:'--cascapedia',  region:'gaspesie',      lat:48.1000, lng:-65.8500 },
-  { id:'011204', name:'Nouvelle',          color:'--nouvelle',    region:'gaspesie',      lat:48.1167, lng:-66.3167 },
-  { id:'011509', name:'Matapédia',         color:'--matapedia',   region:'gaspesie',      lat:48.0000, lng:-66.9833 },
-  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',      lat:48.8333, lng:-64.6667 },
-  { id:'021407', name:'Sainte-Anne',       color:'--ste-anne',    region:'gaspesie',      lat:49.0000, lng:-66.7000 },
-  { id:'021601', name:'Matane',            color:'--matane',      region:'bas-st-laurent', lat:48.8500, lng:-67.5333 },
-  { id:'022003', name:'Rimouski',          color:'--rimouski',    region:'bas-st-laurent', lat:48.4500, lng:-68.5333 },
+  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',      lat:48.0667, lng:-65.4833, iwls:'5cebf1e13d0f4a073c4bbf21', iwlsName:'Bonaventure' },
+  { id:'010902', name:'Petite Cascapédia', color:'--petite',      region:'gaspesie',      lat:48.0833, lng:-65.6667, iwlsCode:'02195', iwlsName:'New Richmond' },
+  { id:'011003', name:'Cascapédia',        color:'--cascapedia',  region:'gaspesie',      lat:48.1000, lng:-65.8500, iwlsCode:'02195', iwlsName:'New Richmond' },
+  { id:'011204', name:'Nouvelle',          color:'--nouvelle',    region:'gaspesie',      lat:48.1167, lng:-66.3167, iwlsCode:'02195', iwlsName:'New Richmond' },
+  { id:'011509', name:'Matapédia',         color:'--matapedia',   region:'gaspesie',      lat:48.0000, lng:-66.9833, iwlsCode:'02195', iwlsName:'New Richmond' },
+  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',      lat:48.8333, lng:-64.6667, iwlsCode:'02320', iwlsName:'Gaspé' },
+  { id:'021407', name:'Sainte-Anne',       color:'--ste-anne',    region:'gaspesie',      lat:49.0000, lng:-66.7000, iwlsCode:'02320', iwlsName:'Gaspé' },
+  { id:'021601', name:'Matane',            color:'--matane',      region:'bas-st-laurent', lat:48.8500, lng:-67.5333, iwlsCode:'02955', iwlsName:'Matane' },
+  { id:'022003', name:'Rimouski',          color:'--rimouski',    region:'bas-st-laurent', lat:48.4500, lng:-68.5333, iwlsCode:'02985', iwlsName:'Rimouski' },
   { id:'MITIS',  name:'Mitis',             color:'--mitis',       region:'bas-st-laurent', lat:48.5833, lng:-68.1833 },
-  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',      lat:48.7000, lng:-64.8000 },
+  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',      lat:48.7000, lng:-64.8000, iwlsCode:'02320', iwlsName:'Gaspé' },
 ];
 
 // ─── État ────────────────────────────────────────────────────────────────────
@@ -473,10 +473,34 @@ async function fetchSunTimes(stationId) {
   return null;
 }
 
-// ─── Marées IWLS — cache localStorage par jour ───────────────────────────────
+// ─── Marées IWLS — résolution UUID automatique + cache localStorage ──────────
+const iwlsUuidCache = {}; // code → uuid en mémoire
+
+async function resolveIwlsUuid(code) {
+  if (iwlsUuidCache[code]) return iwlsUuidCache[code];
+  const stored = localStorage.getItem(`iwls_uuid_${code}`);
+  if (stored) { iwlsUuidCache[code] = stored; return stored; }
+  try {
+    const res = await fetch(`https://api-iwls.dfo-mpo.gc.ca/api/v1/stations?code=${code}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data[0] && data[0].id) {
+      iwlsUuidCache[code] = data[0].id;
+      localStorage.setItem(`iwls_uuid_${code}`, data[0].id);
+      return data[0].id;
+    }
+  } catch(e) {}
+  return null;
+}
+
 async function fetchTides(stationId) {
   const s = STATIONS.find(x => x.id === stationId);
-  if (!s || !s.iwls) return null;
+  if (!s) return null;
+
+  // Résoudre l'UUID : soit déjà connu, soit à chercher via le code
+  let uuid = s.iwls || null;
+  if (!uuid && s.iwlsCode) uuid = await resolveIwlsUuid(s.iwlsCode);
+  if (!uuid) return null;
 
   const today = new Date().toISOString().substring(0,10);
   const key = `tides_${stationId}_${today}`;
@@ -484,31 +508,24 @@ async function fetchTides(stationId) {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
 
-    // Fenêtre : aujourd'hui + demain en UTC
     const from = `${today}T00:00:00Z`;
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     const to = tomorrow.toISOString().substring(0,10) + 'T23:59:59Z';
 
     const res = await fetch(
-      `https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/${s.iwls}/data?time-series-code=wlp-hilo&from=${from}&to=${to}`,
+      `https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/${uuid}/data?time-series-code=wlp-hilo&from=${from}&to=${to}`,
       { cache: 'no-store' }
     );
     if (!res.ok) return null;
     const data = await res.json();
 
-    // Formater : convertir UTC → HAE (UTC-4) et étiqueter HM/BM
     const tides = data.map(t => {
       const d = new Date(t.eventDate);
       const hae = new Date(d.getTime() - 4 * 3600000);
       const hh = hae.getUTCHours().toString().padStart(2,'0');
       const mm = hae.getUTCMinutes().toString().padStart(2,'0');
       const dayLabel = hae.toISOString().substring(0,10) === today ? 'Auj.' : 'Dem.';
-      return {
-        time: `${hh}:${mm}`,
-        value: t.value.toFixed(2),
-        type: t.value > 1.0 ? 'HM' : 'BM',
-        day: dayLabel
-      };
+      return { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value > 1.0 ? 'HM':'BM', day:dayLabel };
     }).filter(t => t.day === 'Auj.');
 
     localStorage.setItem(key, JSON.stringify(tides));
@@ -734,8 +751,8 @@ function buildCards() {
             <div class="detail-val dv-sunset">—</div>
           </div>
         </div>
-        ${s.iwls ? `<div class="detail-item dv-tides" style="margin-top:6px">
-          <div class="detail-label">🌊 Marées — Bonaventure</div>
+        ${s.iwls || s.iwlsCode ? `<div class="detail-item dv-tides" style="margin-top:6px">
+          <div class="detail-label">🌊 Marées — ${s.iwlsName || 'Station locale'}</div>
           <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:#4a5568">···</div>
         </div>` : ''}
         <div class="reload-btn" style="margin-top:8px;border:1.5px solid #3ecfb2;border-radius:6px;padding:7px;text-align:center;color:#3ecfb2;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;" onclick="event.stopPropagation();loadStation('${s.id}')">
