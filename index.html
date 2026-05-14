@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -28,286 +27,285 @@
     --mitis: #f0a070;
   }
 
-- { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { background: var(–bg); }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: var(--bg); }
 
-body {
-color: var(–text);
-font-family: ‘SF Mono’, ‘Fira Mono’, ‘Courier New’, monospace;
-min-height: 100vh;
-padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-}
+  body {
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Mono', 'Courier New', monospace;
+    min-height: 100vh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
 
-header {
-padding: 16px 16px 10px;
-border-bottom: 1px solid var(–border);
-position: sticky;
-top: 0;
-background: var(–bg);
-z-index: 100;
-}
+  header {
+    padding: 16px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
 
-.header-top {
-display: flex;
-align-items: flex-start;
-justify-content: space-between;
-gap: 12px;
-}
+  .header-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
 
-.site-title {
-font-family: Georgia, serif;
-font-size: 1.1rem;
-font-style: italic;
-color: var(–accent);
-letter-spacing: 0.02em;
-line-height: 1.2;
-}
+  .site-title {
+    font-family: Georgia, serif;
+    font-size: 1.1rem;
+    font-style: italic;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+  }
 
-.site-subtitle {
-font-size: 0.58rem;
-color: var(–muted);
-letter-spacing: 0.12em;
-text-transform: uppercase;
-margin-top: 3px;
-}
+  .site-subtitle {
+    font-size: 0.58rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 3px;
+  }
 
-.refresh-btn {
-background: none;
-border: 1.5px solid #b0bbbf;
-color: var(–muted);
-font-family: inherit;
-font-size: 0.65rem;
-padding: 6px 10px;
-border-radius: 6px;
-cursor: pointer;
-letter-spacing: 0.08em;
-white-space: nowrap;
-transition: border-color 0.2s, color 0.2s;
-flex-shrink: 0;
--webkit-appearance: none;
-appearance: none;
-}
+  .refresh-btn {
+    background: none;
+    border: 1.5px solid #b0bbbf;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 0.65rem;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    transition: border-color 0.2s, color 0.2s;
+    flex-shrink: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
 
-.refresh-btn:active { border-color: var(–accent); color: var(–accent); }
-.refresh-btn.loading { animation: pulse 1s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .refresh-btn:active { border-color: var(--accent); color: var(--accent); }
+  .refresh-btn.loading { animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-.last-update {
-font-size: 0.56rem;
-color: var(–muted);
-margin-top: 6px;
-letter-spacing: 0.06em;
-}
+  .last-update {
+    font-size: 0.56rem;
+    color: var(--muted);
+    margin-top: 6px;
+    letter-spacing: 0.06em;
+  }
 
-.status-bar {
-display: flex;
-padding: 9px 16px;
-border-bottom: 1px solid var(–border);
-align-items: center;
-overflow-x: auto;
-white-space: nowrap;
-}
+  .status-bar {
+    display: flex;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
 
-.stat-pill {
-display: inline-flex;
-align-items: center;
-gap: 5px;
-font-size: 0.6rem;
-letter-spacing: 0.06em;
-color: var(–muted);
-flex-shrink: 0;
-}
+  .stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.6rem;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
 
-.stat-val { color: var(–text); font-weight: 700; }
+  .stat-val { color: var(--text); font-weight: 700; }
 
-.filters {
-display: flex;
-gap: 8px;
-padding: 10px 16px;
-border-bottom: 1px solid var(–border);
-}
+  .filters {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
 
-.filter-btn {
-background: none;
-border: 1.5px solid #b0bbbf;
-color: var(–muted);
-font-family: inherit;
-font-size: 0.6rem;
-padding: 5px 12px;
-border-radius: 20px;
-cursor: pointer;
-letter-spacing: 0.08em;
-transition: all 0.2s;
--webkit-appearance: none;
-appearance: none;
-}
+  .filter-btn {
+    background: none;
+    border: 1.5px solid #b0bbbf;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 0.6rem;
+    padding: 5px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    transition: all 0.2s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
 
-.filter-btn.active {
-background: none;
-border: 2px solid var(–accent);
-color: var(–accent);
-font-weight: 700;
-}
+  .filter-btn.active {
+    background: none;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-weight: 700;
+  }
 
-.grid {
-padding: 10px 16px;
-display: flex;
-flex-direction: column;
-gap: 8px;
-}
+  .grid {
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
 
-@media (min-width: 600px) {
-.grid { display: grid; grid-template-columns: 1fr 1fr; }
-}
+  @media (min-width: 600px) {
+    .grid { display: grid; grid-template-columns: 1fr 1fr; }
+  }
 
-.card {
-background: var(–surface);
-border: 1px solid var(–border);
-border-radius: 8px;
-padding: 12px 12px 12px 16px;
-cursor: pointer;
-transition: border-color 0.2s, transform 0.12s;
-position: relative;
-}
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 12px 12px 16px;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.12s;
+    position: relative;
+  }
 
-.card:active { transform: scale(0.99); }
-.card.expanded { border-color: var(–accent); }
+  .card:active { transform: scale(0.99); }
+  .card.expanded { border-color: var(--accent); }
 
-.card-color-bar {
-position: absolute;
-left: 0; top: 0; bottom: 0;
-width: 4px;
-border-radius: 8px 0 0 8px;
-}
+  .card-color-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    border-radius: 8px 0 0 8px;
+  }
 
-.card-header {
-display: flex;
-align-items: center;
-justify-content: space-between;
-gap: 8px;
-}
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
 
-.river-name {
-font-family: Georgia, serif;
-font-size: 1rem;
-font-weight: 700;
-line-height: 1.1;
-}
+  .river-name {
+    font-family: Georgia, serif;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
 
-.station-id {
-font-size: 0.52rem;
-color: var(–muted);
-letter-spacing: 0.1em;
-margin-top: 2px;
-}
+  .station-id {
+    font-size: 0.52rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
 
-.debit-main { text-align: right; flex-shrink: 0; }
+  .debit-main { text-align: right; flex-shrink: 0; }
 
-.debit-value {
-font-size: 1.4rem;
-font-weight: 700;
-line-height: 1;
-letter-spacing: -0.02em;
-}
+  .debit-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
 
-.debit-unit { font-size: 0.52rem; color: var(–muted); letter-spacing: 0.06em; }
+  .debit-unit { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; }
 
-.trend-badge {
-display: inline-flex;
-align-items: center;
-gap: 3px;
-font-size: 0.58rem;
-padding: 2px 6px;
-border-radius: 3px;
-margin-top: 3px;
-letter-spacing: 0.04em;
-}
+  .trend-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.58rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-top: 3px;
+    letter-spacing: 0.04em;
+  }
 
-.trend-up   { background: rgba(39,168,98,0.12);   color: var(–up); }
-.trend-down { background: rgba(217,79,77,0.12);   color: var(–down); }
-.trend-nd   { background: rgba(106,118,121,0.15); color: var(–muted); }
+  .trend-up   { background: rgba(39,168,98,0.12);   color: var(--up); }
+  .trend-down { background: rgba(217,79,77,0.12);   color: var(--down); }
+  .trend-nd   { background: rgba(106,118,121,0.15); color: var(--muted); }
 
-.sparkline-row {
-margin-top: 10px;
-display: flex;
-align-items: flex-end;
-gap: 2px;
-height: 24px;
-}
+  .sparkline-row {
+    margin-top: 10px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 24px;
+  }
 
-.spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
+  .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
 
-.status-msg {
-font-size: 0.58rem;
-color: var(–muted);
-padding: 4px 0 0;
-letter-spacing: 0.04em;
-min-height: 16px;
-}
+  .status-msg {
+    font-size: 0.58rem;
+    color: var(--muted);
+    padding: 4px 0 0;
+    letter-spacing: 0.04em;
+    min-height: 16px;
+  }
 
-.status-msg.ok  { color: var(–accent); }
-.status-msg.err { color: var(–down); }
+  .status-msg.ok  { color: var(--accent); }
+  .status-msg.err { color: var(--down); }
 
-.detail {
-display: none;
-margin-top: 10px;
-padding-top: 10px;
-border-top: 1px solid var(–border);
-}
+  .detail {
+    display: none;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
 
-.card.expanded .detail { display: block; }
+  .card.expanded .detail { display: block; }
 
-.detail-grid {
-display: grid;
-gap: 6px;
-margin-bottom: 8px;
-}
+  .detail-grid {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
 
-.detail-item {
-background: #f7f8f9;
-border-radius: 6px;
-padding: 7px 9px;
-}
+  .detail-item {
+    background: #f7f8f9;
+    border-radius: 6px;
+    padding: 7px 9px;
+  }
 
-.detail-label {
-font-size: 0.52rem;
-color: var(–muted);
-letter-spacing: 0.08em;
-text-transform: uppercase;
-margin-bottom: 3px;
-}
+  .detail-label {
+    font-size: 0.52rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
 
-.detail-val { font-size: 0.82rem; font-weight: 700; color: var(–text); }
+  .detail-val { font-size: 0.82rem; font-weight: 700; color: var(--text); }
 
-.reload-btn {
-width: 100%;
-background: none;
-border: 1.5px solid var(–accent);
-color: var(–accent);
-font-family: inherit;
-font-size: 0.62rem;
-padding: 7px;
-border-radius: 6px;
-cursor: pointer;
-letter-spacing: 0.08em;
-text-transform: uppercase;
--webkit-appearance: none;
-appearance: none;
-}
+  .reload-btn {
+    width: 100%;
+    background: none;
+    border: 1.5px solid var(--accent);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 0.62rem;
+    padding: 7px;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    -webkit-appearance: none;
+    appearance: none;
+  }
 
-.reload-btn:active { background: rgba(62,207,178,0.08); border-color: var(–accent); }
+  .reload-btn:active { background: rgba(62,207,178,0.08); border-color: var(--accent); }
 
-footer {
-padding: 16px;
-text-align: center;
-font-size: 0.52rem;
-color: var(–muted);
-letter-spacing: 0.08em;
-border-top: 1px solid var(–border);
-margin-top: 8px;
-}
+  footer {
+    padding: 16px;
+    text-align: center;
+    font-size: 0.52rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+  }
 </style>
-
 </head>
 <body>
 
@@ -374,7 +372,7 @@ function updateMoon() {
 
 // ─── Stations ────────────────────────────────────────────────────────────────
 const STATIONS = [
-  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',      lat:48.0667, lng:-65.4833 },
+  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',      lat:48.0667, lng:-65.4833, iwls:'5cebf1e13d0f4a073c4bbf21' },
   { id:'010902', name:'Petite Cascapédia', color:'--petite',      region:'gaspesie',      lat:48.0833, lng:-65.6667 },
   { id:'011003', name:'Cascapédia',        color:'--cascapedia',  region:'gaspesie',      lat:48.1000, lng:-65.8500 },
   { id:'011204', name:'Nouvelle',          color:'--nouvelle',    region:'gaspesie',      lat:48.1167, lng:-66.3167 },
@@ -391,7 +389,8 @@ const STATIONS = [
 const state = {};
 STATIONS.forEach(s => {
   state[s.id] = { debit:null, trend:null, status:'idle', msg:'', expanded:false,
-                  sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null };
+                  sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null,
+                  tides:null };
 });
 
 // ─── API MSP ─────────────────────────────────────────────────────────────────
@@ -474,6 +473,50 @@ async function fetchSunTimes(stationId) {
   return null;
 }
 
+// ─── Marées IWLS — cache localStorage par jour ───────────────────────────────
+async function fetchTides(stationId) {
+  const s = STATIONS.find(x => x.id === stationId);
+  if (!s || !s.iwls) return null;
+
+  const today = new Date().toISOString().substring(0,10);
+  const key = `tides_${stationId}_${today}`;
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) return JSON.parse(cached);
+
+    // Fenêtre : aujourd'hui + demain en UTC
+    const from = `${today}T00:00:00Z`;
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    const to = tomorrow.toISOString().substring(0,10) + 'T23:59:59Z';
+
+    const res = await fetch(
+      `https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/${s.iwls}/data?time-series-code=wlp-hilo&from=${from}&to=${to}`,
+      { cache: 'no-store' }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    // Formater : convertir UTC → HAE (UTC-4) et étiqueter HM/BM
+    const tides = data.map(t => {
+      const d = new Date(t.eventDate);
+      const hae = new Date(d.getTime() - 4 * 3600000);
+      const hh = hae.getUTCHours().toString().padStart(2,'0');
+      const mm = hae.getUTCMinutes().toString().padStart(2,'0');
+      const dayLabel = hae.toISOString().substring(0,10) === today ? 'Auj.' : 'Dem.';
+      return {
+        time: `${hh}:${mm}`,
+        value: t.value.toFixed(2),
+        type: t.value > 1.0 ? 'HM' : 'BM',
+        day: dayLabel
+      };
+    });
+
+    localStorage.setItem(key, JSON.stringify(tides));
+    return tides;
+  } catch(e) {}
+  return null;
+}
+
 // ─── Charger une station ──────────────────────────────────────────────────────
 async function loadStation(stationId) {
   state[stationId].status = 'loading';
@@ -485,15 +528,22 @@ async function loadStation(stationId) {
     Object.assign(state[stationId], {
       debit: data.debit, trend: data.trend,
       var24h: data.var24h, max24h: data.max24h, min24h: data.min24h,
-      status: 'ok', msg: data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues'
+      status: 'ok', msg: data.debit === null ? 'Aucune station hydrométrique' : (data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues')
     });
     renderCard(stationId);
 
-    // Sunrise/sunset en arrière-plan (caché par jour)
+    // Sunrise/sunset et marées en arrière-plan (cachés par jour)
     fetchSunTimes(stationId).then(sun => {
       if (sun) {
         state[stationId].sunrise = sun.sunrise;
         state[stationId].sunset  = sun.sunset;
+        renderCard(stationId);
+      }
+    }).catch(() => {});
+
+    fetchTides(stationId).then(tides => {
+      if (tides) {
+        state[stationId].tides = tides;
         renderCard(stationId);
       }
     }).catch(() => {});
@@ -665,6 +715,10 @@ function buildCards() {
             <div class="detail-val dv-sunset">—</div>
           </div>
         </div>
+        ${s.iwls ? `<div class="detail-item dv-tides" style="margin-top:6px">
+          <div class="detail-label">🌊 Marées — Bonaventure</div>
+          <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:var(--muted)">Chargement...</div>
+        </div>` : ''}
         <div class="reload-btn" style="margin-top:8px;border:1.5px solid var(--accent);border-radius:6px;padding:7px;text-align:center;color:var(--accent);font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;" onclick="event.stopPropagation();loadStation('${s.id}')">
           ↻ Recharger cette station
         </div>
@@ -679,6 +733,5 @@ updateMoon();
 filterStations('gaspesie', document.querySelector('.filter-btn'));
 refreshAll();
 </script>
-
 </body>
 </html>
