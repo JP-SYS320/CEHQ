@@ -638,6 +638,25 @@ function renderCard(stationId) {
     card.querySelector('.dv-min24').textContent  = fmt(st.min24h);
     card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
     card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
+
+    // Marées
+    const tidesEl = card.querySelector('.dv-tides-content');
+    if (tidesEl) {
+      if (st.tides && st.tides.length > 0) {
+        tidesEl.innerHTML = st.tides.map(t =>
+          `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
+            <span style="color:var(--muted);font-size:0.6rem">${t.day}</span>
+            <span style="font-weight:700;color:${t.type==='HM' ? 'var(--up)' : 'var(--down)'}">${t.type}</span>
+            <span>${t.time}</span>
+            <span style="color:var(--muted)">${t.value} m</span>
+          </div>`
+        ).join('');
+      } else if (st.status === 'ok' && st.tides === null) {
+        tidesEl.textContent = '···';
+      } else if (st.tides !== undefined && st.tides !== null && st.tides.length === 0) {
+        tidesEl.textContent = 'N/D';
+      }
+    }
   }
 }
 
