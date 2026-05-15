@@ -556,6 +556,9 @@ async function fetchAnglers() {
 
 // ─── Charger une station ──────────────────────────────────────────────────────
 async function loadStation(stationId) {
+  // Éviter les chargements simultanés
+  if (state[stationId].status === 'loading') return;
+
   state[stationId].status = 'loading';
   state[stationId].msg = 'Chargement...';
   renderCard(stationId);
@@ -565,40 +568,41 @@ async function loadStation(stationId) {
     Object.assign(state[stationId], {
       debit: data.debit, trend: data.trend,
       var24h: data.var24h, max24h: data.max24h, min24h: data.min24h,
-      status: 'ok', msg: data.debit === null ? 'Aucune station hydrométrique' : (data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues')
+      status: 'ok',
+      msg: data.debit === null ? 'Aucune station hydrométrique' : (data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues')
     });
-    renderCard(stationId);
-
-    // Sunrise/sunset et marées en arrière-plan (cachés par jour)
-    fetchSunTimes(stationId).then(sun => {
-      if (sun) {
-        state[stationId].sunrise = sun.sunrise;
-        state[stationId].sunset  = sun.sunset;
-        renderCard(stationId);
-      }
-    }).catch(() => {});
-
-    fetchTides(stationId).then(tides => {
-      if (tides) {
-        state[stationId].tides = tides;
-        renderCard(stationId);
-      }
-    }).catch(() => {});
-
-    // Pêcheurs Zec Bonaventure
-    if (stationId === '010802') {
-      fetchAnglers(stationId).then(anglers => {
-        if (anglers) {
-          state[stationId].anglers = anglers;
-          renderCard(stationId);
-        }
-      }).catch(() => {});
-    }
-
   } catch(e) {
     state[stationId].status = 'error';
     state[stationId].msg = 'Erreur — ' + (e.message || 'inconnu');
-    renderCard(stationId);
+  }
+
+  renderCard(stationId);
+
+  // Fetches secondaires en arrière-plan — n'affectent pas le statut principal
+  const s = STATIONS.find(x => x.id === stationId);
+
+  fetchSunTimes(stationId).then(sun => {
+    if (sun && state[stationId].status !== 'loading') {
+      state[stationId].sunrise = sun.sunrise;
+      state[stationId].sunset  = sun.sunset;
+      if (state[stationId].expanded) renderCard(stationId);
+    }
+  }).catch(() => {});
+
+  fetchTides(stationId).then(tides => {
+    if (tides && state[stationId].status !== 'loading') {
+      state[stationId].tides = tides;
+      if (state[stationId].expanded) renderCard(stationId);
+    }
+  }).catch(() => {});
+
+  if (stationId === '010802') {
+    fetchAnglers().then(anglers => {
+      if (anglers && state[stationId].status !== 'loading') {
+        state[stationId].anglers = anglers;
+        if (state[stationId].expanded) renderCard(stationId);
+      }
+    }).catch(() => {});
   }
 }
 
