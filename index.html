@@ -433,11 +433,11 @@ async function fetchDebit(stationId) {
       if (hist.length > 96) hist = hist.slice(-96);
       localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
     }
-    if (hist.length >= 6) {
-      const r = hist.slice(-3).map(e=>e.debit), o = hist.slice(-6,-3).map(e=>e.debit);
-      const avgR = r.reduce((a,b)=>a+b,0)/r.length, avgO = o.reduce((a,b)=>a+b,0)/o.length;
-      const pct = (avgR - avgO) / (avgO || 1);
-      trend = pct >= 0 ? 'up' : 'down';
+    if (hist.length >= 2) {
+      // Comparer valeur actuelle vs valeur il y a ~3h (12 entrées à 15min)
+      const refIndex = Math.max(0, hist.length - 7);
+      const refVal = hist[refIndex].debit;
+      trend = debit >= refVal ? 'up' : 'down';
     }
     if (hist.length >= 2) {
       const vals = hist.map(e=>e.debit);
