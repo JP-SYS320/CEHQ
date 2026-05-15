@@ -390,7 +390,7 @@ const state = {};
 STATIONS.forEach(s => {
   state[s.id] = { debit:null, trend:null, status:'idle', msg:'', expanded:false,
                   sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null,
-                  tides:null };
+                  tides:null, anglers:null };
 });
 
 // ─── API MSP ─────────────────────────────────────────────────────────────────
@@ -534,6 +534,24 @@ async function fetchTides(stationId) {
   return null;
 }
 
+// ─── Pêcheurs Zec Bonaventure ─────────────────────────────────────────────────
+async function fetchAnglers() {
+  try {
+    const url = 'https://pavnew.manisoft.ca/nombrePersonne.php?idZec=zec-bonaventure&idPointEau=F746BF64-1A2D-E811-9402-534E57000000';
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const html = await res.text();
+    // Parser les deux nombres du HTML : Aujourd'hui et Demain
+    const nums = html.match(/>\s*(\d+)\s*</g);
+    if (!nums || nums.length < 2) return null;
+    const today = nums[0].replace(/[><\s]/g, '');
+    const tomorrow = nums[1].replace(/[><\s]/g, '');
+    return { today, tomorrow };
+  } catch(e) {}
+  return null;
+}
+
 // ─── Charger une station ──────────────────────────────────────────────────────
 async function loadStation(stationId) {
   state[stationId].status = 'loading';
@@ -564,6 +582,16 @@ async function loadStation(stationId) {
         renderCard(stationId);
       }
     }).catch(() => {});
+
+    // Pêcheurs Zec Bonaventure
+    if (stationId === '010802') {
+      fetchAnglers(stationId).then(anglers => {
+        if (anglers) {
+          state[stationId].anglers = anglers;
+          renderCard(stationId);
+        }
+      }).catch(() => {});
+    }
 
   } catch(e) {
     state[stationId].status = 'error';
@@ -656,8 +684,13 @@ function renderCard(stationId) {
     card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
     card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
 
-    // Marées
-    const tidesEl = card.querySelector('.dv-tides-content');
+    // Pêcheurs
+    const anglersToday = card.querySelector('.dv-anglers-today');
+    const anglersTomorrow = card.querySelector('.dv-anglers-tomorrow');
+    if (anglersToday && anglersTomorrow) {
+      anglersToday.textContent = st.anglers ? st.anglers.today : '—';
+      anglersTomorrow.textContent = st.anglers ? st.anglers.tomorrow : '—';
+    }
     if (tidesEl) {
       if (st.tides && st.tides.length > 0) {
         tidesEl.innerHTML = st.tides.map(t =>
@@ -754,6 +787,19 @@ function buildCards() {
         ${s.iwls || s.iwlsCode ? `<div class="detail-item dv-tides" style="margin-top:6px">
           <div class="detail-label">🌊 Marées — ${s.iwlsName || 'Station locale'}</div>
           <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:#4a5568">···</div>
+        </div>` : ''}
+        ${s.id === '010802' ? `<div class="detail-item" style="margin-top:6px">
+          <div class="detail-label">🎣 Pêcheurs Zec Bonaventure</div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <div style="flex:1;background:#f7f8f9;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em">Aujourd'hui</div>
+              <div class="dv-anglers-today" style="font-size:1.1rem;font-weight:700;color:#1a2022">—</div>
+            </div>
+            <div style="flex:1;background:#f7f8f9;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em">Demain</div>
+              <div class="dv-anglers-tomorrow" style="font-size:1.1rem;font-weight:700;color:#1a2022">—</div>
+            </div>
+          </div>
         </div>` : ''}
         <div class="reload-btn" style="margin-top:8px;border:1.5px solid #3ecfb2;border-radius:6px;padding:7px;text-align:center;color:#3ecfb2;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;" onclick="event.stopPropagation();loadStation('${s.id}')">
           ↻ Recharger cette station
