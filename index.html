@@ -556,9 +556,6 @@ async function fetchAnglers() {
 
 // ─── Charger une station ──────────────────────────────────────────────────────
 async function loadStation(stationId) {
-  // Éviter les chargements simultanés
-  if (state[stationId].status === 'loading') return;
-
   state[stationId].status = 'loading';
   state[stationId].msg = 'Chargement...';
   renderCard(stationId);
@@ -578,30 +575,19 @@ async function loadStation(stationId) {
 
   renderCard(stationId);
 
-  // Fetches secondaires en arrière-plan — n'affectent pas le statut principal
-  const s = STATIONS.find(x => x.id === stationId);
-
+  // Fetches secondaires — toujours renderCard après
   fetchSunTimes(stationId).then(sun => {
-    if (sun && state[stationId].status !== 'loading') {
-      state[stationId].sunrise = sun.sunrise;
-      state[stationId].sunset  = sun.sunset;
-      if (state[stationId].expanded) renderCard(stationId);
-    }
+    if (sun) { state[stationId].sunrise = sun.sunrise; state[stationId].sunset = sun.sunset; renderCard(stationId); }
   }).catch(() => {});
 
   fetchTides(stationId).then(tides => {
-    if (tides && state[stationId].status !== 'loading') {
-      state[stationId].tides = tides;
-      if (state[stationId].expanded) renderCard(stationId);
-    }
-  }).catch(() => {});
+    if (tides) { state[stationId].tides = tides; renderCard(stationId); }
+    else { state[stationId].tides = []; renderCard(stationId); }
+  }).catch(() => { state[stationId].tides = []; renderCard(stationId); });
 
   if (stationId === '010802') {
     fetchAnglers().then(anglers => {
-      if (anglers && state[stationId].status !== 'loading') {
-        state[stationId].anglers = anglers;
-        if (state[stationId].expanded) renderCard(stationId);
-      }
+      if (anglers) { state[stationId].anglers = anglers; renderCard(stationId); }
     }).catch(() => {});
   }
 }
@@ -690,7 +676,8 @@ function renderCard(stationId) {
     card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
     card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
 
-    // Pêcheurs
+    // Marées
+    const tidesEl = card.querySelector('.dv-tides-content');
     const anglersToday = card.querySelector('.dv-anglers-today');
     const anglersTomorrow = card.querySelector('.dv-anglers-tomorrow');
     if (anglersToday && anglersTomorrow) {
@@ -817,7 +804,7 @@ function buildCards() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 const today = new Date().toISOString().substring(0,10);
-// Purger les vieux caches de marées et soleil (garder seulement aujourd'hui)
+// Purger seulement les vieux caches de marées et soleil — PAS les UUIDs IWLS
 Object.keys(localStorage).forEach(k => {
   if ((k.startsWith('tides_') || k.startsWith('sun_')) && !k.includes(today)) {
     localStorage.removeItem(k);
