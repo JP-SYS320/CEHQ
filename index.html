@@ -539,10 +539,12 @@ async function fetchAnglers() {
   try {
     const url = 'https://pavnew.manisoft.ca/nombrePersonne.php?idZec=zec-bonaventure&idPointEau=F746BF64-1A2D-E811-9402-534E57000000';
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl, { cache: 'no-store' });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(proxyUrl, { cache: 'no-store', signal: controller.signal });
+    clearTimeout(timeout);
     if (!res.ok) return null;
     const html = await res.text();
-    // Parser les deux nombres du HTML : Aujourd'hui et Demain
     const nums = html.match(/>\s*(\d+)\s*</g);
     if (!nums || nums.length < 2) return null;
     const today = nums[0].replace(/[><\s]/g, '');
@@ -810,10 +812,12 @@ function buildCards() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-// Purger les vieilles clés de marées (autre que aujourd'hui)
 const today = new Date().toISOString().substring(0,10);
+// Purger les vieux caches de marées et soleil (garder seulement aujourd'hui)
 Object.keys(localStorage).forEach(k => {
-  if (k.startsWith('tides_') && !k.endsWith(today)) localStorage.removeItem(k);
+  if ((k.startsWith('tides_') || k.startsWith('sun_')) && !k.includes(today)) {
+    localStorage.removeItem(k);
+  }
 });
 
 buildCards();
