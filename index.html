@@ -440,10 +440,14 @@ async function fetchDebit(stationId) {
       trend = debit >= refVal ? 'up' : 'down';
     }
     if (hist.length >= 2) {
-      const vals = hist.map(e=>e.debit);
+      // Stats 24h : filtrer seulement les entrées des dernières 24h
+      const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const last24 = hist.filter(e => e.ts >= cutoff);
+      const vals = (last24.length >= 2 ? last24 : hist).map(e => e.debit);
       max24h = Math.max(...vals);
       min24h = Math.min(...vals);
-      var24h = ((debit - hist[0].debit) / (hist[0].debit || 1)) * 100;
+      const oldest = (last24.length >= 2 ? last24 : hist)[0].debit;
+      var24h = ((debit - oldest) / (oldest || 1)) * 100;
     }
   } catch(e) {}
 
