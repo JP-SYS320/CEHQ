@@ -660,7 +660,7 @@ function renderCard(stationId) {
   else if (st.trend==='down') { tb.className='trend-badge trend-down'; tb.textContent='↓ Descendante'; }
   else                         { tb.className='trend-badge trend-nd';   tb.textContent='— N/D'; }
 
-  card.querySelector('.sparkline-row').innerHTML = buildSpark(st.debit ? [st.debit] : [1], s.color);
+  card.querySelector('.spark-bars').innerHTML = buildSpark(st.debit ? [st.debit] : [1], s.color);
 
   const msg = card.querySelector('.status-msg');
   msg.textContent = st.msg || '';
@@ -713,10 +713,12 @@ function toggleCard(id) {
   const card = document.getElementById(`card-${id}`);
   if (st.expanded) {
     card.classList.add('expanded');
+    card.querySelector('.toggle-label').textContent = 'Moins de stats';
     if (st.status === 'idle') loadStation(id);
     else renderCard(id);
   } else {
     card.classList.remove('expanded');
+    card.querySelector('.toggle-label').textContent = 'Plus de stats';
   }
 }
 
@@ -753,7 +755,10 @@ function buildCards() {
           <div class="trend-badge trend-nd">— N/D</div>
         </div>
       </div>
-      <div class="sparkline-row"></div>
+      <div class="sparkline-row" style="position:relative">
+        <div class="spark-bars" style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:flex-end;gap:2px"></div>
+        <div class="toggle-label" style="position:relative;z-index:1;width:100%;text-align:center;font-size:0.7rem;color:#3d4a52;letter-spacing:0.1em;font-weight:700;line-height:24px">Plus de stats</div>
+      </div>
       <div class="status-msg"></div>
       <div class="detail">
         <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr">
