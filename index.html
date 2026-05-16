@@ -372,17 +372,17 @@ function updateMoon() {
 
 // ─── Stations ────────────────────────────────────────────────────────────────
 const STATIONS = [
-  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',      lat:48.0667, lng:-65.4833, iwls:'5cebf1e13d0f4a073c4bbf21', iwlsName:'Bonaventure' },
+  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',      lat:48.0667, lng:-65.4833, iwls:'5cebf1e13d0f4a073c4bbf21', iwlsName:'Bonaventure',          anglers:{ host:'pavnew',     zec:'zec-bonaventure', point:'F746BF64-1A2D-E811-9402-534E57000000' } },
   { id:'010902', name:'Petite Cascapédia', color:'--petite',      region:'gaspesie',      lat:48.0833, lng:-65.6667, iwlsCode:'02200', iwlsName:'Carleton' },
   { id:'011003', name:'Cascapédia',        color:'--cascapedia',  region:'gaspesie',      lat:48.1000, lng:-65.8500, iwlsCode:'02200', iwlsName:'Carleton' },
   { id:'011204', name:'Nouvelle',          color:'--nouvelle',    region:'gaspesie',      lat:48.1167, lng:-66.3167, iwlsCode:'02175', iwlsName:'Campbellton' },
   { id:'011509', name:'Matapédia',         color:'--matapedia',   region:'gaspesie',      lat:48.0000, lng:-66.9833, iwlsCode:'02175', iwlsName:'Campbellton' },
-  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',      lat:48.8333, lng:-64.6667, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé' },
+  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',      lat:48.8333, lng:-64.6667, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',  anglers:{ host:'pavnewtest', zec:'zec-gaspe',        point:'D75D6E53-5CFE-E411-843E-90FBA62D9769' } },
   { id:'021407', name:'Sainte-Anne',       color:'--ste-anne',    region:'gaspesie',      lat:49.0000, lng:-66.7000, iwlsCode:'02935', iwlsName:'Ste-Anne-des-Monts' },
-  { id:'021601', name:'Matane',            color:'--matane',      region:'bas-st-laurent', lat:48.8500, lng:-67.5333, iwlsCode:'02955', iwlsName:'Matane' },
+  { id:'021601', name:'Matane',            color:'--matane',      region:'bas-st-laurent', lat:48.8500, lng:-67.5333, iwlsCode:'02955', iwlsName:'Matane',               anglers:{ host:'pav',        zec:'zec-matane',       point:'A3965629-8308-E511-A31C-90FBA62D9769' } },
   { id:'022003', name:'Rimouski',          color:'--rimouski',    region:'bas-st-laurent', lat:48.4500, lng:-68.5333, iwlsCode:'02985', iwlsName:'Rimouski' },
-  { id:'MITIS',  name:'Mitis',             color:'--mitis',       region:'bas-st-laurent', lat:48.5833, lng:-68.1833, iwlsCode:'02955', iwlsName:'Matane' },
-  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',      lat:48.7000, lng:-64.8000, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé' },
+  { id:'MITIS',  name:'Mitis',             color:'--mitis',       region:'bas-st-laurent', lat:48.5833, lng:-68.1833, iwlsCode:'02955', iwlsName:'Matane',               anglers:{ host:'pav',        zec:'mitis',            point:'AFE100E2-B427-E811-9402-534E57000000' } },
+  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',      lat:48.7000, lng:-64.8000, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',  anglers:{ host:'pavnewtest', zec:'zec-gaspe',        point:'7021EE39-5CFE-E411-843E-90FBA62D9769' } },
 ];
 
 // ─── État ────────────────────────────────────────────────────────────────────
@@ -538,10 +538,13 @@ async function fetchTides(stationId) {
   return null;
 }
 
-// ─── Pêcheurs Zec Bonaventure ─────────────────────────────────────────────────
-async function fetchAnglers() {
+// ─── Pêcheurs Manisoft ────────────────────────────────────────────────────────
+async function fetchAnglers(stationId) {
+  const s = STATIONS.find(x => x.id === stationId);
+  if (!s || !s.anglers) return null;
   try {
-    const url = 'https://pavnew.manisoft.ca/nombrePersonne.php?idZec=zec-bonaventure&idPointEau=F746BF64-1A2D-E811-9402-534E57000000';
+    const { host, zec, point } = s.anglers;
+    const url = `https://${host}.manisoft.ca/nombrePersonne.php?idZec=${zec}&idPointEau=${point}`;
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -551,9 +554,10 @@ async function fetchAnglers() {
     const html = await res.text();
     const nums = html.match(/>\s*(\d+)\s*</g);
     if (!nums || nums.length < 2) return null;
-    const today = nums[0].replace(/[><\s]/g, '');
-    const tomorrow = nums[1].replace(/[><\s]/g, '');
-    return { today, tomorrow };
+    return {
+      today: nums[0].replace(/[><\s]/g, ''),
+      tomorrow: nums[1].replace(/[><\s]/g, '')
+    };
   } catch(e) {}
   return null;
 }
@@ -589,8 +593,8 @@ async function loadStation(stationId) {
     else { state[stationId].tides = []; renderCard(stationId); }
   }).catch(() => { state[stationId].tides = []; renderCard(stationId); });
 
-  if (stationId === '010802') {
-    fetchAnglers().then(anglers => {
+  if (s && s.anglers) {
+    fetchAnglers(stationId).then(anglers => {
       if (anglers) { state[stationId].anglers = anglers; renderCard(stationId); }
     }).catch(() => {});
   }
@@ -757,7 +761,7 @@ function buildCards() {
       </div>
       <div class="sparkline-row" style="position:relative">
         <div class="spark-bars" style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:flex-end;gap:2px"></div>
-        <div class="toggle-label" style="position:relative;z-index:1;width:100%;text-align:center;font-size:0.7rem;color:#3d4a52;letter-spacing:0.1em;font-weight:700;line-height:24px">Plus de stats</div>
+        <div class="toggle-label" style="position:relative;z-index:1;width:100%;text-align:center;font-size:0.7rem;color:#3d4a52;letter-spacing:0.1em;font-weight:700;line-height:24px;text-transform:uppercase">Plus de stats</div>
       </div>
       <div class="status-msg"></div>
       <div class="detail">
@@ -789,8 +793,8 @@ function buildCards() {
           <div class="detail-label">🌊 Marées — ${s.iwlsName || 'Station locale'}</div>
           <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:#4a5568">···</div>
         </div>` : ''}
-        ${s.id === '010802' ? `<div class="detail-item" style="margin-top:6px">
-          <div class="detail-label">🎣 Pêcheurs Zec Bonaventure</div>
+        ${s.anglers ? `<div class="detail-item" style="margin-top:6px">
+          <div class="detail-label">🎣 Pêcheurs — ${s.name}</div>
           <div style="display:flex;gap:8px;margin-top:4px">
             <div style="flex:1;background:#f7f8f9;border-radius:4px;padding:6px;text-align:center">
               <div style="font-size:0.52rem;color:#4a5568;text-transform:uppercase;letter-spacing:0.08em">Aujourd'hui</div>
