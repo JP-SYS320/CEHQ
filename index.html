@@ -25,6 +25,7 @@
     --petite: #c8a0d4;
     --ste-anne: #88b8d4;
     --mitis: #f0a070;
+    --escoumins: #60b8d0;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -103,7 +104,7 @@
   .sparkline-row { margin-top: 10px; height: 24px; position: relative; }
   .spark-bars { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 2px; }
   .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
-  .toggle-label { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 0.7rem; color: #3d4a52; letter-spacing: 0.1em; font-weight: 700; line-height: 24px; text-transform: uppercase; }
+  .toggle-label { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 1.2rem; color: #3d4a52; font-weight: 700; line-height: 24px; }
 
   .status-msg { font-size: 0.58rem; color: var(--muted); padding: 4px 0 0; letter-spacing: 0.04em; min-height: 16px; }
   .status-msg.ok  { color: #2a9a84; }
@@ -150,6 +151,7 @@
 <div class="filters">
   <div class="filter-btn active" onclick="filterStations('gaspesie', this)">Gaspésie</div>
   <div class="filter-btn" onclick="filterStations('bas-st-laurent', this)">Bas-St-Laurent</div>
+  <div class="filter-btn" onclick="filterStations('autres', this)">Autres</div>
 </div>
 
 <div class="grid" id="stationGrid"></div>
@@ -200,6 +202,7 @@ const STATIONS = [
   { id:'022003', name:'Rimouski',          color:'--rimouski',    region:'bas-st-laurent', lat:48.4500, lng:-68.5333, iwlsCode:'02985', iwlsName:'Rimouski' },
   { id:'MITIS',  name:'Mitis',             color:'--mitis',       region:'bas-st-laurent', lat:48.5833, lng:-68.1833, iwlsCode:'02955', iwlsName:'Matane',              anglers:{host:'pav',        zec:'mitis',            point:'AFE100E2-B427-E811-9402-534E57000000'} },
   { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',       lat:48.7000, lng:-64.8000, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé', anglers:{host:'pavnewtest', zec:'zec-gaspe',        point:'7021EE39-5CFE-E411-843E-90FBA62D9769'} },
+  { id:'070204', name:'Escoumins',          color:'--escoumins',   region:'autres',          lat:48.3500, lng:-69.4000, iwlsCode:'02900', iwlsName:'Les Escoumins' },
 ];
 
 // ─── État ────────────────────────────────────────────────────────────────────
@@ -207,7 +210,7 @@ const state = {};
 STATIONS.forEach(s => {
   state[s.id] = { debit:null, trend:null, status:'idle', msg:'', expanded:false,
                   sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null,
-                  tides:null, anglers:null };
+                  tides:null, anglers:null, montaisons:null };
 });
 
 // ─── API MSP — cache mémoire 5 min ───────────────────────────────────────────
@@ -344,6 +347,58 @@ async function fetchTides(stationId) {
   return null;
 }
 
+// ─── Montaisons Matane — cache localStorage par jour ─────────────────────────
+async function fetchMontaisons(stationId) {
+  const todayStr = new Date().toISOString().substring(0,10);
+  const key = `montaisons_${stationId}_${todayStr}`;
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) return JSON.parse(cached);
+
+    const urls = {
+      '021601': 'https://www.rivierematane.com/statistique-de-la-saison.html',
+      'MITIS':  'https://rivieremitis.com/informations/historique-des-montaisons',
+    };
+    const url = urls[stationId];
+    if (!url) return null;
+
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const controller = new AbortController();
+    const tmout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(proxyUrl, { cache: 'no-store', signal: controller.signal });
+    clearTimeout(tmout);
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    let data = null;
+
+    if (stationId === '021601') {
+      // Matane : tableau cumulatif
+      const m = html.match(/<tr>\s*<td[^>]*>\s*([^<]*\d[^<]*)<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>/);
+      if (m) data = { date: m[1].trim(), grands: m[2]||'0', grilses: m[3]||'0', total: m[4]||'0' };
+    } else if (stationId === 'MITIS') {
+      // Mitis : page d'accueil avec montaisons
+      const grands  = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison grands saumons/);
+      const mad     = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison madeleineaux/);
+      const dateM   = html.match(/(\d{1,2}\s+\w+\s+\d{4})/);
+      if (grands || mad) {
+        const g = grands ? grands[1] : '0';
+        const ma = mad ? mad[1] : '0';
+        data = {
+          date: dateM ? dateM[1] : '',
+          grands: g,
+          grilses: ma,
+          total: (parseInt(g)||0) + (parseInt(ma)||0) + ''
+        };
+      }
+    }
+
+    if (data) localStorage.setItem(key, JSON.stringify(data));
+    return data;
+  } catch(e) {}
+  return null;
+}
+
 // ─── Pêcheurs Manisoft — direct (pas de proxy) ───────────────────────────────
 async function fetchAnglers(stationId) {
   const s = STATIONS.find(x => x.id === stationId);
@@ -400,6 +455,12 @@ async function loadStation(stationId) {
   if (s?.anglers) {
     fetchAnglers(stationId).then(anglers => {
       if (anglers) { state[stationId].anglers = anglers; renderCard(stationId); }
+    }).catch(() => {});
+  }
+
+  if (stationId === '021601' || stationId === 'MITIS') {
+    fetchMontaisons(stationId).then(montaisons => {
+      if (montaisons) { state[stationId].montaisons = montaisons; renderCard(stationId); }
     }).catch(() => {});
   }
 }
@@ -508,6 +569,16 @@ function renderCard(stationId) {
     }
   }
 
+  // Montaisons Matane
+  const montGrands = card.querySelector('.dv-mont-grands');
+  if (montGrands) {
+    const m = st.montaisons;
+    card.querySelector('.dv-mont-grands').textContent  = m ? m.grands  : '—';
+    card.querySelector('.dv-mont-grilses').textContent = m ? m.grilses : '—';
+    card.querySelector('.dv-mont-total').textContent   = m ? m.total   : '—';
+    card.querySelector('.dv-mont-date').textContent    = m ? `En date du ${m.date}` : '';
+  }
+
   // Pêcheurs
   const anglersToday    = card.querySelector('.dv-anglers-today');
   const anglersTomorrow = card.querySelector('.dv-anglers-tomorrow');
@@ -522,12 +593,12 @@ function toggleCard(id) {
   const card = document.getElementById(`card-${id}`);
   if (st.expanded) {
     card.classList.add('expanded');
-    card.querySelector('.toggle-label').textContent = 'MOINS DE STATS';
+    card.querySelector('.toggle-label').textContent = '−';
     if (st.status === 'idle') loadStation(id);
     else renderCard(id);
   } else {
     card.classList.remove('expanded');
-    card.querySelector('.toggle-label').textContent = 'PLUS DE STATS';
+    card.querySelector('.toggle-label').textContent = '+';
   }
 }
 
@@ -566,7 +637,7 @@ function buildCards() {
       </div>
       <div class="sparkline-row">
         <div class="spark-bars"></div>
-        <div class="toggle-label">PLUS DE STATS</div>
+        <div class="toggle-label">+</div>
       </div>
       <div class="status-msg"></div>
       <div class="detail">
@@ -598,6 +669,25 @@ function buildCards() {
             </div>
           </div>
         </div>` : ''}
+        ${s.id === '021601' || s.id === 'MITIS' ? `
+        <div class="detail-item dv-montaisons" style="margin-top:6px">
+          <div class="detail-label">🐟 Montaisons saison 2026</div>
+          <div style="display:flex;gap:6px;margin-top:4px">
+            <div style="flex:1;background:#f0f2f3;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#3d4a52;text-transform:uppercase;letter-spacing:0.08em">Grands</div>
+              <div class="dv-mont-grands" style="font-size:1rem;font-weight:700;color:#1a2022">—</div>
+            </div>
+            <div style="flex:1;background:#f0f2f3;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#3d4a52;text-transform:uppercase;letter-spacing:0.08em">${s.id === 'MITIS' ? 'Mad.' : 'Grilses'}</div>
+              <div class="dv-mont-grilses" style="font-size:1rem;font-weight:700;color:#1a2022">—</div>
+            </div>
+            <div style="flex:1;background:#f0f2f3;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#3d4a52;text-transform:uppercase;letter-spacing:0.08em">Total</div>
+              <div class="dv-mont-total" style="font-size:1rem;font-weight:700;color:#3ecfb2">—</div>
+            </div>
+          </div>
+          <div class="dv-mont-date" style="font-size:0.52rem;color:#3d4a52;margin-top:4px;text-align:right"></div>
+        </div>` : ''}
         <div class="reload-btn" onclick="event.stopPropagation();loadStation('${s.id}')">↻ Recharger cette station</div>
       </div>`;
     grid.appendChild(div);
@@ -609,7 +699,7 @@ const todayStr = new Date().toISOString().substring(0,10);
 // Purger vieux caches marées et soleil (garder UUIDs IWLS — permanents)
 try {
   Object.keys(localStorage).forEach(k => {
-    if ((k.startsWith('tides_') || k.startsWith('sun_')) && !k.includes(todayStr))
+    if ((k.startsWith('tides_') || k.startsWith('sun_') || k.startsWith('montaisons_')) && !k.includes(todayStr))
       localStorage.removeItem(k);
   });
 } catch(e) {}
