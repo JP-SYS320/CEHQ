@@ -394,7 +394,10 @@ async function fetchTides(stationId) {
       const hae = new Date(d.getTime() - 4 * 3600000);
       const hh = hae.getUTCHours().toString().padStart(2,'0');
       const mm = hae.getUTCMinutes().toString().padStart(2,'0');
-      const day = hae.toISOString().substring(0,10) === todayStr ? 'Auj.' : 'Dem.';
+      const haeDate = hae.toISOString().substring(0,10);
+      // Comparer avec la date HAE d'aujourd'hui (pas UTC)
+      const todayHAE = new Date(Date.now() - 4 * 3600000).toISOString().substring(0,10);
+      const day = haeDate === todayHAE ? 'Auj.' : 'Dem.';
       return { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value > 1.0 ? 'HM':'BM', day };
     }).filter(t => t.day === 'Auj.');
     localStorage.setItem(key, JSON.stringify(tides));
@@ -682,7 +685,7 @@ function buildCards() {
       <div class="card-header">
         <div>
           <div class="river-name">${s.id === 'MITIS' ? s.name : `<a href="https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${s.id}%20%20%20%20&Zone=&Secteur=" target="_blank" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;border-bottom:1px solid #d8dee0">${s.name}</a>`}</div>
-          <div class="station-id">STATION ${s.id}</div>
+          <div class="station-id">${s.id === 'MITIS' ? 'AUCUNE STATION CEHQ' : `STATION ${s.id}`}</div>
         </div>
         <div class="debit-main">
           <div class="debit-value" style="color:#b0bbbf">—</div>
