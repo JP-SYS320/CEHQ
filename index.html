@@ -165,6 +165,26 @@
   <div id="pw-btn" onclick="checkPassword()">Accéder</div>
 </div>
 
+<script>
+function checkPassword() {
+  const input = document.getElementById('pw-input');
+  const error = document.getElementById('pw-error');
+  if (input.value === 'Undertaker') {
+    sessionStorage.setItem('auth', '1');
+    document.getElementById('pw-screen').style.display = 'none';
+  } else {
+    error.textContent = 'Mot de passe incorrect';
+    input.value = '';
+    input.focus();
+  }
+}
+if (sessionStorage.getItem('auth') === '1') {
+  document.getElementById('pw-screen').style.display = 'none';
+} else {
+  setTimeout(() => document.getElementById('pw-input').focus(), 100);
+}
+</script>
+
 <header>
   <div class="header-top">
     <div>
@@ -198,13 +218,6 @@
 
 <script>
 // ─── Init ─────────────────────────────────────────────────────────────────────
-// Vérifier si déjà authentifié cette session
-if (sessionStorage.getItem('auth') === '1') {
-  document.getElementById('pw-screen').style.display = 'none';
-} else {
-  document.getElementById('pw-input').focus();
-}
-
 const todayStr = new Date().toISOString().substring(0,10);
 const MOON = {
   new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
