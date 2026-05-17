@@ -6,14 +6,14 @@
 <title>Débits CEHQ — Rivières à Saumon</title>
 <style>
   :root {
-    --bg: #f0f2f3;
-    --surface: #ffffff;
-    --border: #d8dee0;
-    --text: #1a2022;
-    --muted: #3d4a52;
-    --accent: #3ecfb2;
-    --up: #27a862;
-    --down: #d94f4d;
+    --bg: #142230;
+    --surface: #1b2d3e;
+    --border: rgba(201,168,76,0.25);
+    --text: #f0ede4;
+    --muted: #7a9ab0;
+    --accent: #c9a84c;
+    --up: #4ade9a;
+    --down: #f06260;
     --bonaventure: #6ac7a0;
     --york: #7ec8e3;
     --matane: #a891d4;
@@ -39,42 +39,50 @@
   }
 
   header {
-    padding: 16px 16px 10px;
-    border-bottom: 1px solid var(--border);
+    padding: 18px 16px 14px;
+    border-bottom: 2px solid var(--accent);
     position: sticky; top: 0;
-    background: var(--bg); z-index: 100;
+    background: var(--surface); z-index: 100;
   }
 
-  .header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
-  .site-title { font-family: Georgia, serif; font-size: 1.1rem; font-style: italic; color: var(--accent); letter-spacing: 0.02em; line-height: 1.2; }
-  .site-subtitle { font-size: 0.58rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 3px; }
+  .logo-area { display: flex; align-items: center; gap: 10px; }
+
+  .emblem {
+    width: 36px; height: 36px; border: 1.5px solid var(--accent); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0;
+  }
+
+  .site-title { font-family: Georgia, serif; font-size: 1.15rem; font-style: italic; color: var(--text); letter-spacing: 0.02em; line-height: 1.1; }
+  .site-subtitle { font-size: 0.5rem; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; margin-top: 2px; }
 
   .refresh-btn {
-    background: none; border: 1.5px solid #b0bbbf; color: var(--muted);
-    font-family: inherit; font-size: 0.65rem; padding: 6px 10px; border-radius: 6px;
-    cursor: pointer; letter-spacing: 0.08em; white-space: nowrap;
-    transition: border-color 0.2s, color 0.2s; flex-shrink: 0;
+    background: none; border: 1px solid var(--accent); color: var(--accent);
+    font-family: inherit; font-size: 0.58rem; padding: 6px 10px; border-radius: 4px;
+    cursor: pointer; letter-spacing: 0.1em; white-space: nowrap;
+    transition: background 0.2s; flex-shrink: 0;
     -webkit-appearance: none; appearance: none;
   }
-  .refresh-btn:active { border-color: var(--accent); color: var(--accent); }
+  .refresh-btn:active { background: rgba(201,168,76,0.12); }
   .refresh-btn.loading { animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-  .last-update { font-size: 0.56rem; color: var(--muted); margin-top: 6px; letter-spacing: 0.06em; }
+  .last-update { font-size: 0.52rem; color: var(--muted); margin-top: 8px; letter-spacing: 0.06em; border-top: 1px solid rgba(201,168,76,0.2); padding-top: 6px; }
 
-  .status-bar { display: flex; padding: 9px 16px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; }
-  .stat-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.6rem; letter-spacing: 0.06em; color: var(--muted); flex-shrink: 0; }
+  .status-bar { display: flex; padding: 8px 16px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
+  .stat-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.58rem; letter-spacing: 0.06em; color: var(--muted); flex-shrink: 0; }
   .stat-val { color: var(--text); font-weight: 700; }
 
-  .filters { display: flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .filters { display: flex; gap: 8px; padding: 10px 16px; border-bottom: 2px solid var(--accent); background: var(--surface); }
   .filter-btn {
-    background: none; border: 1.5px solid #b0bbbf; color: var(--muted);
-    font-family: inherit; font-size: 0.6rem; padding: 5px 12px; border-radius: 20px;
+    background: none; border: 1px solid var(--muted); color: var(--muted);
+    font-family: inherit; font-size: 0.58rem; padding: 5px 12px; border-radius: 20px;
     cursor: pointer; letter-spacing: 0.08em; transition: all 0.2s;
     -webkit-appearance: none; appearance: none;
   }
-  .filter-btn.active { background: none; border: 2px solid var(--accent); color: var(--accent); font-weight: 700; }
+  .filter-btn.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 
   .grid { padding: 10px 16px; display: flex; flex-direction: column; gap: 8px; }
   @media (min-width: 600px) { .grid { display: grid; grid-template-columns: 1fr 1fr; } }
@@ -97,61 +105,61 @@
   .debit-unit { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; }
 
   .trend-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.58rem; padding: 2px 6px; border-radius: 3px; margin-top: 3px; letter-spacing: 0.04em; }
-  .trend-up   { background: rgba(39,168,98,0.12);   color: #27a862; }
-  .trend-down { background: rgba(217,79,77,0.12);   color: #d94f4d; }
-  .trend-nd   { background: rgba(61,74,82,0.1);     color: var(--muted); }
+  .trend-up   { background: rgba(74,222,154,0.15); color: #4ade9a; }
+  .trend-down { background: rgba(240,98,96,0.15);  color: #f06260; }
+  .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
 
   .sparkline-row { margin-top: 10px; height: 24px; position: relative; }
   .spark-bars { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 2px; }
   .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
-  .toggle-label { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 1.2rem; color: #3d4a52; font-weight: 700; line-height: 24px; }
+  .toggle-label { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 1.2rem; color: rgba(201,168,76,0.6); font-weight: 700; line-height: 24px; }
 
   .status-msg { font-size: 0.58rem; color: var(--muted); padding: 4px 0 0; letter-spacing: 0.04em; min-height: 16px; }
-  .status-msg.ok  { color: #2a9a84; }
-  .status-msg.err { color: #d94f4d; }
+  .status-msg.ok  { color: #c9a84c; }
+  .status-msg.err { color: #f06260; }
 
   .detail { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
   .card.expanded .detail { display: block; }
 
   .detail-grid { display: grid; gap: 6px; margin-bottom: 8px; }
-  .detail-item { background: #f7f8f9; border-radius: 6px; padding: 7px 9px; }
+  .detail-item { background: #142230; border-radius: 6px; padding: 7px 9px; }
   .detail-label { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
   .detail-val { font-size: 0.82rem; font-weight: 700; color: var(--text); }
 
   .reload-btn {
-    width: 100%; background: none; border: 1.5px solid #3ecfb2; color: #3ecfb2;
+    width: 100%; background: none; border: 1px solid var(--accent); color: var(--accent);
     font-family: inherit; font-size: 0.62rem; padding: 7px; border-radius: 6px;
     cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase;
     margin-top: 8px; text-align: center;
     -webkit-appearance: none; appearance: none;
   }
-  .reload-btn:active { background: rgba(62,207,178,0.08); }
+  .reload-btn:active { background: rgba(201,168,76,0.08); }
 
   footer { padding: 16px; text-align: center; font-size: 0.52rem; color: var(--muted); letter-spacing: 0.08em; border-top: 1px solid var(--border); margin-top: 8px; }
 
   /* ─── Écran mot de passe ─── */
   #pw-screen {
-    position: fixed; inset: 0; background: var(--bg); z-index: 9999;
+    position: fixed; inset: 0; background: #0f1923; z-index: 9999;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
     padding: 32px;
   }
-  #pw-title { font-family: Georgia, serif; font-style: italic; font-size: 1.3rem; color: var(--accent); }
-  #pw-subtitle { font-size: 0.6rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  #pw-title { font-family: Georgia, serif; font-style: italic; font-size: 1.3rem; color: #f0ede4; }
+  #pw-subtitle { font-size: 0.6rem; color: #c9a84c; letter-spacing: 0.15em; text-transform: uppercase; }
   #pw-input {
-    width: 100%; max-width: 280px; padding: 12px 16px; border: 1.5px solid #b0bbbf;
+    width: 100%; max-width: 280px; padding: 12px 16px; border: 1px solid #c9a84c;
     border-radius: 8px; font-family: inherit; font-size: 1rem; text-align: center;
-    background: var(--surface); color: var(--text); letter-spacing: 0.2em;
+    background: #1b2d3e; color: #f0ede4; letter-spacing: 0.2em;
     -webkit-appearance: none; appearance: none; outline: none;
   }
-  #pw-input:focus { border-color: var(--accent); }
+  #pw-input:focus { border-color: #f0ede4; }
   #pw-btn {
-    width: 100%; max-width: 280px; padding: 12px; border: 1.5px solid var(--accent);
-    border-radius: 8px; background: none; color: var(--accent); font-family: inherit;
+    width: 100%; max-width: 280px; padding: 12px; border: 1px solid #c9a84c;
+    border-radius: 8px; background: none; color: #c9a84c; font-family: inherit;
     font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700;
     cursor: pointer; -webkit-appearance: none; appearance: none;
   }
-  #pw-btn:active { background: rgba(62,207,178,0.08); }
-  #pw-error { font-size: 0.6rem; color: #d94f4d; letter-spacing: 0.08em; min-height: 16px; }
+  #pw-btn:active { background: rgba(201,168,76,0.1); }
+  #pw-error { font-size: 0.6rem; color: #f06260; letter-spacing: 0.08em; min-height: 16px; }
 </style>
 </head>
 <body>
@@ -187,9 +195,12 @@ if (sessionStorage.getItem('auth') === '1') {
 
 <header>
   <div class="header-top">
-    <div>
-      <div class="site-title">Rivières à Saumon</div>
-      <div class="site-subtitle">Débits CEHQ — Québec</div>
+    <div class="logo-area">
+      <div class="emblem">🐟</div>
+      <div>
+        <div class="site-title">Rivières à Saumon</div>
+        <div class="site-subtitle">Débits CEHQ — Québec</div>
+      </div>
     </div>
     <div class="refresh-btn" id="refreshAll" onclick="refreshAll()">↻ Actualiser</div>
   </div>
@@ -316,8 +327,14 @@ async function fetchDebit(stationId) {
       // Tendance : actuel vs ~1h30 avant
       const refVal = hist[Math.max(0, hist.length - 7)].debit;
       trend = debit >= refVal ? 'up' : 'down';
-      // Stats 24h — utiliser index plutôt que comparaison de strings
-      const pool = hist.length >= 96 ? hist.slice(-96) : hist;
+      // Stats 24h — filtrer par timestamp réel
+      const cutoff = Date.now() - 24 * 3600 * 1000;
+      const last24 = hist.filter(e => {
+        // ts format: "2026-05-17 14:00 UTC"
+        const d = new Date(e.ts.replace(' UTC','Z').replace(' ','T'));
+        return !isNaN(d) && d.getTime() >= cutoff;
+      });
+      const pool = last24.length >= 2 ? last24 : hist.slice(-96);
       const vals = pool.map(e => e.debit);
       max24h = Math.max(...vals);
       min24h = Math.min(...vals);
@@ -601,8 +618,8 @@ function renderCard(stationId) {
   if (st.var24h !== null) {
     const sign = st.var24h >= 0 ? '+' : '';
     varEl.textContent = `${sign}${st.var24h.toFixed(1)} %`;
-    varEl.style.color = st.var24h > 3 ? '#27a862' : st.var24h < -3 ? '#d94f4d' : '#3d4a52';
-  } else { varEl.textContent = 'N/D'; varEl.style.color = '#3d4a52'; }
+    varEl.style.color = st.var24h > 3 ? '#4ade9a' : st.var24h < -3 ? '#f06260' : '#7a9ab0';
+  } else { varEl.textContent = 'N/D'; varEl.style.color = '#7a9ab0'; }
   card.querySelector('.dv-max24').textContent  = fmt(st.max24h);
   card.querySelector('.dv-min24').textContent  = fmt(st.min24h);
 
@@ -615,11 +632,11 @@ function renderCard(stationId) {
   if (tidesEl) {
     if (st.tides?.length > 0) {
       tidesEl.innerHTML = st.tides.map(t =>
-        `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #d8dee0">
-          <span style="color:#3d4a52;font-size:0.6rem">${t.day}</span>
-          <span style="font-weight:700;color:${t.type==='HM'?'#27a862':'#d94f4d'}">${t.type}</span>
-          <span style="color:#1a2022">${t.time}</span>
-          <span style="color:#3d4a52">${t.value} m</span>
+        `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(201,168,76,0.15)">
+          <span style="color:#7a9ab0;font-size:0.6rem">${t.day}</span>
+          <span style="font-weight:700;color:${t.type==='HM'?'#4ade9a':'#f06260'}">${t.type}</span>
+          <span style="color:#f0ede4">${t.time}</span>
+          <span style="color:#7a9ab0">${t.value} m</span>
         </div>`
       ).join('');
     } else {
@@ -717,13 +734,13 @@ function buildCards() {
         <div class="detail-item" style="margin-top:6px">
           <div class="detail-label">🎣 Pêcheurs — ${s.name}</div>
           <div style="display:flex;gap:8px;margin-top:4px">
-            <div style="flex:1;background:#f0f2f3;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#3d4a52;text-transform:uppercase;letter-spacing:0.08em">Aujourd'hui</div>
-              <div class="dv-anglers-today" style="font-size:1.1rem;font-weight:700;color:#1a2022">—</div>
+            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Aujourd'hui</div>
+              <div class="dv-anglers-today" style="font-size:1.1rem;font-weight:700;color:#f0ede4">—</div>
             </div>
-            <div style="flex:1;background:#f0f2f3;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#3d4a52;text-transform:uppercase;letter-spacing:0.08em">Demain</div>
-              <div class="dv-anglers-tomorrow" style="font-size:1.1rem;font-weight:700;color:#1a2022">—</div>
+            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Demain</div>
+              <div class="dv-anglers-tomorrow" style="font-size:1.1rem;font-weight:700;color:#f0ede4">—</div>
             </div>
           </div>
         </div>` : ''}
@@ -731,20 +748,20 @@ function buildCards() {
         <div class="detail-item dv-montaisons" style="margin-top:6px">
           <div class="detail-label">🐟 Montaisons saison 2026</div>
           <div style="display:flex;gap:6px;margin-top:4px">
-            <div style="flex:1;background:#f0f2f3;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#3d4a52;text-transform:uppercase;letter-spacing:0.08em">Grands</div>
-              <div class="dv-mont-grands" style="font-size:1rem;font-weight:700;color:#1a2022">—</div>
+            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Grands</div>
+              <div class="dv-mont-grands" style="font-size:1rem;font-weight:700;color:#f0ede4">—</div>
             </div>
-            <div style="flex:1;background:#f0f2f3;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#3d4a52;text-transform:uppercase;letter-spacing:0.08em">${s.id === 'MITIS' ? 'Mad.' : 'Grilses'}</div>
-              <div class="dv-mont-grilses" style="font-size:1rem;font-weight:700;color:#1a2022">—</div>
+            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">${s.id === 'MITIS' ? 'Mad.' : 'Grilses'}</div>
+              <div class="dv-mont-grilses" style="font-size:1rem;font-weight:700;color:#f0ede4">—</div>
             </div>
-            <div style="flex:1;background:#f0f2f3;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#3d4a52;text-transform:uppercase;letter-spacing:0.08em">Total</div>
-              <div class="dv-mont-total" style="font-size:1rem;font-weight:700;color:#3ecfb2">—</div>
+            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
+              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Total</div>
+              <div class="dv-mont-total" style="font-size:1rem;font-weight:700;color:#c9a84c">—</div>
             </div>
           </div>
-          <div class="dv-mont-date" style="font-size:0.52rem;color:#3d4a52;margin-top:4px;text-align:right"></div>
+          <div class="dv-mont-date" style="font-size:0.52rem;color:#7a9ab0;margin-top:4px;text-align:right"></div>
         </div>` : ''}
         <div class="reload-btn" onclick="event.stopPropagation();loadStation('${s.id}')">↻ Recharger cette station</div>
       </div>`;
