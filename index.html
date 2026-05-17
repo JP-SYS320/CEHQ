@@ -158,7 +158,8 @@
 <footer>SOURCE : CEHQ — CENTRE D'EXPERTISE HYDRIQUE DU QUÉBEC</footer>
 
 <script>
-// ─── Phases lunaires 2026-2027 (NASA) ────────────────────────────────────────
+// ─── Init ─────────────────────────────────────────────────────────────────────
+const todayStr = new Date().toISOString().substring(0,10);
 const MOON = {
   new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
          '2026-06-15','2026-07-14','2026-08-12','2026-09-11','2026-10-10',
@@ -256,10 +257,8 @@ async function fetchDebit(stationId) {
       // Tendance : actuel vs ~1h30 avant
       const refVal = hist[Math.max(0, hist.length - 7)].debit;
       trend = debit >= refVal ? 'up' : 'down';
-      // Stats 24h
-      const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-      const last24 = hist.filter(e => e.ts >= cutoff);
-      const pool = last24.length >= 2 ? last24 : hist;
+      // Stats 24h — utiliser index plutôt que comparaison de strings
+      const pool = hist.length >= 96 ? hist.slice(-96) : hist;
       const vals = pool.map(e => e.debit);
       max24h = Math.max(...vals);
       min24h = Math.min(...vals);
@@ -274,7 +273,6 @@ async function fetchDebit(stationId) {
 async function fetchSunTimes(stationId) {
   const s = STATIONS.find(x => x.id === stationId);
   if (!s) return null;
-  const todayStr = new Date().toISOString().substring(0,10);
   const key = `sun_${stationId}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
@@ -319,7 +317,6 @@ async function fetchTides(stationId) {
   const uuid = s.iwls || (s.iwlsCode ? await resolveIwlsUuid(s.iwlsCode) : null);
   if (!uuid) return null;
 
-  const todayStr = new Date().toISOString().substring(0,10);
   const key = `tides_${stationId}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
@@ -349,7 +346,6 @@ async function fetchTides(stationId) {
 
 // ─── Montaisons Matane — cache localStorage par jour ─────────────────────────
 async function fetchMontaisons(stationId) {
-  const todayStr = new Date().toISOString().substring(0,10);
   const key = `montaisons_${stationId}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
@@ -573,10 +569,10 @@ function renderCard(stationId) {
   const montGrands = card.querySelector('.dv-mont-grands');
   if (montGrands) {
     const m = st.montaisons;
-    card.querySelector('.dv-mont-grands').textContent  = m ? m.grands  : '—';
-    card.querySelector('.dv-mont-grilses').textContent = m ? m.grilses : '—';
-    card.querySelector('.dv-mont-total').textContent   = m ? m.total   : '—';
-    card.querySelector('.dv-mont-date').textContent    = m ? `En date du ${m.date}` : '';
+    card.querySelector('.dv-mont-grands').textContent  = m ? m.grands  : '0';
+    card.querySelector('.dv-mont-grilses').textContent = m ? m.grilses : '0';
+    card.querySelector('.dv-mont-total').textContent   = m ? m.total   : '0';
+    card.querySelector('.dv-mont-date').textContent    = m ? `En date du ${m.date}` : 'Saison 2026 — en attente';
   }
 
   // Pêcheurs
@@ -695,7 +691,6 @@ function buildCards() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-const todayStr = new Date().toISOString().substring(0,10);
 // Purger vieux caches marées et soleil (garder UUIDs IWLS — permanents)
 try {
   Object.keys(localStorage).forEach(k => {
