@@ -418,11 +418,8 @@ async function fetchTides(stationId) {
       const hae = new Date(d.getTime() - 4 * 3600000);
       const hh = hae.getUTCHours().toString().padStart(2,'0');
       const mm = hae.getUTCMinutes().toString().padStart(2,'0');
-      const haeDate = hae.toISOString().substring(0,10);
-      const todayHAE = new Date(Date.now() - 4 * 3600000).toISOString().substring(0,10);
-      const day = haeDate === todayHAE ? 'Auj.' : 'Dem.';
-      return { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value >= median ? 'HM':'BM', day };
-    }).filter(t => t.day === 'Auj.');
+      return { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value >= median ? 'HM':'BM' };
+    });
     localStorage.setItem(key, JSON.stringify(tides));
     return tides;
   } catch(e) {}
@@ -639,7 +636,6 @@ function renderCard(stationId) {
     if (st.tides?.length > 0) {
       tidesEl.innerHTML = st.tides.map(t =>
         `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(201,168,76,0.15)">
-          <span style="color:#7a9ab0;font-size:0.6rem">${t.day}</span>
           <span style="font-weight:700;color:${t.type==='HM'?'#4ade9a':'#f06260'}">${t.type}</span>
           <span style="color:#f0ede4">${t.time}</span>
           <span style="color:#7a9ab0">${t.value} m</span>
