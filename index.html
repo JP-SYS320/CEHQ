@@ -262,18 +262,21 @@ function updateMoon() {
 
 // ─── Stations ────────────────────────────────────────────────────────────────
 const STATIONS = [
-  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',       lat:48.0667, lng:-65.4833, iwls:'5cebf1e13d0f4a073c4bbf21', iwlsName:'Bonaventure',         anglers:{host:'pavnew',     zec:'zec-bonaventure', point:'F746BF64-1A2D-E811-9402-534E57000000'} },
-  { id:'010902', name:'Petite Cascapédia', color:'--petite',      region:'gaspesie',       lat:48.0833, lng:-65.6667, iwlsCode:'02200', iwlsName:'Carleton' },
+  // Gaspésie — ordre alphabétique
+  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',       lat:48.0667, lng:-65.4833, iwls:'5cebf1e13d0f4a073c4bbf21', iwlsName:'Bonaventure',          anglers:{host:'pavnew',     zec:'zec-bonaventure', point:'F746BF64-1A2D-E811-9402-534E57000000'} },
   { id:'011003', name:'Cascapédia',        color:'--cascapedia',  region:'gaspesie',       lat:48.1000, lng:-65.8500, iwlsCode:'02200', iwlsName:'Carleton' },
-  { id:'011204', name:'Nouvelle',          color:'--nouvelle',    region:'gaspesie',       lat:48.1167, lng:-66.3167, iwlsCode:'02175', iwlsName:'Campbellton' },
+  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',       lat:48.7000, lng:-64.8000, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',  anglers:{host:'pavnewtest', zec:'zec-gaspe',        point:'7021EE39-5CFE-E411-843E-90FBA62D9769'} },
   { id:'011509', name:'Matapédia',         color:'--matapedia',   region:'gaspesie',       lat:48.0000, lng:-66.9833, iwlsCode:'02175', iwlsName:'Campbellton' },
-  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',       lat:48.8333, lng:-64.6667, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé', anglers:{host:'pavnewtest', zec:'zec-gaspe',        point:'D75D6E53-5CFE-E411-843E-90FBA62D9769'} },
+  { id:'011204', name:'Nouvelle',          color:'--nouvelle',    region:'gaspesie',       lat:48.1167, lng:-66.3167, iwlsCode:'02175', iwlsName:'Campbellton' },
+  { id:'010902', name:'Petite Cascapédia', color:'--petite',      region:'gaspesie',       lat:48.0833, lng:-65.6667, iwlsCode:'02200', iwlsName:'Carleton' },
   { id:'021407', name:'Sainte-Anne',       color:'--ste-anne',    region:'gaspesie',       lat:49.0000, lng:-66.7000, iwlsCode:'02935', iwlsName:'Ste-Anne-des-Monts' },
-  { id:'021601', name:'Matane',            color:'--matane',      region:'bas-st-laurent', lat:48.8500, lng:-67.5333, iwlsCode:'02955', iwlsName:'Matane',              anglers:{host:'pav',        zec:'zec-matane',       point:'A3965629-8308-E511-A31C-90FBA62D9769'} },
+  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',       lat:48.8333, lng:-64.6667, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',  anglers:{host:'pavnewtest', zec:'zec-gaspe',        point:'D75D6E53-5CFE-E411-843E-90FBA62D9769'} },
+  // Bas-St-Laurent — ordre alphabétique
+  { id:'021601', name:'Matane',            color:'--matane',      region:'bas-st-laurent', lat:48.8500, lng:-67.5333, iwlsCode:'02955', iwlsName:'Matane',               anglers:{host:'pav',        zec:'zec-matane',       point:'A3965629-8308-E511-A31C-90FBA62D9769'} },
+  { id:'MITIS',  name:'Mitis',             color:'--mitis',       region:'bas-st-laurent', lat:48.5833, lng:-68.1833, iwlsCode:'02955', iwlsName:'Matane',               anglers:{host:'pav',        zec:'mitis',            point:'AFE100E2-B427-E811-9402-534E57000000'} },
   { id:'022003', name:'Rimouski',          color:'--rimouski',    region:'bas-st-laurent', lat:48.4500, lng:-68.5333, iwlsCode:'02985', iwlsName:'Rimouski' },
-  { id:'MITIS',  name:'Mitis',             color:'--mitis',       region:'bas-st-laurent', lat:48.5833, lng:-68.1833, iwlsCode:'02955', iwlsName:'Matane',              anglers:{host:'pav',        zec:'mitis',            point:'AFE100E2-B427-E811-9402-534E57000000'} },
-  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',       lat:48.7000, lng:-64.8000, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé', anglers:{host:'pavnewtest', zec:'zec-gaspe',        point:'7021EE39-5CFE-E411-843E-90FBA62D9769'} },
-  { id:'070204', name:'Escoumins',          color:'--escoumins',   region:'autres',          lat:48.3500, lng:-69.4000, iwlsCode:'02900', iwlsName:'Les Escoumins' },
+  // Autres
+  { id:'070204', name:'Escoumins',         color:'--escoumins',   region:'autres',          lat:48.3500, lng:-69.4000, iwlsCode:'02900', iwlsName:'Les Escoumins' },
 ];
 
 // ─── État ────────────────────────────────────────────────────────────────────
@@ -406,16 +409,19 @@ async function fetchTides(stationId) {
     );
     if (!res.ok) return null;
     const data = await res.json();
+    const values = data.map(t => t.value);
+    const sorted = [...values].sort((a,b) => a-b);
+    const median = sorted[Math.floor(sorted.length/2)];
+
     const tides = data.map(t => {
       const d = new Date(t.eventDate);
       const hae = new Date(d.getTime() - 4 * 3600000);
       const hh = hae.getUTCHours().toString().padStart(2,'0');
       const mm = hae.getUTCMinutes().toString().padStart(2,'0');
       const haeDate = hae.toISOString().substring(0,10);
-      // Comparer avec la date HAE d'aujourd'hui (pas UTC)
       const todayHAE = new Date(Date.now() - 4 * 3600000).toISOString().substring(0,10);
       const day = haeDate === todayHAE ? 'Auj.' : 'Dem.';
-      return { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value > 1.0 ? 'HM':'BM', day };
+      return { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value >= median ? 'HM':'BM', day };
     }).filter(t => t.day === 'Auj.');
     localStorage.setItem(key, JSON.stringify(tides));
     return tides;
