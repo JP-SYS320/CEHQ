@@ -327,13 +327,10 @@ async function fetchDebit(stationId) {
       localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
     }
     if (hist.length >= 2) {
-      // Tendance : actuel vs ~1h30 avant
       const refVal = hist[Math.max(0, hist.length - 7)].debit;
       trend = debit >= refVal ? 'up' : 'down';
-      // Stats 24h — filtrer par timestamp réel
       const cutoff = Date.now() - 24 * 3600 * 1000;
       const last24 = hist.filter(e => {
-        // ts format: "2026-05-17 14:00 UTC"
         const d = new Date(e.ts.replace(' UTC','Z').replace(' ','T'));
         return !isNaN(d) && d.getTime() >= cutoff;
       });
@@ -400,26 +397,38 @@ async function fetchTides(stationId) {
   try {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
-    const from = `${todayStr}T00:00:00Z`;
-    const tom = new Date(); tom.setDate(tom.getDate() + 1);
-    const to = tom.toISOString().substring(0,10) + 'T23:59:59Z';
+
+    // Couvrir la journée locale HAE complète : today 04:00 UTC → tomorrow 04:00 UTC
+    const from = `${todayStr}T04:00:00Z`;
+    const tom = new Date(todayStr + 'T04:00:00Z');
+    tom.setDate(tom.getDate() + 1);
+    const to = tom.toISOString().substring(0, 19) + 'Z';
+
     const res = await fetch(
       `https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/${uuid}/data?time-series-code=wlp-hilo&from=${from}&to=${to}`,
       { cache: 'no-store' }
     );
     if (!res.ok) return null;
     const data = await res.json();
+    if (!data?.length) return null;
+
+    // Moyenne pour distinguer HM/BM (wlp-hilo retourne déjà seulement les extrema)
     const values = data.map(t => t.value);
-    const sorted = [...values].sort((a,b) => a-b);
-    const median = sorted[Math.floor(sorted.length/2)];
+    const median = values.reduce((a, b) => a + b, 0) / values.length;
 
     const tides = data.map(t => {
       const d = new Date(t.eventDate);
+      // Convertir UTC → HAE (UTC-4)
       const hae = new Date(d.getTime() - 4 * 3600000);
-      const hh = hae.getUTCHours().toString().padStart(2,'0');
-      const mm = hae.getUTCMinutes().toString().padStart(2,'0');
-      return { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value >= median ? 'HM':'BM' };
+      const hh = hae.getUTCHours().toString().padStart(2, '0');
+      const mm = hae.getUTCMinutes().toString().padStart(2, '0');
+      return {
+        time: `${hh}:${mm}`,
+        value: t.value.toFixed(2),
+        type: t.value >= median ? 'HM' : 'BM'
+      };
     });
+
     localStorage.setItem(key, JSON.stringify(tides));
     return tides;
   } catch(e) {}
@@ -451,11 +460,9 @@ async function fetchMontaisons(stationId) {
     let data = null;
 
     if (stationId === '021601') {
-      // Matane : tableau cumulatif
       const m = html.match(/<tr>\s*<td[^>]*>\s*([^<]*\d[^<]*)<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>/);
       if (m) data = { date: m[1].trim(), grands: m[2]||'0', grilses: m[3]||'0', total: m[4]||'0' };
     } else if (stationId === 'MITIS') {
-      // Mitis : page d'accueil avec montaisons
       const grands  = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison grands saumons/);
       const mad     = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison madeleineaux/);
       const dateM   = html.match(/(\d{1,2}\s+\w+\s+\d{4})/);
@@ -520,7 +527,6 @@ async function loadStation(stationId) {
   }
   renderCard(stationId);
 
-  // Fetches secondaires en arrière-plan
   fetchSunTimes(stationId).then(sun => {
     if (sun) { state[stationId].sunrise = sun.sunrise; state[stationId].sunset = sun.sunset; renderCard(stationId); }
   }).catch(() => {});
@@ -642,11 +648,12 @@ function renderCard(stationId) {
         </div>`
       ).join('');
     } else {
+      tidesEl.innerHTML = '';
       tidesEl.textContent = st.tides === null ? '···' : 'N/D';
     }
   }
 
-  // Montaisons Matane
+  // Montaisons
   const montGrands = card.querySelector('.dv-mont-grands');
   if (montGrands) {
     const m = st.montaisons;
@@ -730,7 +737,7 @@ function buildCards() {
         ${s.iwls || s.iwlsCode ? `
         <div class="detail-item" style="margin-top:6px">
           <div class="detail-label">🌊 Marées — ${s.iwlsName || 'Station locale'}</div>
-          <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:#3d4a52">···</div>
+          <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:var(--muted)">···</div>
         </div>` : ''}
         ${s.anglers ? `
         <div class="detail-item" style="margin-top:6px">
@@ -772,11 +779,13 @@ function buildCards() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-// Purger vieux caches marées et soleil (garder UUIDs IWLS — permanents)
+// Purger vieux caches marées, soleil et montaisons (garder UUIDs IWLS — permanents)
+// On invalide aussi le cache marées d'aujourd'hui pour forcer un rechargement propre
 try {
   Object.keys(localStorage).forEach(k => {
-    if ((k.startsWith('tides_') || k.startsWith('sun_') || k.startsWith('montaisons_')) && !k.includes(todayStr))
-      localStorage.removeItem(k);
+    if (k.startsWith('tides_') || k.startsWith('sun_') || k.startsWith('montaisons_')) {
+      if (!k.includes(todayStr) || k.startsWith('tides_')) localStorage.removeItem(k);
+    }
   });
 } catch(e) {}
 
