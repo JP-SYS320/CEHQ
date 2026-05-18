@@ -731,8 +731,15 @@ function buildCards() {
           <div class="detail-item"><div class="detail-label">Min 24h</div><div class="detail-val dv-min24">—</div></div>
         </div>
         <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:6px">
-          <div class="detail-item"><div class="detail-label">🌅 Lever</div><div class="detail-val dv-sunrise">—</div></div>
-          <div class="detail-item"><div class="detail-label">🌇 Coucher</div><div class="detail-val dv-sunset">—</div></div>
+          <div class="detail-item">
+            <div class="detail-label">🌅 Lever &nbsp;·&nbsp; 🌇 Coucher</div>
+            <div class="detail-val" style="display:flex;gap:10px">
+              <span class="dv-sunrise">—</span>
+              <span style="color:var(--muted)">·</span>
+              <span class="dv-sunset">—</span>
+            </div>
+          </div>
+          <div class="detail-item"></div>
         </div>
         ${s.iwls || s.iwlsCode ? `
         <div class="detail-item" style="margin-top:6px">
