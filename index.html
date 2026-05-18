@@ -104,15 +104,15 @@
   .debit-value { font-size: 1.4rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
   .debit-unit { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; }
 
-  .trend-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.58rem; padding: 2px 6px; border-radius: 3px; margin-top: 3px; letter-spacing: 0.04em; }
-  .trend-up   { background: rgba(74,222,154,0.15); color: #4ade9a; }
-  .trend-down { background: rgba(240,98,96,0.15);  color: #f06260; }
+  .trend-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.58rem; padding: 2px 6px; border-radius: 3px; margin-top: 3px; letter-spacing: 0.04em; font-weight: 700; }
+  .trend-up   { background: #ffffff; color: #27a862; }
+  .trend-down { background: #ffffff; color: #d94f4d; }
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
 
   .sparkline-row { margin-top: 10px; height: 24px; position: relative; }
   .spark-bars { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 2px; }
   .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
-  .toggle-label { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 1.2rem; color: rgba(201,168,76,0.6); font-weight: 700; line-height: 24px; }
+  .toggle-label { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 1.4rem; color: #000000; font-weight: 900; line-height: 24px; }
 
   .status-msg { font-size: 0.58rem; color: var(--muted); padding: 4px 0 0; letter-spacing: 0.04em; min-height: 16px; }
   .status-msg.ok  { color: #c9a84c; }
@@ -572,7 +572,7 @@ function buildSpark(history, color) {
   const max = Math.max(...history);
   return history.map((v, i) => {
     const pct = Math.max(10, (v / max) * 100);
-    const c = i === history.length-1 ? col : '#d8dee0';
+    const c = i === history.length-1 ? col : 'rgba(201,168,76,0.15)';
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
 }
@@ -590,13 +590,13 @@ function renderCard(stationId) {
   const debitEl = card.querySelector('.debit-value');
   if (st.status === 'loading') {
     debitEl.textContent = '···';
-    debitEl.style.color = '#b0bbbf';
+    debitEl.style.color = '#7a9ab0';
   } else if (st.debit !== null) {
     debitEl.textContent = st.debit.toFixed(1);
     debitEl.style.color = col;
   } else {
     debitEl.textContent = '—';
-    debitEl.style.color = '#b0bbbf';
+    debitEl.style.color = '#7a9ab0';
   }
 
   const tb = card.querySelector('.trend-badge');
@@ -705,7 +705,7 @@ function buildCards() {
           <div class="station-id">${s.id === 'MITIS' ? 'AUCUNE STATION CEHQ' : `STATION ${s.id}`}</div>
         </div>
         <div class="debit-main">
-          <div class="debit-value" style="color:#b0bbbf">—</div>
+          <div class="debit-value" style="color:#7a9ab0">—</div>
           <div class="debit-unit">m³/s</div>
           <div class="trend-badge trend-nd">— N/D</div>
         </div>
