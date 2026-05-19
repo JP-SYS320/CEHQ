@@ -283,6 +283,7 @@ const STATIONS = [
   { id:'011003', name:'Cascapédia', color:'--cascapedia', region:'gaspesie', lat:48.1000, lng:-65.8500,
     iwlsCode:'02200', iwlsName:'Carleton',
     links:[
+      {label:'🎫 Acheter droits', url:null},
       {label:'🌐 Société Cascapédia', url:'https://www.cascapedia.ca'}
     ]
   },
@@ -318,6 +319,7 @@ const STATIONS = [
   { id:'021407', name:'Sainte-Anne', color:'--ste-anne', region:'gaspesie', lat:49.0000, lng:-66.7000,
     iwlsCode:'02935', iwlsName:'Ste-Anne-des-Monts',
     links:[
+      {label:'🎫 Acheter droits', url:null},
       {label:'🌐 Destination Chic-Chocs', url:'https://destinationchicchocs.com'}
     ]
   },
@@ -482,10 +484,11 @@ async function fetchTides(stationId) {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
 
+    // Fetcher aujourd'hui (04:00 UTC) + demain complet (jusqu'à +48h)
     const from = `${todayStr}T04:00:00Z`;
-    const tom = new Date(todayStr + 'T04:00:00Z');
-    tom.setDate(tom.getDate() + 1);
-    const to = tom.toISOString().substring(0, 19) + 'Z';
+    const dayAfter = new Date(todayStr + 'T04:00:00Z');
+    dayAfter.setDate(dayAfter.getDate() + 2);
+    const to = dayAfter.toISOString().substring(0, 19) + 'Z';
 
     const res = await fetch(
       `https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/${uuid}/data?time-series-code=wlp-hilo&from=${from}&to=${to}`,
@@ -498,14 +501,22 @@ async function fetchTides(stationId) {
     const values = data.map(t => t.value);
     const median = values.reduce((a, b) => a + b, 0) / values.length;
 
-    const tides = data.map(t => {
+    // Seuil minuit HAE = 04:00 UTC du lendemain
+    const tomorrowThreshold = new Date(todayStr + 'T04:00:00Z');
+    tomorrowThreshold.setDate(tomorrowThreshold.getDate() + 1);
+
+    const today = [], tomorrow = [];
+    data.forEach(t => {
       const d = new Date(t.eventDate);
       const hae = new Date(d.getTime() - 4 * 3600000);
       const hh = hae.getUTCHours().toString().padStart(2, '0');
       const mm = hae.getUTCMinutes().toString().padStart(2, '0');
-      return { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value >= median ? 'HM' : 'BM' };
+      const entry = { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value >= median ? 'HM' : 'BM' };
+      if (d < tomorrowThreshold) today.push(entry);
+      else tomorrow.push(entry);
     });
 
+    const tides = { today, tomorrow };
     localStorage.setItem(key, JSON.stringify(tides));
     return tides;
   } catch(e) {}
@@ -603,9 +614,9 @@ async function loadStation(stationId) {
   }).catch(() => {});
 
   fetchTides(stationId).then(tides => {
-    state[stationId].tides = tides || [];
+    state[stationId].tides = tides || null;
     renderCard(stationId);
-  }).catch(() => { state[stationId].tides = []; renderCard(stationId); });
+  }).catch(() => { state[stationId].tides = null; renderCard(stationId); });
 
   if (s?.anglers) {
     fetchAnglers(stationId).then(anglers => {
@@ -707,17 +718,31 @@ function renderCard(stationId) {
 
   const tidesEl = card.querySelector('.dv-tides-content');
   if (tidesEl) {
-    if (st.tides?.length > 0) {
-      tidesEl.innerHTML = st.tides.map(t =>
-        `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(201,168,76,0.15)">
-          <span style="font-weight:700;color:${t.type==='HM'?'#4ade9a':'#f06260'}">${t.type}</span>
-          <span style="color:#f0ede4">${t.time}</span>
-          <span style="color:#7a9ab0">${t.value} m</span>
+    const td = st.tides;
+    const hasToday    = td?.today?.length > 0;
+    const hasTomorrow = td?.tomorrow?.length > 0;
+    if (hasToday || hasTomorrow) {
+      const renderCol = (arr) => (arr || []).map(t =>
+        `<div style="display:flex;gap:4px;align-items:baseline;padding:2px 0;border-bottom:1px solid rgba(201,168,76,0.1)">
+          <span style="font-weight:700;font-size:0.6rem;color:${t.type==='HM'?'#4ade9a':'#f06260'};width:18px">${t.type}</span>
+          <span style="color:#f0ede4;font-size:0.65rem">${t.time}</span>
+          <span style="color:#7a9ab0;font-size:0.6rem">${t.value}m</span>
         </div>`
       ).join('');
+      tidesEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <div style="font-size:0.5rem;color:var(--accent);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px">Aujourd'hui</div>
+            ${renderCol(td?.today)}
+          </div>
+          <div>
+            <div style="font-size:0.5rem;color:var(--accent);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px">Demain</div>
+            ${renderCol(td?.tomorrow)}
+          </div>
+        </div>`;
     } else {
       tidesEl.innerHTML = '';
-      tidesEl.textContent = st.tides === null ? '···' : 'N/D';
+      tidesEl.textContent = td === null ? '···' : 'N/D';
     }
   }
 
@@ -777,7 +802,9 @@ function buildCards() {
       ? '<span class="detail-nd">N/D</span>'
       : s.links?.length
         ? `<div class="detail-links">${s.links.map(l =>
-            `<a class="detail-link" href="${l.url}" target="_blank" onclick="event.stopPropagation()">${l.label}</a>`
+            l.url
+              ? `<a class="detail-link" href="${l.url}" target="_blank" onclick="event.stopPropagation()">${l.label}</a>`
+              : `<span class="detail-link" style="color:var(--muted);cursor:default">${l.label} — N/D</span>`
           ).join('')}</div>`
         : '';
 
@@ -807,11 +834,15 @@ function buildCards() {
         </div>
         <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:6px">
           <div class="detail-item">
-            <div class="detail-label">🌅 Lever &nbsp;·&nbsp; 🌇 Coucher</div>
-            <div class="detail-val" style="display:flex;gap:10px">
-              <span class="dv-sunrise">—</span>
-              <span style="color:var(--muted)">·</span>
-              <span class="dv-sunset">—</span>
+            <div style="display:flex;gap:16px">
+              <div>
+                <div class="detail-label">🌅 Lever</div>
+                <div class="detail-val dv-sunrise">—</div>
+              </div>
+              <div>
+                <div class="detail-label">🌇 Coucher</div>
+                <div class="detail-val dv-sunset">—</div>
+              </div>
             </div>
           </div>
           <div class="detail-item">${linksHtml}</div>
