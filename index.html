@@ -189,6 +189,14 @@ function checkPassword() {
   if (input.value === 'Undertaker') {
     sessionStorage.setItem('auth', '1');
     document.getElementById('pw-screen').style.display = 'none';
+    // Force reflow header sticky — bug Safari iOS
+    const h = document.querySelector('header');
+    h.style.display = 'none';
+    requestAnimationFrame(() => {
+      h.style.display = '';
+      window.scrollTo(0, 1);
+      requestAnimationFrame(() => window.scrollTo(0, 0));
+    });
   } else {
     error.textContent = 'Mot de passe incorrect';
     input.value = '';
@@ -723,14 +731,14 @@ function renderCard(stationId) {
     const hasTomorrow = td?.tomorrow?.length > 0;
     if (hasToday || hasTomorrow) {
       const renderCol = (arr) => (arr || []).map(t =>
-        `<div style="display:flex;gap:4px;align-items:baseline;padding:2px 0;border-bottom:1px solid rgba(201,168,76,0.1)">
-          <span style="font-weight:700;font-size:0.6rem;color:${t.type==='HM'?'#4ade9a':'#f06260'};width:18px">${t.type}</span>
-          <span style="color:#f0ede4;font-size:0.65rem">${t.time}</span>
-          <span style="color:#7a9ab0;font-size:0.6rem">${t.value}m</span>
+        `<div style="display:flex;align-items:baseline;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(201,168,76,0.12)">
+          <span style="font-weight:700;font-size:0.62rem;color:${t.type==='HM'?'#4ade9a':'#f06260'};width:22px;flex-shrink:0">${t.type}</span>
+          <span style="color:#f0ede4;font-size:0.7rem;flex:1;text-align:center">${t.time}</span>
+          <span style="color:#7a9ab0;font-size:0.62rem;text-align:right">${t.value} m</span>
         </div>`
       ).join('');
       tidesEl.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
             <div style="font-size:0.5rem;color:var(--accent);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px">Aujourd'hui</div>
             ${renderCol(td?.today)}
@@ -834,14 +842,14 @@ function buildCards() {
         </div>
         <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:6px">
           <div class="detail-item">
-            <div style="display:flex;gap:16px">
+            <div style="display:flex;gap:0;justify-content:space-around;text-align:center">
               <div>
                 <div class="detail-label">🌅 Lever</div>
-                <div class="detail-val dv-sunrise">—</div>
+                <div class="detail-val dv-sunrise" style="font-size:1rem">—</div>
               </div>
               <div>
                 <div class="detail-label">🌇 Coucher</div>
-                <div class="detail-val dv-sunset">—</div>
+                <div class="detail-val dv-sunset" style="font-size:1rem">—</div>
               </div>
             </div>
           </div>
