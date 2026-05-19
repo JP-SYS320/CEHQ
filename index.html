@@ -133,6 +133,7 @@
   }
   .detail-link:last-child { border-bottom: none; }
   .detail-link:active { opacity: 0.65; }
+  .detail-nd { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.06em; }
 
   .reload-btn {
     width: 100%; background: none; border: 1px solid var(--accent); color: var(--accent);
@@ -279,19 +280,74 @@ const STATIONS = [
       {label:'🌐 Zec Bonaventure', url:'https://www.zecbonaventure.com'}
     ]
   },
-  { id:'011003', name:'Cascapédia',        color:'--cascapedia',  region:'gaspesie',       lat:48.1000, lng:-65.8500, iwlsCode:'02200', iwlsName:'Carleton' },
-  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',       lat:48.7000, lng:-64.8000, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé', anglers:{host:'pavnewtest', zec:'zec-gaspe', point:'7021EE39-5CFE-E411-843E-90FBA62D9769'} },
-  { id:'011509', name:'Matapédia',         color:'--matapedia',   region:'gaspesie',       lat:48.0000, lng:-66.9833, iwlsCode:'02175', iwlsName:'Campbellton' },
-  { id:'011204', name:'Nouvelle',          color:'--nouvelle',    region:'gaspesie',       lat:48.1167, lng:-66.3167, iwlsCode:'02175', iwlsName:'Campbellton' },
-  { id:'010902', name:'Petite Cascapédia', color:'--petite',      region:'gaspesie',       lat:48.0833, lng:-65.6667, iwlsCode:'02200', iwlsName:'Carleton' },
-  { id:'021407', name:'Sainte-Anne',       color:'--ste-anne',    region:'gaspesie',       lat:49.0000, lng:-66.7000, iwlsCode:'02935', iwlsName:'Ste-Anne-des-Monts' },
-  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',       lat:48.8333, lng:-64.6667, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé', anglers:{host:'pavnewtest', zec:'zec-gaspe', point:'D75D6E53-5CFE-E411-843E-90FBA62D9769'} },
+  { id:'011003', name:'Cascapédia', color:'--cascapedia', region:'gaspesie', lat:48.1000, lng:-65.8500,
+    iwlsCode:'02200', iwlsName:'Carleton',
+    links:null
+  },
+  { id:'020602', name:'Dartmouth', color:'--dartmouth', region:'gaspesie', lat:48.7000, lng:-64.8000,
+    iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',
+    anglers:{host:'pavnewtest', zec:'zec-gaspe', point:'7021EE39-5CFE-E411-843E-90FBA62D9769'},
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=zec-gaspe'}
+    ]
+  },
+  { id:'011509', name:'Matapédia', color:'--matapedia', region:'gaspesie', lat:48.0000, lng:-66.9833,
+    iwlsCode:'02175', iwlsName:'Campbellton',
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=cgrmp'}
+    ]
+  },
+  { id:'011204', name:'Nouvelle', color:'--nouvelle', region:'gaspesie', lat:48.1167, lng:-66.3167,
+    iwlsCode:'02175', iwlsName:'Campbellton',
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-nouvelle'}
+    ]
+  },
+  { id:'010902', name:'Petite Cascapédia', color:'--petite', region:'gaspesie', lat:48.0833, lng:-65.6667,
+    iwlsCode:'02200', iwlsName:'Carleton',
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=zec-petite-cascapedia'}
+    ]
+  },
+  { id:'021407', name:'Sainte-Anne', color:'--ste-anne', region:'gaspesie', lat:49.0000, lng:-66.7000,
+    iwlsCode:'02935', iwlsName:'Ste-Anne-des-Monts',
+    links:null
+  },
+  { id:'020404', name:'York', color:'--york', region:'gaspesie', lat:48.8333, lng:-64.6667,
+    iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',
+    anglers:{host:'pavnewtest', zec:'zec-gaspe', point:'D75D6E53-5CFE-E411-843E-90FBA62D9769'},
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=zec-gaspe'}
+    ]
+  },
   // Bas-St-Laurent — ordre alphabétique
-  { id:'021601', name:'Matane',  color:'--matane',  region:'bas-st-laurent', lat:48.8500, lng:-67.5333, iwlsCode:'02955', iwlsName:'Matane', anglers:{host:'pav', zec:'zec-matane', point:'A3965629-8308-E511-A31C-90FBA62D9769'} },
-  { id:'MITIS',  name:'Mitis',   color:'--mitis',   region:'bas-st-laurent', lat:48.5833, lng:-68.1833, iwlsCode:'02955', iwlsName:'Matane', anglers:{host:'pav', zec:'mitis',      point:'AFE100E2-B427-E811-9402-534E57000000'} },
-  { id:'022003', name:'Rimouski',color:'--rimouski', region:'bas-st-laurent', lat:48.4500, lng:-68.5333, iwlsCode:'02985', iwlsName:'Rimouski' },
+  { id:'021601', name:'Matane', color:'--matane', region:'bas-st-laurent', lat:48.8500, lng:-67.5333,
+    iwlsCode:'02955', iwlsName:'Matane',
+    anglers:{host:'pav', zec:'zec-matane', point:'A3965629-8308-E511-A31C-90FBA62D9769'},
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=zec-matane'}
+    ]
+  },
+  { id:'MITIS', name:'Mitis', color:'--mitis', region:'bas-st-laurent', lat:48.5833, lng:-68.1833,
+    iwlsCode:'02955', iwlsName:'Matane',
+    anglers:{host:'pav', zec:'mitis', point:'AFE100E2-B427-E811-9402-534E57000000'},
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=mitis'}
+    ]
+  },
+  { id:'022003', name:'Rimouski', color:'--rimouski', region:'bas-st-laurent', lat:48.4500, lng:-68.5333,
+    iwlsCode:'02985', iwlsName:'Rimouski',
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-rimouski'}
+    ]
+  },
   // Autres
-  { id:'070204', name:'Escoumins', color:'--escoumins', region:'autres', lat:48.3500, lng:-69.4000, iwlsCode:'02900', iwlsName:'Les Escoumins' },
+  { id:'070204', name:'Escoumins', color:'--escoumins', region:'autres', lat:48.3500, lng:-69.4000,
+    iwlsCode:'02900', iwlsName:'Les Escoumins',
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-escoumins'}
+    ]
+  },
 ];
 
 // ─── État ────────────────────────────────────────────────────────────────────
@@ -413,7 +469,6 @@ async function fetchTides(stationId) {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
 
-    // Couvrir la journée locale HAE complète : today 04:00 UTC → tomorrow 04:00 UTC
     const from = `${todayStr}T04:00:00Z`;
     const tom = new Date(todayStr + 'T04:00:00Z');
     tom.setDate(tom.getDate() + 1);
@@ -427,7 +482,6 @@ async function fetchTides(stationId) {
     const data = await res.json();
     if (!data?.length) return null;
 
-    // Moyenne pour distinguer HM/BM
     const values = data.map(t => t.value);
     const median = values.reduce((a, b) => a + b, 0) / values.length;
 
@@ -625,7 +679,6 @@ function renderCard(stationId) {
 
   if (!st.expanded) return;
 
-  // Stats 24h
   const fmt = v => v !== null ? v.toFixed(1) + ' m³/s' : 'N/D';
   const varEl = card.querySelector('.dv-var');
   if (st.var24h !== null) {
@@ -636,11 +689,9 @@ function renderCard(stationId) {
   card.querySelector('.dv-max24').textContent = fmt(st.max24h);
   card.querySelector('.dv-min24').textContent = fmt(st.min24h);
 
-  // Lever/coucher
   card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
   card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
 
-  // Marées
   const tidesEl = card.querySelector('.dv-tides-content');
   if (tidesEl) {
     if (st.tides?.length > 0) {
@@ -657,7 +708,6 @@ function renderCard(stationId) {
     }
   }
 
-  // Montaisons
   const montGrands = card.querySelector('.dv-mont-grands');
   if (montGrands) {
     const m = st.montaisons;
@@ -667,7 +717,6 @@ function renderCard(stationId) {
     card.querySelector('.dv-mont-date').textContent    = m ? `En date du ${m.date}` : 'Saison 2026 — en attente';
   }
 
-  // Pêcheurs
   const anglersToday    = card.querySelector('.dv-anglers-today');
   const anglersTomorrow = card.querySelector('.dv-anglers-tomorrow');
   if (anglersToday) anglersToday.textContent    = st.anglers?.today    ?? '—';
@@ -711,11 +760,15 @@ function buildCards() {
     div.dataset.id = s.id;
     div.onclick = () => toggleCard(s.id);
 
-    const linksHtml = s.links?.length
-      ? `<div class="detail-links">${s.links.map(l =>
-          `<a class="detail-link" href="${l.url}" target="_blank" onclick="event.stopPropagation()">${l.label}</a>`
-        ).join('')}</div>`
-      : '';
+    // Case droite : liens si disponibles, N/D si null explicite, vide sinon
+    let linksHtml = '';
+    if (s.links === null) {
+      linksHtml = '<span class="detail-nd">N/D</span>';
+    } else if (s.links?.length) {
+      linksHtml = `<div class="detail-links">${s.links.map(l =>
+        `<a class="detail-link" href="${l.url}" target="_blank" onclick="event.stopPropagation()">${l.label}</a>`
+      ).join('')}</div>`;
+    }
 
     div.innerHTML = `
       <div class="card-color-bar"></div>
