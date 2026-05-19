@@ -46,7 +46,6 @@
   }
 
   .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-
   .logo-area { display: flex; align-items: center; gap: 10px; }
 
   .emblem {
@@ -125,6 +124,15 @@
   .detail-item { background: #142230; border-radius: 6px; padding: 7px 9px; }
   .detail-label { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
   .detail-val { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+
+  .detail-links { display: flex; flex-direction: column; gap: 4px; }
+  .detail-link {
+    display: block; font-size: 0.62rem; color: var(--accent);
+    text-decoration: none; letter-spacing: 0.03em; line-height: 1.4;
+    padding: 3px 0; border-bottom: 1px solid rgba(201,168,76,0.15);
+  }
+  .detail-link:last-child { border-bottom: none; }
+  .detail-link:active { opacity: 0.65; }
 
   .reload-btn {
     width: 100%; background: none; border: 1px solid var(--accent); color: var(--accent);
@@ -263,20 +271,27 @@ function updateMoon() {
 // ─── Stations ────────────────────────────────────────────────────────────────
 const STATIONS = [
   // Gaspésie — ordre alphabétique
-  { id:'010802', name:'Bonaventure',       color:'--bonaventure', region:'gaspesie',       lat:48.0667, lng:-65.4833, iwls:'5cebf1e13d0f4a073c4bbf21', iwlsName:'Bonaventure',          anglers:{host:'pavnew',     zec:'zec-bonaventure', point:'F746BF64-1A2D-E811-9402-534E57000000'} },
+  { id:'010802', name:'Bonaventure', color:'--bonaventure', region:'gaspesie', lat:48.0667, lng:-65.4833,
+    iwls:'5cebf1e13d0f4a073c4bbf21', iwlsName:'Bonaventure',
+    anglers:{host:'pavnew', zec:'zec-bonaventure', point:'F746BF64-1A2D-E811-9402-534E57000000'},
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=zec-bonaventure'},
+      {label:'🌐 Zec Bonaventure', url:'https://www.zecbonaventure.com'}
+    ]
+  },
   { id:'011003', name:'Cascapédia',        color:'--cascapedia',  region:'gaspesie',       lat:48.1000, lng:-65.8500, iwlsCode:'02200', iwlsName:'Carleton' },
-  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',       lat:48.7000, lng:-64.8000, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',  anglers:{host:'pavnewtest', zec:'zec-gaspe',        point:'7021EE39-5CFE-E411-843E-90FBA62D9769'} },
+  { id:'020602', name:'Dartmouth',         color:'--dartmouth',   region:'gaspesie',       lat:48.7000, lng:-64.8000, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé', anglers:{host:'pavnewtest', zec:'zec-gaspe', point:'7021EE39-5CFE-E411-843E-90FBA62D9769'} },
   { id:'011509', name:'Matapédia',         color:'--matapedia',   region:'gaspesie',       lat:48.0000, lng:-66.9833, iwlsCode:'02175', iwlsName:'Campbellton' },
   { id:'011204', name:'Nouvelle',          color:'--nouvelle',    region:'gaspesie',       lat:48.1167, lng:-66.3167, iwlsCode:'02175', iwlsName:'Campbellton' },
   { id:'010902', name:'Petite Cascapédia', color:'--petite',      region:'gaspesie',       lat:48.0833, lng:-65.6667, iwlsCode:'02200', iwlsName:'Carleton' },
   { id:'021407', name:'Sainte-Anne',       color:'--ste-anne',    region:'gaspesie',       lat:49.0000, lng:-66.7000, iwlsCode:'02935', iwlsName:'Ste-Anne-des-Monts' },
-  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',       lat:48.8333, lng:-64.6667, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',  anglers:{host:'pavnewtest', zec:'zec-gaspe',        point:'D75D6E53-5CFE-E411-843E-90FBA62D9769'} },
+  { id:'020404', name:'York',              color:'--york',        region:'gaspesie',       lat:48.8333, lng:-64.6667, iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé', anglers:{host:'pavnewtest', zec:'zec-gaspe', point:'D75D6E53-5CFE-E411-843E-90FBA62D9769'} },
   // Bas-St-Laurent — ordre alphabétique
-  { id:'021601', name:'Matane',            color:'--matane',      region:'bas-st-laurent', lat:48.8500, lng:-67.5333, iwlsCode:'02955', iwlsName:'Matane',               anglers:{host:'pav',        zec:'zec-matane',       point:'A3965629-8308-E511-A31C-90FBA62D9769'} },
-  { id:'MITIS',  name:'Mitis',             color:'--mitis',       region:'bas-st-laurent', lat:48.5833, lng:-68.1833, iwlsCode:'02955', iwlsName:'Matane',               anglers:{host:'pav',        zec:'mitis',            point:'AFE100E2-B427-E811-9402-534E57000000'} },
-  { id:'022003', name:'Rimouski',          color:'--rimouski',    region:'bas-st-laurent', lat:48.4500, lng:-68.5333, iwlsCode:'02985', iwlsName:'Rimouski' },
+  { id:'021601', name:'Matane',  color:'--matane',  region:'bas-st-laurent', lat:48.8500, lng:-67.5333, iwlsCode:'02955', iwlsName:'Matane', anglers:{host:'pav', zec:'zec-matane', point:'A3965629-8308-E511-A31C-90FBA62D9769'} },
+  { id:'MITIS',  name:'Mitis',   color:'--mitis',   region:'bas-st-laurent', lat:48.5833, lng:-68.1833, iwlsCode:'02955', iwlsName:'Matane', anglers:{host:'pav', zec:'mitis',      point:'AFE100E2-B427-E811-9402-534E57000000'} },
+  { id:'022003', name:'Rimouski',color:'--rimouski', region:'bas-st-laurent', lat:48.4500, lng:-68.5333, iwlsCode:'02985', iwlsName:'Rimouski' },
   // Autres
-  { id:'070204', name:'Escoumins',         color:'--escoumins',   region:'autres',          lat:48.3500, lng:-69.4000, iwlsCode:'02900', iwlsName:'Les Escoumins' },
+  { id:'070204', name:'Escoumins', color:'--escoumins', region:'autres', lat:48.3500, lng:-69.4000, iwlsCode:'02900', iwlsName:'Les Escoumins' },
 ];
 
 // ─── État ────────────────────────────────────────────────────────────────────
@@ -412,21 +427,16 @@ async function fetchTides(stationId) {
     const data = await res.json();
     if (!data?.length) return null;
 
-    // Moyenne pour distinguer HM/BM (wlp-hilo retourne déjà seulement les extrema)
+    // Moyenne pour distinguer HM/BM
     const values = data.map(t => t.value);
     const median = values.reduce((a, b) => a + b, 0) / values.length;
 
     const tides = data.map(t => {
       const d = new Date(t.eventDate);
-      // Convertir UTC → HAE (UTC-4)
       const hae = new Date(d.getTime() - 4 * 3600000);
       const hh = hae.getUTCHours().toString().padStart(2, '0');
       const mm = hae.getUTCMinutes().toString().padStart(2, '0');
-      return {
-        time: `${hh}:${mm}`,
-        value: t.value.toFixed(2),
-        type: t.value >= median ? 'HM' : 'BM'
-      };
+      return { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value >= median ? 'HM' : 'BM' };
     });
 
     localStorage.setItem(key, JSON.stringify(tides));
@@ -435,7 +445,7 @@ async function fetchTides(stationId) {
   return null;
 }
 
-// ─── Montaisons Matane — cache localStorage par jour ─────────────────────────
+// ─── Montaisons — cache localStorage par jour ─────────────────────────────────
 async function fetchMontaisons(stationId) {
   const key = `montaisons_${stationId}_${todayStr}`;
   try {
@@ -458,23 +468,17 @@ async function fetchMontaisons(stationId) {
     const html = await res.text();
 
     let data = null;
-
     if (stationId === '021601') {
       const m = html.match(/<tr>\s*<td[^>]*>\s*([^<]*\d[^<]*)<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>/);
       if (m) data = { date: m[1].trim(), grands: m[2]||'0', grilses: m[3]||'0', total: m[4]||'0' };
     } else if (stationId === 'MITIS') {
-      const grands  = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison grands saumons/);
-      const mad     = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison madeleineaux/);
-      const dateM   = html.match(/(\d{1,2}\s+\w+\s+\d{4})/);
+      const grands = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison grands saumons/);
+      const mad    = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison madeleineaux/);
+      const dateM  = html.match(/(\d{1,2}\s+\w+\s+\d{4})/);
       if (grands || mad) {
         const g = grands ? grands[1] : '0';
         const ma = mad ? mad[1] : '0';
-        data = {
-          date: dateM ? dateM[1] : '',
-          grands: g,
-          grilses: ma,
-          total: (parseInt(g)||0) + (parseInt(ma)||0) + ''
-        };
+        data = { date: dateM ? dateM[1] : '', grands: g, grilses: ma, total: (parseInt(g)||0) + (parseInt(ma)||0) + '' };
       }
     }
 
@@ -484,7 +488,7 @@ async function fetchMontaisons(stationId) {
   return null;
 }
 
-// ─── Pêcheurs Manisoft — direct (pas de proxy) ───────────────────────────────
+// ─── Pêcheurs Manisoft ───────────────────────────────────────────────────────
 async function fetchAnglers(stationId) {
   const s = STATIONS.find(x => x.id === stationId);
   if (!s?.anglers) return null;
@@ -629,8 +633,8 @@ function renderCard(stationId) {
     varEl.textContent = `${sign}${st.var24h.toFixed(1)} %`;
     varEl.style.color = st.var24h > 3 ? '#4ade9a' : st.var24h < -3 ? '#f06260' : '#7a9ab0';
   } else { varEl.textContent = 'N/D'; varEl.style.color = '#7a9ab0'; }
-  card.querySelector('.dv-max24').textContent  = fmt(st.max24h);
-  card.querySelector('.dv-min24').textContent  = fmt(st.min24h);
+  card.querySelector('.dv-max24').textContent = fmt(st.max24h);
+  card.querySelector('.dv-min24').textContent = fmt(st.min24h);
 
   // Lever/coucher
   card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
@@ -706,6 +710,13 @@ function buildCards() {
     div.id = `card-${s.id}`;
     div.dataset.id = s.id;
     div.onclick = () => toggleCard(s.id);
+
+    const linksHtml = s.links?.length
+      ? `<div class="detail-links">${s.links.map(l =>
+          `<a class="detail-link" href="${l.url}" target="_blank" onclick="event.stopPropagation()">${l.label}</a>`
+        ).join('')}</div>`
+      : '';
+
     div.innerHTML = `
       <div class="card-color-bar"></div>
       <div class="card-header">
@@ -739,7 +750,7 @@ function buildCards() {
               <span class="dv-sunset">—</span>
             </div>
           </div>
-          <div class="detail-item"></div>
+          <div class="detail-item">${linksHtml}</div>
         </div>
         ${s.iwls || s.iwlsCode ? `
         <div class="detail-item" style="margin-top:6px">
@@ -786,8 +797,6 @@ function buildCards() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-// Purger vieux caches marées, soleil et montaisons (garder UUIDs IWLS — permanents)
-// On invalide aussi le cache marées d'aujourd'hui pour forcer un rechargement propre
 try {
   Object.keys(localStorage).forEach(k => {
     if (k.startsWith('tides_') || k.startsWith('sun_') || k.startsWith('montaisons_')) {
