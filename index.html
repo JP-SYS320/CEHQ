@@ -245,8 +245,9 @@ if (sessionStorage.getItem('auth') === '1') {
 </footer>
 
 <script>
-// ─── Init ─────────────────────────────────────────────────────────────────────
-const todayStr = new Date().toISOString().substring(0,10);
+// ─── Constantes ───────────────────────────────────────────────────────────────
+const todayStr = new Date().toISOString().substring(0, 10);
+const MOIS = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
 const MOON = {
   new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
          '2026-06-15','2026-07-14','2026-08-12','2026-09-11','2026-10-10',
@@ -255,18 +256,18 @@ const MOON = {
          '2026-05-31','2026-06-30','2026-07-29','2026-08-28','2026-09-26',
          '2026-10-26','2026-11-24','2026-12-24','2027-01-22','2027-02-20'],
 };
-const MOIS = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
 
+// ─── Lune ─────────────────────────────────────────────────────────────────────
 function nextMoon(type) {
-  const today = new Date(); today.setHours(0,0,0,0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   for (const s of MOON[type]) {
     const d = new Date(s + 'T12:00:00');
     if (d >= today) {
       const diff = Math.round((d - today) / 86400000);
-      return { label:`${d.getDate()} ${MOIS[d.getMonth()]}`, diff };
+      return { label: `${d.getDate()} ${MOIS[d.getMonth()]}`, diff };
     }
   }
-  return { label:'—', diff:0 };
+  return { label: '—', diff: 0 };
 }
 
 function updateMoon() {
@@ -305,6 +306,7 @@ const STATIONS = [
   },
   { id:'011509', name:'Matapédia', color:'--matapedia', region:'gaspesie', lat:48.0000, lng:-66.9833,
     iwlsCode:'02175', iwlsName:'Campbellton',
+    anglersUrl:'https://rivierematapedia.com/peche-information/statistiques.html',
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=cgrmp'},
       {label:'🌐 CGRMP', url:'https://rivierematapedia.com'}
@@ -373,6 +375,9 @@ const STATIONS = [
   },
 ];
 
+// Index O(1) par id — évite les .find() répétés sur 12 entrées dans renderCard/filterStations
+const STATION_MAP = Object.fromEntries(STATIONS.map(s => [s.id, s]));
+
 // ─── État ────────────────────────────────────────────────────────────────────
 const state = {};
 STATIONS.forEach(s => {
@@ -381,9 +386,21 @@ STATIONS.forEach(s => {
                   tides:null, anglers:null, montaisons:null };
 });
 
-// ─── API MSP — cache mémoire 5 min ───────────────────────────────────────────
+// ─── CSS var cache — résolution unique par variable ───────────────────────────
+const cssCache = {};
+function getCSSVar(name) {
+  if (!cssCache[name]) cssCache[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return cssCache[name];
+}
+
+// Pré-résoudre toutes les couleurs au démarrage (évite getComputedStyle dans renderCard)
+function primeColorCache() {
+  STATIONS.forEach(s => getCSSVar(s.color));
+}
+
+// ─── API MSP — un seul fetch par actualisation, indexé après réception ────────
 const WFS_URL = 'https://geoegl.msp.gouv.qc.ca/apis/mapserver-vigilance/ws/vigilance.fcgi?service=wfs&version=1.1.0&request=getfeature&typename=stations_igo2_public&outputformat=geojson';
-let wfsCache = null, wfsCacheTime = 0;
+let wfsCache = null, wfsCacheTime = 0, wfsIndex = null;
 
 async function fetchAllStations() {
   const now = Date.now();
@@ -392,6 +409,12 @@ async function fetchAllStations() {
   if (!res.ok) throw new Error('API MSP indisponible');
   wfsCache = await res.json();
   wfsCacheTime = now;
+  // Indexer le GeoJSON par numéro de station pour des lookups O(1)
+  wfsIndex = Object.fromEntries(
+    wfsCache.features
+      .filter(f => f.properties.station)
+      .map(f => [f.properties.station.toString().trim(), f])
+  );
   return wfsCache;
 }
 
@@ -400,16 +423,15 @@ async function fetchDebit(stationId) {
   if (stationId === 'MITIS')
     return { debit:null, trend:null, timestamp:null, var24h:null, max24h:null, min24h:null };
 
-  const geojson = await fetchAllStations();
-  const feat = geojson.features.find(f =>
-    f.properties.station && f.properties.station.toString().trim() === stationId
-  );
+  await fetchAllStations(); // garantit que wfsIndex est prêt
+  const feat = wfsIndex?.[stationId];
   if (!feat) throw new Error(`Station ${stationId} non trouvée`);
+
   const p = feat.properties;
   const debit = parseFloat(p.dern_valeur_deb);
   if (isNaN(debit) || debit < 0) throw new Error('Débit non disponible');
   const timestamp = p.dern_date_prise_valeur_utc
-    ? p.dern_date_prise_valeur_utc.replace('T',' ').substring(0,16) + ' UTC'
+    ? p.dern_date_prise_valeur_utc.replace('T', ' ').substring(0, 16) + ' UTC'
     : '—';
 
   let trend = null, var24h = null, max24h = null, min24h = null;
@@ -425,7 +447,7 @@ async function fetchDebit(stationId) {
       trend = debit >= refVal ? 'up' : 'down';
       const cutoff = Date.now() - 24 * 3600 * 1000;
       const last24 = hist.filter(e => {
-        const d = new Date(e.ts.replace(' UTC','Z').replace(' ','T'));
+        const d = new Date(e.ts.replace(' UTC', 'Z').replace(' ', 'T'));
         return !isNaN(d) && d.getTime() >= cutoff;
       });
       const pool = last24.length >= 2 ? last24 : hist.slice(-96);
@@ -440,10 +462,8 @@ async function fetchDebit(stationId) {
 }
 
 // ─── Sunrise/Sunset — cache localStorage par jour ────────────────────────────
-async function fetchSunTimes(stationId) {
-  const s = STATIONS.find(x => x.id === stationId);
-  if (!s) return null;
-  const key = `sun_${stationId}_${todayStr}`;
+async function fetchSunTimes(s) {
+  const key = `sun_${s.id}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
@@ -461,7 +481,7 @@ async function fetchSunTimes(stationId) {
   return null;
 }
 
-// ─── Marées IWLS — UUID auto-résolu + cache localStorage ─────────────────────
+// ─── Marées IWLS — UUID résolu une seule fois, mis en cache permanent ─────────
 const iwlsUuidCache = {};
 
 async function resolveIwlsUuid(code) {
@@ -481,18 +501,17 @@ async function resolveIwlsUuid(code) {
   return null;
 }
 
-async function fetchTides(stationId) {
-  const s = STATIONS.find(x => x.id === stationId);
-  if (!s) return null;
+async function fetchTides(s) {
   const uuid = s.iwls || (s.iwlsCode ? await resolveIwlsUuid(s.iwlsCode) : null);
   if (!uuid) return null;
 
-  const key = `tides_${stationId}_${todayStr}`;
+  // Cache valide pour la journée courante seulement (pas effacé au démarrage)
+  const key = `tides_${s.id}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
 
-    // Fetcher aujourd'hui (04:00 UTC) + demain complet (jusqu'à +48h)
+    // Fenêtre : minuit HAE aujourd'hui → minuit HAE après-demain (UTC+4h)
     const from = `${todayStr}T04:00:00Z`;
     const dayAfter = new Date(todayStr + 'T04:00:00Z');
     dayAfter.setDate(dayAfter.getDate() + 2);
@@ -507,7 +526,7 @@ async function fetchTides(stationId) {
     if (!data?.length) return null;
 
     const values = data.map(t => t.value);
-    const median = values.reduce((a, b) => a + b, 0) / values.length;
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
 
     // Seuil minuit HAE = 04:00 UTC du lendemain
     const tomorrowThreshold = new Date(todayStr + 'T04:00:00Z');
@@ -519,9 +538,8 @@ async function fetchTides(stationId) {
       const hae = new Date(d.getTime() - 4 * 3600000);
       const hh = hae.getUTCHours().toString().padStart(2, '0');
       const mm = hae.getUTCMinutes().toString().padStart(2, '0');
-      const entry = { time:`${hh}:${mm}`, value:t.value.toFixed(2), type:t.value >= median ? 'HM' : 'BM' };
-      if (d < tomorrowThreshold) today.push(entry);
-      else tomorrow.push(entry);
+      const entry = { time: `${hh}:${mm}`, value: t.value.toFixed(2), type: t.value >= avg ? 'HM' : 'BM' };
+      (d < tomorrowThreshold ? today : tomorrow).push(entry);
     });
 
     const tides = { today, tomorrow };
@@ -545,10 +563,12 @@ async function fetchMontaisons(stationId) {
     const url = urls[stationId];
     if (!url) return null;
 
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
     const controller = new AbortController();
     const tmout = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(proxyUrl, { cache: 'no-store', signal: controller.signal });
+    const res = await fetch(
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      { cache: 'no-store', signal: controller.signal }
+    );
     clearTimeout(tmout);
     if (!res.ok) return null;
     const html = await res.text();
@@ -564,7 +584,8 @@ async function fetchMontaisons(stationId) {
       if (grands || mad) {
         const g = grands ? grands[1] : '0';
         const ma = mad ? mad[1] : '0';
-        data = { date: dateM ? dateM[1] : '', grands: g, grilses: ma, total: (parseInt(g)||0) + (parseInt(ma)||0) + '' };
+        data = { date: dateM ? dateM[1] : '', grands: g, grilses: ma,
+                 total: String((parseInt(g) || 0) + (parseInt(ma) || 0)) };
       }
     }
 
@@ -574,33 +595,57 @@ async function fetchMontaisons(stationId) {
   return null;
 }
 
-// ─── Pêcheurs Manisoft ───────────────────────────────────────────────────────
-async function fetchAnglers(stationId) {
-  const s = STATIONS.find(x => x.id === stationId);
-  if (!s?.anglers) return null;
+// ─── Pêcheurs — Manisoft standard + scraping CGRMP (Matapédia) ───────────────
+async function fetchAnglers(s) {
+  // Matapédia — scraping CGRMP via allorigins
+  if (s.anglersUrl) {
+    try {
+      const controller = new AbortController();
+      const tmout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(s.anglersUrl)}`,
+        { cache: 'no-store', signal: controller.signal }
+      );
+      clearTimeout(tmout);
+      if (!res.ok) return null;
+      const html = await res.text();
+      const m = html.match(/PÊCHEURS[\s\S]*?rivière Matapédia[\s\S]*?<td[^>]*>\s*(\d+)\s*<\/td>/i);
+      if (m) return { today: m[1], tomorrow: null };
+    } catch(e) {}
+    return null;
+  }
+
+  // Manisoft standard
+  if (!s.anglers) return null;
   try {
     const { host, zec, point } = s.anglers;
-    const url = `https://${host}.manisoft.ca/nombrePersonne.php?idZec=${zec}&idPointEau=${point}`;
     const controller = new AbortController();
     const tmout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+    const res = await fetch(
+      `https://${host}.manisoft.ca/nombrePersonne.php?idZec=${zec}&idPointEau=${point}`,
+      { cache: 'no-store', signal: controller.signal }
+    );
     clearTimeout(tmout);
     if (!res.ok) return null;
     const html = await res.text();
     const nums = html.match(/>\s*(\d+)\s*</g);
     if (!nums || nums.length < 2) return null;
-    return { today: nums[0].replace(/[><\s]/g,''), tomorrow: nums[1].replace(/[><\s]/g,'') };
+    return {
+      today:    nums[0].replace(/[><\s]/g, ''),
+      tomorrow: nums[1].replace(/[><\s]/g, '')
+    };
   } catch(e) {}
   return null;
 }
 
 // ─── Charger une station ──────────────────────────────────────────────────────
 async function loadStation(stationId) {
-  const s = STATIONS.find(x => x.id === stationId);
+  const s = STATION_MAP[stationId];
   state[stationId].status = 'loading';
   state[stationId].msg = 'Chargement...';
   renderCard(stationId);
 
+  // Débit — attendu (bloque le rendu principal)
   try {
     const data = await fetchDebit(stationId);
     Object.assign(state[stationId], {
@@ -617,17 +662,18 @@ async function loadStation(stationId) {
   }
   renderCard(stationId);
 
-  fetchSunTimes(stationId).then(sun => {
+  // Fetches secondaires — tous en parallèle, en arrière-plan
+  fetchSunTimes(s).then(sun => {
     if (sun) { state[stationId].sunrise = sun.sunrise; state[stationId].sunset = sun.sunset; renderCard(stationId); }
   }).catch(() => {});
 
-  fetchTides(stationId).then(tides => {
+  fetchTides(s).then(tides => {
     state[stationId].tides = tides || null;
     renderCard(stationId);
   }).catch(() => { state[stationId].tides = null; renderCard(stationId); });
 
-  if (s?.anglers) {
-    fetchAnglers(stationId).then(anglers => {
+  if (s.anglers || s.anglersUrl) {
+    fetchAnglers(s).then(anglers => {
       if (anglers) { state[stationId].anglers = anglers; renderCard(stationId); }
     }).catch(() => {});
   }
@@ -644,24 +690,20 @@ function refreshAll() {
   const btn = document.getElementById('refreshAll');
   btn.classList.add('loading');
   btn.textContent = '↻ Chargement...';
-  const done = () => {
+
+  const markDone = () => {
     btn.classList.remove('loading');
     btn.textContent = '↻ Actualiser';
     const now = new Date();
     document.getElementById('lastUpdate').textContent =
-      `Dernière mise à jour : ${now.toLocaleDateString('fr-CA')} ${now.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'})}`;
+      `Dernière mise à jour : ${now.toLocaleDateString('fr-CA')} ${now.toLocaleTimeString('fr-CA', {hour:'2-digit', minute:'2-digit'})}`;
   };
+
+  // Timeout de 12s sur le fetch principal (débit) seulement — les secondaires continuent librement
   Promise.race([
     Promise.all(STATIONS.map(s => loadStation(s.id))),
-    new Promise(r => setTimeout(r, 10000))
-  ]).then(done);
-}
-
-// ─── CSS var cache ────────────────────────────────────────────────────────────
-const cssCache = {};
-function getCSSVar(name) {
-  if (!cssCache[name]) cssCache[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return cssCache[name];
+    new Promise(r => setTimeout(r, 12000))
+  ]).then(markDone);
 }
 
 // ─── Mini sparkline ───────────────────────────────────────────────────────────
@@ -669,16 +711,17 @@ function buildSpark(history, color) {
   if (!history?.length) return '';
   const col = getCSSVar(color);
   const max = Math.max(...history);
+  if (max === 0) return '';
   return history.map((v, i) => {
     const pct = Math.max(10, (v / max) * 100);
-    const c = i === history.length-1 ? col : 'rgba(201,168,76,0.15)';
+    const c = i === history.length - 1 ? col : 'rgba(201,168,76,0.15)';
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
 }
 
 // ─── Rendu carte ──────────────────────────────────────────────────────────────
 function renderCard(stationId) {
-  const s = STATIONS.find(x => x.id === stationId);
+  const s  = STATION_MAP[stationId]; // O(1)
   const st = state[stationId];
   const card = document.getElementById(`card-${stationId}`);
   if (!card) return;
@@ -686,6 +729,7 @@ function renderCard(stationId) {
   const col = getCSSVar(s.color);
   card.querySelector('.card-color-bar').style.background = col;
 
+  // Débit
   const debitEl = card.querySelector('.debit-value');
   if (st.status === 'loading') {
     debitEl.textContent = '···';
@@ -698,41 +742,57 @@ function renderCard(stationId) {
     debitEl.style.color = '#7a9ab0';
   }
 
+  // Tendance
   const tb = card.querySelector('.trend-badge');
-  if (st.trend === 'up')      { tb.className='trend-badge trend-up';   tb.textContent='↑ Montante'; }
-  else if (st.trend==='down') { tb.className='trend-badge trend-down'; tb.textContent='↓ Descendante'; }
-  else                         { tb.className='trend-badge trend-nd';   tb.textContent='— N/D'; }
+  if (st.trend === 'up')        { tb.className = 'trend-badge trend-up';   tb.textContent = '↑ Montante'; }
+  else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.textContent = '↓ Descendante'; }
+  else                          { tb.className = 'trend-badge trend-nd';   tb.textContent = '— N/D'; }
 
-  card.querySelector('.spark-bars').innerHTML = buildSpark(st.debit ? [st.debit] : [1], s.color);
+  // Sparkline historique
+  try {
+    const hist = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
+    const vals = hist.slice(-24).map(h => h.debit);
+    card.querySelector('.spark-bars').innerHTML =
+      buildSpark(vals.length ? vals : (st.debit ? [st.debit] : [1]), s.color);
+  } catch(e) {
+    card.querySelector('.spark-bars').innerHTML = buildSpark(st.debit ? [st.debit] : [1], s.color);
+  }
 
+  // Message statut
   const msg = card.querySelector('.status-msg');
   msg.textContent = st.msg || '';
-  msg.className = 'status-msg' + (st.status==='ok' ? ' ok' : st.status==='error' ? ' err' : '');
+  msg.className = 'status-msg' + (st.status === 'ok' ? ' ok' : st.status === 'error' ? ' err' : '');
 
   if (!st.expanded) return;
 
+  // ── Détail ──
   const fmt = v => v !== null ? v.toFixed(1) + ' m³/s' : 'N/D';
+
   const varEl = card.querySelector('.dv-var');
   if (st.var24h !== null) {
     const sign = st.var24h >= 0 ? '+' : '';
     varEl.textContent = `${sign}${st.var24h.toFixed(1)} %`;
     varEl.style.color = st.var24h > 3 ? '#4ade9a' : st.var24h < -3 ? '#f06260' : '#7a9ab0';
-  } else { varEl.textContent = 'N/D'; varEl.style.color = '#7a9ab0'; }
+  } else {
+    varEl.textContent = 'N/D';
+    varEl.style.color = '#7a9ab0';
+  }
   card.querySelector('.dv-max24').textContent = fmt(st.max24h);
   card.querySelector('.dv-min24').textContent = fmt(st.min24h);
 
   card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
   card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
 
+  // Marées
   const tidesEl = card.querySelector('.dv-tides-content');
   if (tidesEl) {
     const td = st.tides;
     const hasToday    = td?.today?.length > 0;
     const hasTomorrow = td?.tomorrow?.length > 0;
     if (hasToday || hasTomorrow) {
-      const renderCol = (arr) => (arr || []).map(t =>
+      const renderCol = arr => (arr || []).map(t =>
         `<div style="display:flex;align-items:baseline;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(201,168,76,0.12)">
-          <span style="font-weight:700;font-size:0.62rem;color:${t.type==='HM'?'#4ade9a':'#f06260'};width:22px;flex-shrink:0">${t.type}</span>
+          <span style="font-weight:700;font-size:0.62rem;color:${t.type === 'HM' ? '#4ade9a' : '#f06260'};width:22px;flex-shrink:0">${t.type}</span>
           <span style="color:#f0ede4;font-size:0.7rem;flex:1;text-align:center">${t.time}</span>
           <span style="color:#7a9ab0;font-size:0.62rem;text-align:right">${t.value} m</span>
         </div>`
@@ -754,6 +814,7 @@ function renderCard(stationId) {
     }
   }
 
+  // Montaisons
   const montGrands = card.querySelector('.dv-mont-grands');
   if (montGrands) {
     const m = st.montaisons;
@@ -763,13 +824,14 @@ function renderCard(stationId) {
     card.querySelector('.dv-mont-date').textContent    = m ? `En date du ${m.date}` : 'Saison 2026 — en attente';
   }
 
+  // Pêcheurs
   const anglersToday    = card.querySelector('.dv-anglers-today');
   const anglersTomorrow = card.querySelector('.dv-anglers-tomorrow');
-  if (anglersToday) anglersToday.textContent    = st.anglers?.today    ?? '—';
+  if (anglersToday)    anglersToday.textContent    = st.anglers?.today    ?? '—';
   if (anglersTomorrow) anglersTomorrow.textContent = st.anglers?.tomorrow ?? '—';
 }
 
-// ─── Toggle ───────────────────────────────────────────────────────────────────
+// ─── Toggle carte ─────────────────────────────────────────────────────────────
 function toggleCard(id) {
   const st = state[id];
   st.expanded = !st.expanded;
@@ -785,13 +847,12 @@ function toggleCard(id) {
   }
 }
 
-// ─── Filtre ───────────────────────────────────────────────────────────────────
+// ─── Filtre région ────────────────────────────────────────────────────────────
 function filterStations(filter, btn) {
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   document.querySelectorAll('.card').forEach(card => {
-    const s = STATIONS.find(x => x.id === card.dataset.id);
-    card.style.display = s.region === filter ? '' : 'none';
+    card.style.display = STATION_MAP[card.dataset.id].region === filter ? '' : 'none';
   });
 }
 
@@ -816,11 +877,16 @@ function buildCards() {
           ).join('')}</div>`
         : '';
 
+    const cehqUrl = `https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${s.id}%20%20%20%20&Zone=&Secteur=`;
+    const nameHtml = s.id === 'MITIS'
+      ? s.name
+      : `<a href="${cehqUrl}" target="_blank" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;border-bottom:1px solid #d8dee0">${s.name}</a>`;
+
     div.innerHTML = `
       <div class="card-color-bar"></div>
       <div class="card-header">
         <div>
-          <div class="river-name">${s.id === 'MITIS' ? s.name : `<a href="https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${s.id}%20%20%20%20&Zone=&Secteur=" target="_blank" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;border-bottom:1px solid #d8dee0">${s.name}</a>`}</div>
+          <div class="river-name">${nameHtml}</div>
           <div class="station-id">${s.id === 'MITIS' ? 'AUCUNE STATION CEHQ' : `STATION ${s.id}`}</div>
         </div>
         <div class="debit-main">
@@ -860,7 +926,7 @@ function buildCards() {
           <div class="detail-label">🌊 Marées — ${s.iwlsName || 'Station locale'}</div>
           <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:var(--muted)">···</div>
         </div>` : ''}
-        ${s.anglers ? `
+        ${s.anglers || s.anglersUrl ? `
         <div class="detail-item" style="margin-top:6px">
           <div class="detail-label">🎣 Pêcheurs — ${s.name}</div>
           <div style="display:flex;gap:8px;margin-top:4px">
@@ -868,10 +934,10 @@ function buildCards() {
               <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Aujourd'hui</div>
               <div class="dv-anglers-today" style="font-size:1.1rem;font-weight:700;color:#f0ede4">—</div>
             </div>
-            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
+            ${!s.anglersUrl ? `<div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
               <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Demain</div>
               <div class="dv-anglers-tomorrow" style="font-size:1.1rem;font-weight:700;color:#f0ede4">—</div>
-            </div>
+            </div>` : ''}
           </div>
         </div>` : ''}
         ${s.id === '021601' || s.id === 'MITIS' ? `
@@ -900,14 +966,19 @@ function buildCards() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+// Purger caches expirés (soleil et montaisons d'autres jours)
+// Les marées sont gardées si elles sont du jour courant
+// Les UUIDs IWLS sont permanents — jamais supprimés
 try {
   Object.keys(localStorage).forEach(k => {
-    if (k.startsWith('tides_') || k.startsWith('sun_') || k.startsWith('montaisons_')) {
-      if (!k.includes(todayStr) || k.startsWith('tides_')) localStorage.removeItem(k);
-    }
+    if ((k.startsWith('sun_') || k.startsWith('montaisons_')) && !k.includes(todayStr))
+      localStorage.removeItem(k);
+    if (k.startsWith('tides_') && !k.includes(todayStr))
+      localStorage.removeItem(k);
   });
 } catch(e) {}
 
+primeColorCache();
 buildCards();
 updateMoon();
 filterStations('gaspesie', document.querySelector('.filter-btn'));
