@@ -26,6 +26,7 @@
     --ste-anne: #88b8d4;
     --mitis: #f0a070;
     --escoumins: #60b8d0;
+    --debit-color: #88b8d4;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -108,11 +109,11 @@
   .trend-down { background: #ffffff; color: #d94f4d; }
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
 
-  .sparkline-row { margin-top: 4px; height: 36px; position: relative; }
+  .sparkline-row { margin-top: 4px; height: 36px; position: relative; margin-bottom: 10px; }
   .spark-bars { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 2px; }
   .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
   .toggle-label {
-    position: absolute; bottom: -22px; right: 0;
+    position: absolute; bottom: -32px; right: 0;
     font-size: 0.75rem; color: var(--muted); line-height: 1;
     border: 1px solid rgba(122,154,176,0.35); border-radius: 4px;
     padding: 2px 7px; background: var(--surface);
@@ -131,15 +132,15 @@
   .detail-label { font-size: 0.5rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
   .detail-val { font-size: 0.82rem; font-weight: 700; color: var(--text); }
 
-  .detail-links { display: flex; flex-direction: column; gap: 4px; }
+  .detail-links { display: flex; flex-direction: column; gap: 6px; }
   .detail-link {
-    display: block; font-size: 0.62rem; color: var(--accent);
-    text-decoration: none; letter-spacing: 0.03em; line-height: 1.4;
-    padding: 3px 0; border-bottom: 1px solid rgba(201,168,76,0.15);
+    display: block; font-size: 0.78rem; color: var(--accent);
+    text-decoration: none; letter-spacing: 0.02em; line-height: 1.4;
+    padding: 4px 0; border-bottom: 1px solid rgba(201,168,76,0.15);
   }
   .detail-link:last-child { border-bottom: none; }
   .detail-link:active { opacity: 0.65; }
-  .detail-nd { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.06em; }
+  .detail-nd { font-size: 0.78rem; color: var(--muted); letter-spacing: 0.04em; }
 
   .reload-btn {
     width: 100%; background: none; border: 1px solid var(--accent); color: var(--accent);
@@ -737,7 +738,7 @@ function renderCard(stationId) {
   if (!card) return;
 
   const col = getCSSVar(s.color);
-  card.querySelector('.card-color-bar').style.background = col;
+  card.querySelector('.card-color-bar').style.background = 'var(--debit-color)';
 
   // Débit
   const debitEl = card.querySelector('.debit-value');
@@ -746,7 +747,7 @@ function renderCard(stationId) {
     debitEl.style.color = '#7a9ab0';
   } else if (st.debit !== null) {
     debitEl.textContent = st.debit.toFixed(1);
-    debitEl.style.color = col;
+    debitEl.style.color = 'var(--debit-color)';
   } else {
     debitEl.textContent = '—';
     debitEl.style.color = '#7a9ab0';
@@ -763,9 +764,9 @@ function renderCard(stationId) {
     const hist = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
     const vals = hist.slice(-24).map(h => h.debit);
     card.querySelector('.spark-bars').innerHTML =
-      buildSpark(vals.length ? vals : (st.debit ? [st.debit] : [1]), s.color);
+      buildSpark(vals.length ? vals : (st.debit ? [st.debit] : [1]), '--debit-color');
   } catch(e) {
-    card.querySelector('.spark-bars').innerHTML = buildSpark(st.debit ? [st.debit] : [1], s.color);
+    card.querySelector('.spark-bars').innerHTML = buildSpark(st.debit ? [st.debit] : [1], '--debit-color');
   }
 
   // Message statut
@@ -801,10 +802,10 @@ function renderCard(stationId) {
     const hasTomorrow = td?.tomorrow?.length > 0;
     if (hasToday || hasTomorrow) {
       const renderCol = arr => (arr || []).map(t =>
-        `<div style="display:flex;align-items:baseline;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(201,168,76,0.12)">
-          <span style="font-weight:700;font-size:0.62rem;color:${t.type === 'HM' ? '#4ade9a' : '#f06260'};width:22px;flex-shrink:0">${t.type}</span>
-          <span style="color:#f0ede4;font-size:0.7rem;flex:1;text-align:center">${t.time}</span>
-          <span style="color:#7a9ab0;font-size:0.62rem;text-align:right">${t.value} m</span>
+        `<div style="display:flex;align-items:baseline;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(201,168,76,0.12)">
+          <span style="font-weight:700;font-size:0.72rem;color:${t.type === 'HM' ? '#4ade9a' : '#f06260'};width:24px;flex-shrink:0">${t.type}</span>
+          <span style="color:#f0ede4;font-size:0.82rem;flex:1;text-align:center">${t.time}</span>
+          <span style="color:#7a9ab0;font-size:0.72rem;text-align:right">${t.value} m</span>
         </div>`
       ).join('');
       tidesEl.innerHTML = `
@@ -883,7 +884,7 @@ function buildCards() {
         ? `<div class="detail-links">${s.links.map(l =>
             l.url
               ? `<a class="detail-link" href="${l.url}" target="_blank" onclick="event.stopPropagation()">${l.label}</a>`
-              : `<span class="detail-link" style="color:var(--muted);cursor:default">${l.label} — N/D</span>`
+              : `<span class="detail-link" style="color:var(--muted);cursor:default;font-size:0.78rem">${l.label} — N/D</span>`
           ).join('')}</div>`
         : '';
 
@@ -962,13 +963,13 @@ function buildCards() {
           <div style="display:flex;align-items:stretch;text-align:center">
             <div style="flex:1;padding:2px 0">
               <div class="detail-label">Aujourd'hui</div>
-              <div class="dv-anglers-today" style="font-size:1.3rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
+              <div class="dv-anglers-today" style="font-size:1.6rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
             </div>
             ${!s.anglersUrl ? `
             <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
             <div style="flex:1;padding:2px 0">
               <div class="detail-label">Demain</div>
-              <div class="dv-anglers-tomorrow" style="font-size:1.3rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
+              <div class="dv-anglers-tomorrow" style="font-size:1.6rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
             </div>` : ''}
           </div>
         </div>` : ''}
@@ -981,17 +982,17 @@ function buildCards() {
           <div style="display:flex;align-items:stretch;text-align:center">
             <div style="flex:1;padding:2px 0">
               <div class="detail-label">Grands</div>
-              <div class="dv-mont-grands" style="font-size:1.3rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
+              <div class="dv-mont-grands" style="font-size:1.6rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
             </div>
             <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
             <div style="flex:1;padding:2px 0">
               <div class="detail-label">${s.id === 'MITIS' ? 'Mad.' : 'Grilses'}</div>
-              <div class="dv-mont-grilses" style="font-size:1.3rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
+              <div class="dv-mont-grilses" style="font-size:1.6rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
             </div>
             <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
             <div style="flex:1;padding:2px 0">
               <div class="detail-label">Total</div>
-              <div class="dv-mont-total" style="font-size:1.3rem;font-weight:700;color:#c9a84c;margin-top:2px">—</div>
+              <div class="dv-mont-total" style="font-size:1.6rem;font-weight:700;color:#c9a84c;margin-top:2px">—</div>
             </div>
           </div>
           <div class="dv-mont-date" style="font-size:0.5rem;color:#7a9ab0;margin-top:5px;text-align:right"></div>
