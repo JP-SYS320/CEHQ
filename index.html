@@ -300,7 +300,7 @@ const STATIONS = [
     iwlsCode:'02200', iwlsName:'Carleton',
     links:[
       {label:'🎫 N/D', url:null},
-      {label:'🌐 Société Cascapédia', url:'https://www.cascapedia.ca'}
+      {label:'🌐 Société Casca.', url:'https://www.cascapedia.ca'}
     ]
   },
   { id:'020602', name:'Dartmouth', color:'--dartmouth', region:'gaspesie', lat:48.7000, lng:-64.8000,
@@ -330,14 +330,14 @@ const STATIONS = [
     iwlsCode:'02200', iwlsName:'Carleton',
     links:[
       {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=zec-petite-cascapedia'},
-      {label:'🌐 ZEC Petite Cascapédia', url:'https://zecpetitecascapedia.com'}
+      {label:'🌐 Zec Petite Cas.', url:'https://zecpetitecascapedia.com'}
     ]
   },
   { id:'021407', name:'Sainte-Anne', color:'--ste-anne', region:'gaspesie', lat:49.0000, lng:-66.7000,
     iwlsCode:'02935', iwlsName:'Ste-Anne-des-Monts',
     links:[
       {label:'🎫 N/D', url:null},
-      {label:'🌐 Destination Chic-Chocs', url:'https://destinationchicchocs.com'}
+      {label:'🌐 Destination Chic', url:'https://destinationchicchocs.com'}
     ]
   },
   { id:'020404', name:'York', color:'--york', region:'gaspesie', lat:48.8333, lng:-64.6667,
@@ -884,7 +884,7 @@ function buildCards() {
         ? `<div class="detail-links">${s.links.map(l =>
             l.url
               ? `<a class="detail-link" href="${l.url}" target="_blank" onclick="event.stopPropagation()">${l.label}</a>`
-              : `<span class="detail-link" style="color:var(--muted);cursor:default;font-size:0.78rem">${l.label} — N/D</span>`
+              : `<span class="detail-link" style="color:var(--muted);cursor:default;font-size:0.78rem">${l.label}</span>`
           ).join('')}</div>`
         : '';
 
@@ -950,7 +950,7 @@ function buildCards() {
         <div class="detail-item" style="margin-top:6px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div style="font-size:1.2rem;line-height:1">🌊</div>
-            <div class="detail-label" style="margin-top:0">Marées — ${s.iwlsName || 'Station locale'}</div>
+            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Marées — ${s.iwlsName || 'Station locale'}</div>
           </div>
           <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:var(--muted)">···</div>
         </div>` : ''}
@@ -958,26 +958,27 @@ function buildCards() {
         <div class="detail-item" style="margin-top:6px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div style="font-size:1.2rem;line-height:1">🎣</div>
-            <div class="detail-label" style="margin-top:0">Pêcheurs — ${s.name}</div>
+            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Pêcheurs — ${s.name}</div>
           </div>
-          <div style="display:flex;align-items:stretch;text-align:center">
-            <div style="flex:1;padding:2px 0">
-              <div class="detail-label">Aujourd'hui</div>
-              <div class="dv-anglers-today" style="font-size:1.6rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:2px">
+            <div style="background:#0f1923;border-radius:6px;padding:7px 9px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <div class="detail-label">Auj.</div>
+                <div class="dv-anglers-today" style="font-size:1.3rem;font-weight:700;color:#f0ede4">—</div>
+              </div>
+              ${!s.anglersUrl ? `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;padding-top:4px;border-top:1px solid rgba(201,168,76,0.15)">
+                <div class="detail-label">Demain</div>
+                <div class="dv-anglers-tomorrow" style="font-size:1.3rem;font-weight:700;color:#f0ede4">—</div>
+              </div>` : ''}
             </div>
-            ${!s.anglersUrl ? `
-            <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
-            <div style="flex:1;padding:2px 0">
-              <div class="detail-label">Demain</div>
-              <div class="dv-anglers-tomorrow" style="font-size:1.6rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
-            </div>` : ''}
+            <div style="background:#0f1923;border-radius:6px;padding:7px 9px"></div>
           </div>
         </div>` : ''}
         ${s.id === '021601' || s.id === 'MITIS' ? `
         <div class="detail-item dv-montaisons" style="margin-top:6px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div style="font-size:1.2rem;line-height:1">🐟</div>
-            <div class="detail-label" style="margin-top:0">Montaisons saison 2026</div>
+            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Montaisons saison 2026</div>
           </div>
           <div style="display:flex;align-items:stretch;text-align:center">
             <div style="flex:1;padding:2px 0">
