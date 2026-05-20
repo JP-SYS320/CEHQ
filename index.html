@@ -101,9 +101,9 @@
   .station-id { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.1em; margin-top: 2px; }
   .debit-main { text-align: right; flex-shrink: 0; }
   .debit-value { font-size: 1.4rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
-  .debit-unit { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; }
+  .debit-unit { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.04em; }
 
-  .trend-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; padding: 3px 8px; border-radius: 3px; margin-top: 4px; letter-spacing: 0.04em; font-weight: 700; }
+  .trend-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; padding: 3px 8px; border-radius: 3px; margin-top: 5px; letter-spacing: 0.04em; font-weight: 700; }
   .trend-up   { background: #ffffff; color: #27a862; }
   .trend-down { background: #ffffff; color: #d94f4d; }
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
@@ -122,8 +122,8 @@
 
   .detail-grid { display: grid; gap: 6px; margin-bottom: 8px; }
   .detail-item { background: #142230; border-radius: 6px; padding: 7px 9px; }
-  .detail-label { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 3px; }
-  .detail-val { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+  .detail-label { font-size: 0.5rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
+  .detail-val { font-size: 1.05rem; font-weight: 700; color: var(--text); }
 
   .detail-links { display: flex; flex-direction: column; gap: 4px; }
   .detail-link {
@@ -894,8 +894,10 @@ function buildCards() {
           <div class="station-id">${s.id === 'MITIS' ? 'AUCUNE STATION CEHQ' : `STATION ${s.id}`}</div>
         </div>
         <div class="debit-main">
-          <div class="debit-value" style="color:#7a9ab0">—</div>
-          <div class="debit-unit">m³/s</div>
+          <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:4px">
+            <div class="debit-value" style="color:#7a9ab0">—</div>
+            <div class="debit-unit">m³/s</div>
+          </div>
           <div class="trend-badge trend-nd">— N/D</div>
         </div>
       </div>
@@ -906,9 +908,21 @@ function buildCards() {
       <div class="status-msg"></div>
       <div class="detail">
         <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr">
-          <div class="detail-item"><div class="detail-label">Variation 24h</div><div class="detail-val dv-var">—</div></div>
-          <div class="detail-item"><div class="detail-label">Max 24h</div><div class="detail-val dv-max24">—</div></div>
-          <div class="detail-item"><div class="detail-label">Min 24h</div><div class="detail-val dv-min24">—</div></div>
+          <div class="detail-item" style="text-align:center">
+            <div style="font-size:1.1rem;line-height:1.2">📊</div>
+            <div class="detail-label">Var. 24h</div>
+            <div class="detail-val dv-var">—</div>
+          </div>
+          <div class="detail-item" style="text-align:center">
+            <div style="font-size:1.1rem;line-height:1.2">⬆️</div>
+            <div class="detail-label">Max 24h</div>
+            <div class="detail-val dv-max24">—</div>
+          </div>
+          <div class="detail-item" style="text-align:center">
+            <div style="font-size:1.1rem;line-height:1.2">⬇️</div>
+            <div class="detail-label">Min 24h</div>
+            <div class="detail-val dv-min24">—</div>
+          </div>
         </div>
         <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:6px">
           <div class="detail-item">
@@ -930,41 +944,54 @@ function buildCards() {
         </div>
         ${s.iwls || s.iwlsCode ? `
         <div class="detail-item" style="margin-top:6px">
-          <div class="detail-label">🌊 Marées — ${s.iwlsName || 'Station locale'}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div style="font-size:1.2rem;line-height:1">🌊</div>
+            <div class="detail-label" style="margin-top:0">Marées — ${s.iwlsName || 'Station locale'}</div>
+          </div>
           <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:var(--muted)">···</div>
         </div>` : ''}
         ${s.anglers || s.anglersUrl ? `
         <div class="detail-item" style="margin-top:6px">
-          <div class="detail-label">🎣 Pêcheurs — ${s.name}</div>
-          <div style="display:flex;gap:8px;margin-top:4px">
-            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Aujourd'hui</div>
-              <div class="dv-anglers-today" style="font-size:1.1rem;font-weight:700;color:#f0ede4">—</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div style="font-size:1.2rem;line-height:1">🎣</div>
+            <div class="detail-label" style="margin-top:0">Pêcheurs — ${s.name}</div>
+          </div>
+          <div style="display:flex;align-items:stretch;text-align:center">
+            <div style="flex:1;padding:2px 0">
+              <div class="detail-label">Aujourd'hui</div>
+              <div class="dv-anglers-today" style="font-size:1.3rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
             </div>
-            ${!s.anglersUrl ? `<div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Demain</div>
-              <div class="dv-anglers-tomorrow" style="font-size:1.1rem;font-weight:700;color:#f0ede4">—</div>
+            ${!s.anglersUrl ? `
+            <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
+            <div style="flex:1;padding:2px 0">
+              <div class="detail-label">Demain</div>
+              <div class="dv-anglers-tomorrow" style="font-size:1.3rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
             </div>` : ''}
           </div>
         </div>` : ''}
         ${s.id === '021601' || s.id === 'MITIS' ? `
         <div class="detail-item dv-montaisons" style="margin-top:6px">
-          <div class="detail-label">🐟 Montaisons saison 2026</div>
-          <div style="display:flex;gap:6px;margin-top:4px">
-            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Grands</div>
-              <div class="dv-mont-grands" style="font-size:1rem;font-weight:700;color:#f0ede4">—</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div style="font-size:1.2rem;line-height:1">🐟</div>
+            <div class="detail-label" style="margin-top:0">Montaisons saison 2026</div>
+          </div>
+          <div style="display:flex;align-items:stretch;text-align:center">
+            <div style="flex:1;padding:2px 0">
+              <div class="detail-label">Grands</div>
+              <div class="dv-mont-grands" style="font-size:1.3rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
             </div>
-            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">${s.id === 'MITIS' ? 'Mad.' : 'Grilses'}</div>
-              <div class="dv-mont-grilses" style="font-size:1rem;font-weight:700;color:#f0ede4">—</div>
+            <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
+            <div style="flex:1;padding:2px 0">
+              <div class="detail-label">${s.id === 'MITIS' ? 'Mad.' : 'Grilses'}</div>
+              <div class="dv-mont-grilses" style="font-size:1.3rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
             </div>
-            <div style="flex:1;background:#0f1923;border-radius:4px;padding:6px;text-align:center">
-              <div style="font-size:0.52rem;color:#7a9ab0;text-transform:uppercase;letter-spacing:0.08em">Total</div>
-              <div class="dv-mont-total" style="font-size:1rem;font-weight:700;color:#c9a84c">—</div>
+            <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
+            <div style="flex:1;padding:2px 0">
+              <div class="detail-label">Total</div>
+              <div class="dv-mont-total" style="font-size:1.3rem;font-weight:700;color:#c9a84c;margin-top:2px">—</div>
             </div>
           </div>
-          <div class="dv-mont-date" style="font-size:0.52rem;color:#7a9ab0;margin-top:4px;text-align:right"></div>
+          <div class="dv-mont-date" style="font-size:0.5rem;color:#7a9ab0;margin-top:5px;text-align:right"></div>
         </div>` : ''}
         <div class="reload-btn" onclick="event.stopPropagation();loadStation('${s.id}')">↻ Recharger cette station</div>
       </div>`;
