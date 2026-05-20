@@ -103,7 +103,7 @@
   .debit-value { font-size: 1.4rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
   .debit-unit { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.04em; }
 
-  .trend-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; padding: 4px 10px; border-radius: 3px; margin-top: 5px; letter-spacing: 0.04em; font-weight: 700; }
+  .trend-badge { display: inline-flex; align-items: center; font-size: 0.65rem; padding: 2px 7px; border-radius: 3px; margin-top: 4px; letter-spacing: 0.05em; font-weight: 700; }
   .trend-up   { background: #ffffff; color: #27a862; }
   .trend-down { background: #ffffff; color: #d94f4d; }
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
@@ -748,9 +748,9 @@ function renderCard(stationId) {
 
   // Tendance
   const tb = card.querySelector('.trend-badge');
-  if (st.trend === 'up')        { tb.className = 'trend-badge trend-up';   tb.innerHTML = '<span style="font-size:1.1rem;line-height:1">↑</span> Montante'; }
-  else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.innerHTML = '<span style="font-size:1.1rem;line-height:1">↓</span> Descendante'; }
-  else                          { tb.className = 'trend-badge trend-nd';   tb.innerHTML = '<span style="font-size:1.1rem;line-height:1">—</span> N/D'; }
+  if (st.trend === 'up')        { tb.className = 'trend-badge trend-up';   tb.textContent = 'Montante'; }
+  else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.textContent = 'Descendante'; }
+  else                          { tb.className = 'trend-badge trend-nd';   tb.textContent = 'N/D'; }
 
   // Sparkline historique
   try {
@@ -771,6 +771,7 @@ function renderCard(stationId) {
 
   // ── Détail ──
   const fmt = v => v !== null ? v.toFixed(1) : 'N/D';
+  const fmtUnit = v => v !== null ? '<div style="font-size:0.48rem;color:var(--muted);letter-spacing:0.04em;margin-top:1px">m³/s</div>' : '';
 
   const varEl = card.querySelector('.dv-var');
   if (st.var24h !== null) {
@@ -781,8 +782,8 @@ function renderCard(stationId) {
     varEl.textContent = 'N/D';
     varEl.style.color = '#7a9ab0';
   }
-  card.querySelector('.dv-max24').textContent = fmt(st.max24h);
-  card.querySelector('.dv-min24').textContent = fmt(st.min24h);
+  card.querySelector('.dv-max24').innerHTML = fmt(st.max24h) + fmtUnit(st.max24h);
+  card.querySelector('.dv-min24').innerHTML = fmt(st.min24h) + fmtUnit(st.min24h);
 
   card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
   card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
@@ -898,7 +899,7 @@ function buildCards() {
             <div class="debit-value" style="color:#7a9ab0">—</div>
             <div class="debit-unit">m³/s</div>
           </div>
-          <div class="trend-badge trend-nd">— N/D</div>
+          <div class="trend-badge trend-nd">N/D</div>
         </div>
       </div>
       <div class="sparkline-row">
@@ -913,11 +914,11 @@ function buildCards() {
             <div class="detail-val dv-var">—</div>
           </div>
           <div class="detail-item" style="text-align:center">
-            <div class="detail-label">Max <span style="opacity:0.6">m³/s</span></div>
+            <div class="detail-label">Max 24h</div>
             <div class="detail-val dv-max24">—</div>
           </div>
           <div class="detail-item" style="text-align:center">
-            <div class="detail-label">Min <span style="opacity:0.6">m³/s</span></div>
+            <div class="detail-label">Min 24h</div>
             <div class="detail-val dv-min24">—</div>
           </div>
         </div>
