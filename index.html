@@ -108,10 +108,10 @@
   .trend-down { background: #ffffff; color: #d94f4d; }
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
 
-  .sparkline-row { margin-top: 10px; height: 36px; position: relative; margin-bottom: 18px; }
+  .sparkline-row { margin-top: 10px; height: 36px; position: relative; }
   .spark-bars { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 2px; }
   .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
-  .toggle-label { position: absolute; bottom: -18px; right: 0; font-size: 0.7rem; color: var(--muted); line-height: 1; padding: 2px 0; }
+  .toggle-label { position: absolute; bottom: -22px; right: 0; font-size: 1.1rem; color: var(--muted); line-height: 1; }
 
   .status-msg { font-size: 0.58rem; color: var(--muted); padding: 4px 0 0; letter-spacing: 0.04em; min-height: 16px; }
   .status-msg.ok  { color: #c9a84c; }
@@ -771,7 +771,6 @@ function renderCard(stationId) {
 
   // ── Détail ──
   const fmt = v => v !== null ? v.toFixed(1) : 'N/D';
-  const fmtUnit = v => v !== null ? '<div style="font-size:0.48rem;color:var(--muted);letter-spacing:0.04em;margin-top:1px">m³/s</div>' : '';
 
   const varEl = card.querySelector('.dv-var');
   if (st.var24h !== null) {
@@ -782,8 +781,8 @@ function renderCard(stationId) {
     varEl.textContent = 'N/D';
     varEl.style.color = '#7a9ab0';
   }
-  card.querySelector('.dv-max24').innerHTML = fmt(st.max24h) + fmtUnit(st.max24h);
-  card.querySelector('.dv-min24').innerHTML = fmt(st.min24h) + fmtUnit(st.min24h);
+  card.querySelector('.dv-max24').textContent = fmt(st.max24h);
+  card.querySelector('.dv-min24').textContent = fmt(st.min24h);
 
   card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
   card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
@@ -914,11 +913,11 @@ function buildCards() {
             <div class="detail-val dv-var">—</div>
           </div>
           <div class="detail-item" style="text-align:center">
-            <div class="detail-label">Max 24h</div>
+            <div class="detail-label">Max <span style="opacity:0.6">m³/s</span></div>
             <div class="detail-val dv-max24">—</div>
           </div>
           <div class="detail-item" style="text-align:center">
-            <div class="detail-label">Min 24h</div>
+            <div class="detail-label">Min <span style="opacity:0.6">m³/s</span></div>
             <div class="detail-val dv-min24">—</div>
           </div>
         </div>
