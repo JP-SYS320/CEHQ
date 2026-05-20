@@ -103,15 +103,15 @@
   .debit-value { font-size: 1.4rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
   .debit-unit { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.04em; }
 
-  .trend-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; padding: 3px 8px; border-radius: 3px; margin-top: 5px; letter-spacing: 0.04em; font-weight: 700; }
+  .trend-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; padding: 4px 10px; border-radius: 3px; margin-top: 5px; letter-spacing: 0.04em; font-weight: 700; }
   .trend-up   { background: #ffffff; color: #27a862; }
   .trend-down { background: #ffffff; color: #d94f4d; }
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
 
-  .sparkline-row { margin-top: 10px; height: 36px; position: relative; }
+  .sparkline-row { margin-top: 10px; height: 36px; position: relative; margin-bottom: 18px; }
   .spark-bars { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 2px; }
   .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
-  .toggle-label { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 1.4rem; color: #000000; font-weight: 900; line-height: 24px; }
+  .toggle-label { position: absolute; bottom: -18px; right: 0; font-size: 0.7rem; color: var(--muted); line-height: 1; padding: 2px 0; }
 
   .status-msg { font-size: 0.58rem; color: var(--muted); padding: 4px 0 0; letter-spacing: 0.04em; min-height: 16px; }
   .status-msg.ok  { color: #c9a84c; }
@@ -123,7 +123,7 @@
   .detail-grid { display: grid; gap: 6px; margin-bottom: 8px; }
   .detail-item { background: #142230; border-radius: 6px; padding: 7px 9px; }
   .detail-label { font-size: 0.5rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
-  .detail-val { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+  .detail-val { font-size: 0.95rem; font-weight: 700; color: var(--text); }
 
   .detail-links { display: flex; flex-direction: column; gap: 4px; }
   .detail-link {
@@ -748,9 +748,9 @@ function renderCard(stationId) {
 
   // Tendance
   const tb = card.querySelector('.trend-badge');
-  if (st.trend === 'up')        { tb.className = 'trend-badge trend-up';   tb.textContent = '↑ Montante'; }
-  else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.textContent = '↓ Descendante'; }
-  else                          { tb.className = 'trend-badge trend-nd';   tb.textContent = '— N/D'; }
+  if (st.trend === 'up')        { tb.className = 'trend-badge trend-up';   tb.innerHTML = '<span style="font-size:1.1rem;line-height:1">↑</span> Montante'; }
+  else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.innerHTML = '<span style="font-size:1.1rem;line-height:1">↓</span> Descendante'; }
+  else                          { tb.className = 'trend-badge trend-nd';   tb.innerHTML = '<span style="font-size:1.1rem;line-height:1">—</span> N/D'; }
 
   // Sparkline historique
   try {
@@ -770,7 +770,8 @@ function renderCard(stationId) {
   if (!st.expanded) return;
 
   // ── Détail ──
-  const fmt = v => v !== null ? v.toFixed(1) + ' m³/s' : 'N/D';
+  const fmt = v => v !== null ? v.toFixed(1) : 'N/D';
+  const fmtUnit = v => v !== null ? '<div style="font-size:0.48rem;color:var(--muted);letter-spacing:0.04em;margin-top:1px">m³/s</div>' : '';
 
   const varEl = card.querySelector('.dv-var');
   if (st.var24h !== null) {
@@ -781,8 +782,8 @@ function renderCard(stationId) {
     varEl.textContent = 'N/D';
     varEl.style.color = '#7a9ab0';
   }
-  card.querySelector('.dv-max24').textContent = fmt(st.max24h);
-  card.querySelector('.dv-min24').textContent = fmt(st.min24h);
+  card.querySelector('.dv-max24').innerHTML = fmt(st.max24h) + fmtUnit(st.max24h);
+  card.querySelector('.dv-min24').innerHTML = fmt(st.min24h) + fmtUnit(st.min24h);
 
   card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
   card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
@@ -842,12 +843,12 @@ function toggleCard(id) {
   const card = document.getElementById(`card-${id}`);
   if (st.expanded) {
     card.classList.add('expanded');
-    card.querySelector('.toggle-label').textContent = '−';
+    card.querySelector('.toggle-label').textContent = '▲';
     if (st.status === 'idle') loadStation(id);
     else renderCard(id);
   } else {
     card.classList.remove('expanded');
-    card.querySelector('.toggle-label').textContent = '+';
+    card.querySelector('.toggle-label').textContent = '▼';
   }
 }
 
@@ -903,7 +904,7 @@ function buildCards() {
       </div>
       <div class="sparkline-row">
         <div class="spark-bars"></div>
-        <div class="toggle-label">+</div>
+        <div class="toggle-label">▼</div>
       </div>
       <div class="status-msg"></div>
       <div class="detail">
@@ -927,13 +928,13 @@ function buildCards() {
               <div style="flex:1;padding:2px 0">
                 <div style="font-size:1.2rem;line-height:1.2">🌅</div>
                 <div class="detail-label" style="margin-top:2px">Lever</div>
-                <div class="dv-sunrise" style="font-size:1.05rem;font-weight:700;color:var(--text);margin-top:2px">—</div>
+                <div class="dv-sunrise" style="font-size:0.9rem;font-weight:700;color:var(--text);margin-top:2px">—</div>
               </div>
               <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
               <div style="flex:1;padding:2px 0">
                 <div style="font-size:1.2rem;line-height:1.2">🌇</div>
                 <div class="detail-label" style="margin-top:2px">Coucher</div>
-                <div class="dv-sunset" style="font-size:1.05rem;font-weight:700;color:var(--text);margin-top:2px">—</div>
+                <div class="dv-sunset" style="font-size:0.9rem;font-weight:700;color:var(--text);margin-top:2px">—</div>
               </div>
             </div>
           </div>
