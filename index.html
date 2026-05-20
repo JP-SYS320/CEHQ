@@ -103,12 +103,12 @@
   .debit-value { font-size: 1.4rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
   .debit-unit { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; }
 
-  .trend-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.58rem; padding: 2px 6px; border-radius: 3px; margin-top: 3px; letter-spacing: 0.04em; font-weight: 700; }
+  .trend-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; padding: 3px 8px; border-radius: 3px; margin-top: 4px; letter-spacing: 0.04em; font-weight: 700; }
   .trend-up   { background: #ffffff; color: #27a862; }
   .trend-down { background: #ffffff; color: #d94f4d; }
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
 
-  .sparkline-row { margin-top: 10px; height: 24px; position: relative; }
+  .sparkline-row { margin-top: 10px; height: 36px; position: relative; }
   .spark-bars { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 2px; }
   .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
   .toggle-label { position: relative; z-index: 1; width: 100%; text-align: center; font-size: 1.4rem; color: #000000; font-weight: 900; line-height: 24px; }
@@ -711,10 +711,14 @@ function buildSpark(history, color) {
   if (!history?.length) return '';
   const col = getCSSVar(color);
   const max = Math.max(...history);
-  if (max === 0) return '';
+  const min = Math.min(...history);
+  const range = max - min;
+  // Normalisation locale : amplifie les variations même si elles sont faibles
   return history.map((v, i) => {
-    const pct = Math.max(10, (v / max) * 100);
-    const c = i === history.length - 1 ? col : 'rgba(201,168,76,0.15)';
+    const pct = range > 0
+      ? Math.max(8, ((v - min) / range) * 88 + 8)  // 8% min, 96% max
+      : 50;
+    const c = i === history.length - 1 ? col : 'rgba(201,168,76,0.2)';
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
 }
@@ -908,14 +912,17 @@ function buildCards() {
         </div>
         <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:6px">
           <div class="detail-item">
-            <div style="display:flex;gap:0;justify-content:space-around;text-align:center">
-              <div>
-                <div class="detail-label">🌅 Lever</div>
-                <div class="detail-val dv-sunrise" style="font-size:1rem">—</div>
+            <div style="display:flex;align-items:stretch;text-align:center">
+              <div style="flex:1;padding:2px 0">
+                <div style="font-size:1.2rem;line-height:1.2">🌅</div>
+                <div class="detail-label" style="margin-top:2px">Lever</div>
+                <div class="dv-sunrise" style="font-size:1.05rem;font-weight:700;color:var(--text);margin-top:2px">—</div>
               </div>
-              <div>
-                <div class="detail-label">🌇 Coucher</div>
-                <div class="detail-val dv-sunset" style="font-size:1rem">—</div>
+              <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
+              <div style="flex:1;padding:2px 0">
+                <div style="font-size:1.2rem;line-height:1.2">🌇</div>
+                <div class="detail-label" style="margin-top:2px">Coucher</div>
+                <div class="dv-sunset" style="font-size:1.05rem;font-weight:700;color:var(--text);margin-top:2px">—</div>
               </div>
             </div>
           </div>
