@@ -41,8 +41,8 @@
     min-height: 100vh;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     background-color: var(--bg);
-    /* Écailles de poisson — motif SVG inline, doré subtil sur fond marine */
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='34' viewBox='0 0 40 34'><defs><pattern id='scales' x='0' y='0' width='40' height='34' patternUnits='userSpaceOnUse'><path d='M 0 17 Q 10 0, 20 17 Q 30 0, 40 17 M -20 34 Q -10 17, 0 34 Q 10 17, 20 34 Q 30 17, 40 34 Q 50 17, 60 34' fill='none' stroke='%23c9a84c' stroke-width='0.8' opacity='0.18'/></pattern></defs><rect width='40' height='34' fill='url(%23scales)'/></svg>");
+    /* Galets — points dorés en grille décalée, très subtils */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><circle cx='7' cy='7' r='1.1' fill='%23c9a84c' opacity='0.22'/><circle cx='21' cy='21' r='1.1' fill='%23c9a84c' opacity='0.22'/></svg>");
     background-repeat: repeat;
   }
 
@@ -109,7 +109,7 @@
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
   .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-  .last-update { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; text-align: right; }
+  .last-update { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; text-align: right; white-space: nowrap; }
 
   .status-bar { display: flex; padding: 10px 16px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
   .stat-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.58rem; letter-spacing: 0.06em; color: var(--muted); flex-shrink: 0; line-height: 1; }
@@ -291,7 +291,7 @@ if (sessionStorage.getItem('auth') === '1') {
     </div>
     <div class="header-right">
       <div class="refresh-btn" id="refreshAll" onclick="refreshAll()">↻ Actualiser</div>
-      <div class="last-update" id="lastUpdate">Dernière mise à jour : —</div>
+      <div class="last-update" id="lastUpdate">MAJ —</div>
     </div>
   </div>
 </header>
@@ -308,12 +308,22 @@ if (sessionStorage.getItem('auth') === '1') {
 </div>
 
 <div class="grid" id="stationGrid"></div>
-<footer>SOURCE : CEHQ — CENTRE D'EXPERTISE HYDRIQUE DU QUÉBEC<br><br>
-<span style="font-family:Georgia,serif;font-style:italic;font-size:0.6rem;color:#3d4a52;letter-spacing:0.04em">
-  Conçu et développé par Jean-Philippe Tremblay<br>
-  En collaboration avec Claude — Intelligence Artificielle Anthropic<br>
-  © 2026 Jean-Philippe Tremblay — Tous droits réservés
-</span>
+<footer>
+  <div style="margin-bottom:10px">SOURCES DE DONNÉES</div>
+  <div style="font-size:0.5rem;line-height:1.7;color:var(--muted);letter-spacing:0.04em;text-transform:none">
+    Débits — Centre d'expertise hydrique du Québec (CEHQ)<br>
+    Marées — Pêches et Océans Canada (IWLS / MPO)<br>
+    Météo — Open-Meteo &amp; Environnement Canada (GEM)<br>
+    Pêcheurs — Manisoft / Zecs participantes<br>
+    Statistiques sportives — MFFP, gouvernement du Québec
+  </div>
+  <br>
+  <span style="font-family:Georgia,serif;font-style:italic;font-size:0.6rem;color:#3d4a52;letter-spacing:0.04em">
+    Conçu et développé par Jean-Philippe Tremblay<br>
+    Développement assisté par Claude (Anthropic)<br>
+    © 2026 Jean-Philippe Tremblay — Code et interface<br>
+    Les données affichées demeurent la propriété de leurs fournisseurs respectifs
+  </span>
 </footer>
 
 <script>
@@ -872,7 +882,7 @@ function refreshAll() {
     btn.textContent = '↻ Actualiser';
     const now = new Date();
     document.getElementById('lastUpdate').textContent =
-      `Dernière mise à jour : ${now.toLocaleDateString('fr-CA')} ${now.toLocaleTimeString('fr-CA', {hour:'2-digit', minute:'2-digit'})}`;
+      `MAJ ${now.toLocaleDateString('fr-CA')} · ${now.toLocaleTimeString('fr-CA', {hour:'2-digit', minute:'2-digit'})}`;
   };
 
   // Timeout de 12s sur le fetch principal (débit) seulement — les secondaires continuent librement
@@ -883,25 +893,29 @@ function refreshAll() {
 }
 
 // ─── Mini sparkline ───────────────────────────────────────────────────────────
-// trend: 'up' → vert, 'down' → rouge, null → bleu (couleur débit par défaut)
+// Chaque barre est colorée selon sa variation par rapport à la précédente :
+//   - plus haute → vert (montante)
+//   - plus basse → rouge (descendante)
+//   - égale     → bleu (stable)
+// La première barre n'a pas de précédente : on lui donne la couleur stable.
 function buildSpark(history, trend) {
   if (!history?.length) return '';
-  const mainCol = trend === 'up'   ? '#4ade9a'
-                : trend === 'down' ? '#f06260'
-                :                    getCSSVar('--debit-color');
-  // Couleur des barres antérieures : même teinte, légèrement atténuée (75% d'opacité)
-  const pastCol = trend === 'up'   ? 'rgba(74,222,154,0.75)'
-                : trend === 'down' ? 'rgba(240,98,96,0.75)'
-                :                    'rgba(136,184,212,0.75)';
+  const UP    = '#4ade9a';
+  const DOWN  = '#f06260';
+  const FLAT  = getCSSVar('--debit-color');
   const max = Math.max(...history);
   const min = Math.min(...history);
   const range = max - min;
-  // Normalisation locale : amplifie les variations même si elles sont faibles
   return history.map((v, i) => {
     const pct = range > 0
       ? Math.max(8, ((v - min) / range) * 88 + 8)  // 8% min, 96% max
       : 50;
-    const c = i === history.length - 1 ? mainCol : pastCol;
+    // Couleur par comparaison avec la barre précédente
+    let c;
+    if (i === 0)               c = FLAT;
+    else if (v > history[i-1]) c = UP;
+    else if (v < history[i-1]) c = DOWN;
+    else                       c = FLAT;
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
 }
