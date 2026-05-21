@@ -450,9 +450,27 @@ async function fetchDebit(stationId) {
   const p = feat.properties;
   const debit = parseFloat(p.dern_valeur_deb);
   if (isNaN(debit) || debit < 0) throw new Error('Débit non disponible');
-  const timestamp = p.dern_date_prise_valeur_utc
-    ? p.dern_date_prise_valeur_utc.replace('T', ' ').substring(0, 16) + ' UTC'
-    : '—';
+  // Convertir le timestamp UTC en heure locale Montréal (HAE/HNE selon saison)
+  let timestamp = '—';
+  if (p.dern_date_prise_valeur_utc) {
+    const utcDate = new Date(p.dern_date_prise_valeur_utc);
+    if (!isNaN(utcDate)) {
+      const localStr = utcDate.toLocaleString('fr-CA', {
+        timeZone: 'America/Toronto',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      });
+      // Format fr-CA : "2026-05-21 09:00" — vérifier si on est en HAE ou HNE
+      const isDST = (() => {
+        const jan = new Date(utcDate.getFullYear(), 0, 1).getTimezoneOffset();
+        const jul = new Date(utcDate.getFullYear(), 6, 1).getTimezoneOffset();
+        const offset = -utcDate.getTimezoneOffset();
+        return offset > -Math.max(jan, jul);
+      })();
+      const tz = isDST ? 'HAE' : 'HNE';
+      timestamp = `${localStr.replace(',', '')} ${tz}`;
+    }
+  }
 
   let trend = null, var24h = null, max24h = null, min24h = null;
   try {
