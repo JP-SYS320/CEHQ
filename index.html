@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Débits CEHQ — Rivières à Saumon</title>
+<title>CurrentRun — Débits CEHQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #142230;
@@ -41,7 +44,7 @@
 
   header {
     padding: 14px 16px;
-    border-bottom: 2px solid var(--accent);
+    border-bottom: 1px solid var(--border);
     position: sticky; top: 0;
     background: var(--surface); z-index: 100;
   }
@@ -57,6 +60,39 @@
 
   .site-title { font-family: Georgia, serif; font-size: 1.15rem; font-style: italic; color: var(--text); letter-spacing: 0.02em; line-height: 1.1; }
   .site-subtitle { font-size: 0.5rem; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; margin-top: 2px; }
+
+  /* ─── Branding CurrentRun ─── */
+  .brand {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.45rem;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 1px;
+  }
+  .brand-current {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--text);
+  }
+  .brand-run {
+    font-style: italic;
+    font-weight: 700;
+    color: var(--accent);
+    position: relative;
+  }
+  .brand-run::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -3px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  /* Version XL pour l'écran de mot de passe */
+  .brand-xl { font-size: 2.4rem; }
+  .brand-xl .brand-run::after { bottom: -5px; height: 1.5px; }
 
   .refresh-btn {
     background: none; border: 1px solid var(--accent); color: var(--accent);
@@ -159,7 +195,7 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
     padding: 32px;
   }
-  #pw-title { font-family: Georgia, serif; font-style: italic; font-size: 1.3rem; color: #f0ede4; }
+  #pw-title { color: #f0ede4; }
   #pw-subtitle { font-size: 0.6rem; color: #c9a84c; letter-spacing: 0.15em; text-transform: uppercase; }
   #pw-input {
     width: 100%; max-width: 280px; padding: 12px 16px; border: 1px solid #c9a84c;
@@ -181,7 +217,9 @@
 <body>
 
 <div id="pw-screen">
-  <div id="pw-title">Rivières à Saumon</div>
+  <div id="pw-title" class="brand brand-xl">
+    <span class="brand-current">Current</span><span class="brand-run">Run</span>
+  </div>
   <div id="pw-subtitle">Accès privé — Mot de passe requis</div>
   <input id="pw-input" type="password" placeholder="••••••••" autocomplete="off"
     onkeydown="if(event.key==='Enter') checkPassword()">
@@ -222,7 +260,9 @@ if (sessionStorage.getItem('auth') === '1') {
     <div class="logo-area">
       <div class="emblem">🐟</div>
       <div>
-        <div class="site-title">Rivières à Saumon</div>
+        <div class="site-title brand">
+          <span class="brand-current">Current</span><span class="brand-run">Run</span>
+        </div>
         <div class="site-subtitle">Débits CEHQ — Québec</div>
       </div>
     </div>
@@ -818,9 +858,16 @@ function refreshAll() {
 }
 
 // ─── Mini sparkline ───────────────────────────────────────────────────────────
-function buildSpark(history, color) {
+// trend: 'up' → vert, 'down' → rouge, null → bleu (couleur débit par défaut)
+function buildSpark(history, trend) {
   if (!history?.length) return '';
-  const col = getCSSVar(color);
+  const mainCol = trend === 'up'   ? '#4ade9a'
+                : trend === 'down' ? '#f06260'
+                :                    getCSSVar('--debit-color');
+  // Couleur des barres antérieures : même teinte, plus pâle (40% d'opacité)
+  const pastCol = trend === 'up'   ? 'rgba(74,222,154,0.4)'
+                : trend === 'down' ? 'rgba(240,98,96,0.4)'
+                :                    'rgba(136,184,212,0.4)';
   const max = Math.max(...history);
   const min = Math.min(...history);
   const range = max - min;
@@ -829,7 +876,7 @@ function buildSpark(history, color) {
     const pct = range > 0
       ? Math.max(8, ((v - min) / range) * 88 + 8)  // 8% min, 96% max
       : 50;
-    const c = i === history.length - 1 ? col : 'rgba(201,168,76,0.2)';
+    const c = i === history.length - 1 ? mainCol : pastCol;
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
 }
@@ -879,10 +926,11 @@ function renderCard(stationId) {
   else                          { tb.className = 'trend-badge trend-nd';   tb.textContent = 'N/D'; }
 
   // Sparkline historique — utilise le cache mémoire (évite localStorage à chaque render)
+  // Couleur déterminée par la tendance actuelle (montante = vert, descendante = rouge, N/D = bleu)
   const hist = st._histCache || [];
   const vals = hist.slice(-24).map(h => h.debit);
   card.querySelector('.spark-bars').innerHTML =
-    buildSpark(vals.length ? vals : (st.debit ? [st.debit] : [1]), '--debit-color');
+    buildSpark(vals.length ? vals : (st.debit ? [st.debit] : [1]), st.trend);
 
   // Message statut
   const msg = card.querySelector('.status-msg');
