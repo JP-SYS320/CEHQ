@@ -40,6 +40,10 @@
     font-family: 'SF Mono', 'Fira Mono', 'Courier New', monospace;
     min-height: 100vh;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background-color: var(--bg);
+    /* Écailles de poisson — motif SVG inline, doré subtil sur fond marine */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='34' viewBox='0 0 40 34'><defs><pattern id='scales' x='0' y='0' width='40' height='34' patternUnits='userSpaceOnUse'><path d='M 0 17 Q 10 0, 20 17 Q 30 0, 40 17 M -20 34 Q -10 17, 0 34 Q 10 17, 20 34 Q 30 17, 40 34 Q 50 17, 60 34' fill='none' stroke='%23c9a84c' stroke-width='0.8' opacity='0.18'/></pattern></defs><rect width='40' height='34' fill='url(%23scales)'/></svg>");
+    background-repeat: repeat;
   }
 
   header {
@@ -52,10 +56,9 @@
   .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .logo-area { display: flex; align-items: center; gap: 10px; }
 
-  .emblem {
-    width: 36px; height: 36px; border: 1.5px solid var(--accent); border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.1rem; flex-shrink: 0;
+  .cr-logo {
+    width: 42px; height: 42px; flex-shrink: 0;
+    filter: drop-shadow(0 0 4px rgba(201,168,76,0.15));
   }
 
   .site-title { font-family: Georgia, serif; font-size: 1.15rem; font-style: italic; color: var(--text); letter-spacing: 0.02em; line-height: 1.1; }
@@ -105,7 +108,8 @@
   .refresh-btn.loading { animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-  .last-update { font-size: 0.52rem; color: var(--muted); margin-top: 10px; letter-spacing: 0.06em; border-top: 1px solid rgba(201,168,76,0.2); padding-top: 10px; }
+  .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+  .last-update { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; text-align: right; }
 
   .status-bar { display: flex; padding: 10px 16px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
   .stat-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.58rem; letter-spacing: 0.06em; color: var(--muted); flex-shrink: 0; line-height: 1; }
@@ -258,17 +262,38 @@ if (sessionStorage.getItem('auth') === '1') {
 <header>
   <div class="header-top">
     <div class="logo-area">
-      <div class="emblem">🐟</div>
+      <svg class="cr-logo" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-label="CurrentRun logo">
+        <!-- Cercle extérieur doré -->
+        <circle cx="32" cy="32" r="30" fill="none" stroke="#c9a84c" stroke-width="1.5"/>
+        <!-- Cercle intérieur subtil -->
+        <circle cx="32" cy="32" r="27" fill="none" stroke="#c9a84c" stroke-width="0.5" opacity="0.4"/>
+        <!-- Vague décorative en arrière-plan (le « current ») -->
+        <path d="M 8 40 Q 18 33, 28 40 T 48 40 T 60 40"
+              fill="none" stroke="#c9a84c" stroke-width="0.8" opacity="0.4" stroke-linecap="round"/>
+        <!-- Lettre C en italique serif blanc cassé -->
+        <text x="20" y="44"
+              font-family="Playfair Display, Georgia, serif"
+              font-size="36" font-style="italic" font-weight="400"
+              fill="#f0ede4"
+              text-anchor="middle">C</text>
+        <!-- Lettre R en italique gras doré -->
+        <text x="42" y="44"
+              font-family="Playfair Display, Georgia, serif"
+              font-size="36" font-style="italic" font-weight="700"
+              fill="#c9a84c"
+              text-anchor="middle">R</text>
+      </svg>
       <div>
         <div class="site-title brand">
           <span class="brand-current">Current</span><span class="brand-run">Run</span>
         </div>
-        <div class="site-subtitle">Débits CEHQ — Québec</div>
       </div>
     </div>
-    <div class="refresh-btn" id="refreshAll" onclick="refreshAll()">↻ Actualiser</div>
+    <div class="header-right">
+      <div class="refresh-btn" id="refreshAll" onclick="refreshAll()">↻ Actualiser</div>
+      <div class="last-update" id="lastUpdate">Dernière mise à jour : —</div>
+    </div>
   </div>
-  <div class="last-update" id="lastUpdate">Dernière mise à jour : —</div>
 </header>
 
 <div class="status-bar">
@@ -864,10 +889,10 @@ function buildSpark(history, trend) {
   const mainCol = trend === 'up'   ? '#4ade9a'
                 : trend === 'down' ? '#f06260'
                 :                    getCSSVar('--debit-color');
-  // Couleur des barres antérieures : même teinte, plus pâle (40% d'opacité)
-  const pastCol = trend === 'up'   ? 'rgba(74,222,154,0.4)'
-                : trend === 'down' ? 'rgba(240,98,96,0.4)'
-                :                    'rgba(136,184,212,0.4)';
+  // Couleur des barres antérieures : même teinte, légèrement atténuée (75% d'opacité)
+  const pastCol = trend === 'up'   ? 'rgba(74,222,154,0.75)'
+                : trend === 'down' ? 'rgba(240,98,96,0.75)'
+                :                    'rgba(136,184,212,0.75)';
   const max = Math.max(...history);
   const min = Math.min(...history);
   const range = max - min;
