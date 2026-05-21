@@ -1000,13 +1000,6 @@ function buildCards() {
           </div>
           <div class="detail-item">${linksHtml}</div>
         </div>
-        <div class="detail-item" style="margin-top:6px;text-align:center">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div style="font-size:1.2rem;line-height:1">🌧️</div>
-            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Précipitations 24h</div>
-          </div>
-          <div class="dv-rain" style="font-size:1.6rem;font-weight:700;color:#7ec8e3">—</div>
-        </div>
         ${s.iwls || s.iwlsCode ? `
         <div class="detail-item" style="margin-top:6px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
@@ -1032,9 +1025,20 @@ function buildCards() {
                 <div class="dv-anglers-tomorrow" style="font-size:1.3rem;font-weight:700;color:#f0ede4">—</div>
               </div>` : ''}
             </div>
-            <div style="background:#0f1923;border-radius:6px;padding:7px 9px"></div>
+            <div style="background:#0f1923;border-radius:6px;padding:7px 9px;text-align:center">
+              <div style="font-size:1.2rem;line-height:1">🌧️</div>
+              <div class="detail-label" style="margin-top:2px;font-size:0.5rem">Précip. 24h</div>
+              <div class="dv-rain" style="font-size:1.3rem;font-weight:700;color:#7ec8e3;margin-top:2px">—</div>
+            </div>
           </div>
-        </div>` : ''}
+        </div>` : `
+        <div class="detail-item" style="margin-top:6px;text-align:center">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div style="font-size:1.2rem;line-height:1">🌧️</div>
+            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Précipitations 24h</div>
+          </div>
+          <div class="dv-rain" style="font-size:1.6rem;font-weight:700;color:#7ec8e3">—</div>
+        </div>`}
         ${s.id === '021601' || s.id === 'MITIS' ? `
         <div class="detail-item dv-montaisons" style="margin-top:6px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
