@@ -495,14 +495,22 @@ async function fetchDebit(stationId) {
   return { debit, trend, timestamp, var24h, max24h, min24h };
 }
 
-// ─── Météo journalière — Open-Meteo : lever, coucher, pluie 24h ─────────────
+// ─── Météo — Open-Meteo : lever/coucher, pluie 24h glissantes, probabilité ──
 async function fetchWeather(s) {
   const key = `weather_${s.id}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      // Cache valide 30 min — au-delà on re-fetch pour la pluie glissante
+      if (parsed._t && (Date.now() - parsed._t) < 30 * 60 * 1000) return parsed;
+    }
 
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&daily=sunrise,sunset,precipitation_sum,precipitation_probability_max&past_days=1&forecast_days=1&timezone=America%2FToronto`;
+    // Combine daily (sunrise/sunset/probabilité) + hourly (precipitation pour 24h glissantes)
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}` +
+                `&daily=sunrise,sunset,precipitation_probability_max` +
+                `&hourly=precipitation` +
+                `&past_days=1&forecast_days=1&timezone=America%2FToronto`;
     const controller = new AbortController();
     const tmout = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
@@ -510,22 +518,31 @@ async function fetchWeather(s) {
     if (!res.ok) return null;
     const data = await res.json();
 
-    const times  = data.daily?.time || [];
-    const idx    = times.indexOf(todayStr);
-    if (idx === -1) return null;
-
-    // Lever/coucher — format HH:mm depuis ISO datetime
+    // Daily — chercher aujourd'hui
+    const dailyTimes = data.daily?.time || [];
+    const idx = dailyTimes.indexOf(todayStr);
     const fmtTime = iso => iso ? iso.substring(11, 16) : null;
-    const sunrise = fmtTime(data.daily.sunrise?.[idx]);
-    const sunset  = fmtTime(data.daily.sunset?.[idx]);
-    const rain    = data.daily.precipitation_sum?.[idx] ?? null;
-    const rainProb = data.daily.precipitation_probability_max?.[idx] ?? null;
+    const sunrise = idx !== -1 ? fmtTime(data.daily.sunrise?.[idx]) : null;
+    const sunset  = idx !== -1 ? fmtTime(data.daily.sunset?.[idx])  : null;
+    const rainProb = idx !== -1 ? (data.daily.precipitation_probability_max?.[idx] ?? null) : null;
 
-    const result = {
-      sunrise, sunset,
-      rain: rain !== null ? Math.round(rain * 10) / 10 : null,
-      rainProb
-    };
+    // Hourly — somme des 24 dernières heures glissantes
+    const hourlyTimes = data.hourly?.time || [];
+    const precip      = data.hourly?.precipitation || [];
+    const now = Date.now();
+    const cutoff = now - 24 * 3600 * 1000;
+    let rainSum = 0, count = 0;
+    hourlyTimes.forEach((t, i) => {
+      // Les timestamps hourly sont en heure locale (timezone=America/Toronto)
+      const ts = new Date(t).getTime();
+      if (ts >= cutoff && ts <= now && precip[i] != null) {
+        rainSum += precip[i];
+        count++;
+      }
+    });
+    const rain = count > 0 ? Math.round(rainSum * 10) / 10 : null;
+
+    const result = { sunrise, sunset, rain, rainProb, _t: Date.now() };
     localStorage.setItem(key, JSON.stringify(result));
     return result;
   } catch(e) {}
@@ -1096,7 +1113,7 @@ function buildCards() {
 // Les UUIDs IWLS sont permanents — jamais supprimés
 try {
   Object.keys(localStorage).forEach(k => {
-    // Purger weather_ pour forcer un re-fetch (changement modèle météo)
+    // Purger weather_ pour forcer un re-fetch (passage en pluie glissante 24h)
     if (k.startsWith('weather_')) localStorage.removeItem(k);
     if (k.startsWith('montaisons_') && !k.includes(todayStr)) localStorage.removeItem(k);
     if (k.startsWith('tides_') && !k.includes(todayStr))
