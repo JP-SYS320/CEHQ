@@ -388,9 +388,13 @@ const STATION_MAP = Object.fromEntries(STATIONS.map(s => [s.id, s]));
 // ─── État ────────────────────────────────────────────────────────────────────
 const state = {};
 STATIONS.forEach(s => {
+  // Pré-charger l'historique depuis localStorage pour que la sparkline soit dispo dès le premier render
+  let histCache = [];
+  try { histCache = JSON.parse(localStorage.getItem(`hist_${s.id}`) || '[]'); } catch(e) {}
   state[s.id] = { debit:null, trend:null, status:'idle', msg:'', expanded:false,
                   sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null,
-                  tides:null, anglers:null, montaisons:null, rain:null };
+                  tides:null, anglers:null, montaisons:null, rain:null,
+                  _histCache: histCache };
 });
 
 // ─── CSS var cache — résolution unique par variable ───────────────────────────
@@ -405,24 +409,33 @@ function primeColorCache() {
   STATIONS.forEach(s => getCSSVar(s.color));
 }
 
-// ─── API MSP — un seul fetch par actualisation, indexé après réception ────────
+// ─── API MSP — un seul fetch partagé, indexé après réception ─────────────────
 const WFS_URL = 'https://geoegl.msp.gouv.qc.ca/apis/mapserver-vigilance/ws/vigilance.fcgi?service=wfs&version=1.1.0&request=getfeature&typename=stations_igo2_public&outputformat=geojson';
-let wfsCache = null, wfsCacheTime = 0, wfsIndex = null;
+let wfsCache = null, wfsCacheTime = 0, wfsIndex = null, wfsPending = null;
 
 async function fetchAllStations() {
   const now = Date.now();
   if (wfsCache && (now - wfsCacheTime) < 5 * 60 * 1000) return wfsCache;
-  const res = await fetch(WFS_URL, { cache: 'no-store' });
-  if (!res.ok) throw new Error('API MSP indisponible');
-  wfsCache = await res.json();
-  wfsCacheTime = now;
-  // Indexer le GeoJSON par numéro de station pour des lookups O(1)
-  wfsIndex = Object.fromEntries(
-    wfsCache.features
-      .filter(f => f.properties.station)
-      .map(f => [f.properties.station.toString().trim(), f])
-  );
-  return wfsCache;
+  // Déduplication : si un fetch est déjà en cours, on attend le même
+  if (wfsPending) return wfsPending;
+
+  wfsPending = (async () => {
+    try {
+      const res = await fetch(WFS_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error('API MSP indisponible');
+      wfsCache = await res.json();
+      wfsCacheTime = Date.now();
+      wfsIndex = Object.fromEntries(
+        wfsCache.features
+          .filter(f => f.properties.station)
+          .map(f => [f.properties.station.toString().trim(), f])
+      );
+      return wfsCache;
+    } finally {
+      wfsPending = null;
+    }
+  })();
+  return wfsPending;
 }
 
 // ─── Débit + historique localStorage ─────────────────────────────────────────
@@ -463,6 +476,8 @@ async function fetchDebit(stationId) {
       min24h = Math.min(...vals);
       var24h = ((debit - pool[0].debit) / (pool[0].debit || 1)) * 100;
     }
+    // Stocker l'historique en mémoire pour éviter une relecture localStorage à chaque render
+    state[stationId]._histCache = hist;
   } catch(e) {}
 
   return { debit, trend, timestamp, var24h, max24h, min24h };
@@ -682,28 +697,30 @@ async function loadStation(stationId) {
   renderCard(stationId);
 
   // Fetches secondaires — tous en parallèle, en arrière-plan
-  fetchSunTimes(s).then(sun => {
-    if (sun) { state[stationId].sunrise = sun.sunrise; state[stationId].sunset = sun.sunset; renderCard(stationId); }
+  // scheduleRender groupe les mises à jour pour éviter des re-renders en cascade
+  fetchWeather(s).then(w => {
+    if (w) {
+      state[stationId].sunrise = w.sunrise;
+      state[stationId].sunset  = w.sunset;
+      state[stationId].rain    = w.rain;
+      scheduleRender(stationId);
+    }
   }).catch(() => {});
 
   fetchTides(s).then(tides => {
     state[stationId].tides = tides || null;
-    renderCard(stationId);
-  }).catch(() => { state[stationId].tides = null; renderCard(stationId); });
+    scheduleRender(stationId);
+  }).catch(() => { state[stationId].tides = null; scheduleRender(stationId); });
 
   if (s.anglers || s.anglersUrl) {
     fetchAnglers(s).then(anglers => {
-      if (anglers) { state[stationId].anglers = anglers; renderCard(stationId); }
+      if (anglers) { state[stationId].anglers = anglers; scheduleRender(stationId); }
     }).catch(() => {});
   }
 
-  fetchRain(s).then(rain => {
-    if (rain !== null) { state[stationId].rain = rain; renderCard(stationId); }
-  }).catch(() => {});
-
   if (stationId === '021601' || stationId === 'MITIS') {
     fetchMontaisons(stationId).then(montaisons => {
-      if (montaisons) { state[stationId].montaisons = montaisons; renderCard(stationId); }
+      if (montaisons) { state[stationId].montaisons = montaisons; scheduleRender(stationId); }
     }).catch(() => {});
   }
 }
@@ -746,6 +763,21 @@ function buildSpark(history, color) {
   }).join('');
 }
 
+// ─── Render batching — groupe les renders dans un même frame ─────────────────
+const pendingRenders = new Set();
+let renderScheduled = false;
+
+function scheduleRender(stationId) {
+  pendingRenders.add(stationId);
+  if (renderScheduled) return;
+  renderScheduled = true;
+  requestAnimationFrame(() => {
+    pendingRenders.forEach(id => renderCard(id));
+    pendingRenders.clear();
+    renderScheduled = false;
+  });
+}
+
 // ─── Rendu carte ──────────────────────────────────────────────────────────────
 function renderCard(stationId) {
   const s  = STATION_MAP[stationId]; // O(1)
@@ -775,15 +807,11 @@ function renderCard(stationId) {
   else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.textContent = 'Descendante'; }
   else                          { tb.className = 'trend-badge trend-nd';   tb.textContent = 'N/D'; }
 
-  // Sparkline historique
-  try {
-    const hist = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
-    const vals = hist.slice(-24).map(h => h.debit);
-    card.querySelector('.spark-bars').innerHTML =
-      buildSpark(vals.length ? vals : (st.debit ? [st.debit] : [1]), '--debit-color');
-  } catch(e) {
-    card.querySelector('.spark-bars').innerHTML = buildSpark(st.debit ? [st.debit] : [1], '--debit-color');
-  }
+  // Sparkline historique — utilise le cache mémoire (évite localStorage à chaque render)
+  const hist = st._histCache || [];
+  const vals = hist.slice(-24).map(h => h.debit);
+  card.querySelector('.spark-bars').innerHTML =
+    buildSpark(vals.length ? vals : (st.debit ? [st.debit] : [1]), '--debit-color');
 
   // Message statut
   const msg = card.querySelector('.status-msg');
@@ -1043,7 +1071,7 @@ function buildCards() {
 // Les UUIDs IWLS sont permanents — jamais supprimés
 try {
   Object.keys(localStorage).forEach(k => {
-    if ((k.startsWith('sun_') || k.startsWith('montaisons_')) && !k.includes(todayStr))
+    if ((k.startsWith('weather_') || k.startsWith('montaisons_')) && !k.includes(todayStr))
       localStorage.removeItem(k);
     if (k.startsWith('tides_') && !k.includes(todayStr))
       localStorage.removeItem(k);
