@@ -894,14 +894,14 @@ function renderCard(stationId) {
     }
   }
 
-  // Pluie 24h + probabilité
+  // Pluie 24h + probabilité (deux lignes séparées)
   const rainEl = card.querySelector('.dv-rain');
   if (rainEl) {
     if (st.rain !== null) {
       const probHtml = st.rainProb !== null
-        ? `<span style="font-size:0.6rem;color:var(--muted);margin-left:6px;font-weight:400">${st.rainProb}%</span>`
+        ? `<div style="font-size:0.7rem;color:var(--muted);font-weight:400;margin-top:4px;padding-top:4px;border-top:1px solid rgba(201,168,76,0.15)">Prob. ${st.rainProb}%</div>`
         : '';
-      rainEl.innerHTML = `${st.rain.toFixed(1)}<span style="font-size:0.55rem;color:var(--muted);margin-left:2px;font-weight:400">mm</span>${probHtml}`;
+      rainEl.innerHTML = `<div>${st.rain.toFixed(1)}<span style="font-size:0.55rem;color:var(--muted);margin-left:2px;font-weight:400">mm</span></div>${probHtml}`;
     } else {
       rainEl.textContent = '—';
     }
