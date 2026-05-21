@@ -490,7 +490,7 @@ async function fetchWeather(s) {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
 
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&daily=sunrise,sunset,precipitation_sum,precipitation_probability_max&past_days=1&forecast_days=0&models=gem_seamless&timezone=America%2FToronto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&daily=sunrise,sunset,precipitation_sum,precipitation_probability_max&past_days=1&forecast_days=0&timezone=America%2FToronto`;
     const controller = new AbortController();
     const tmout = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
@@ -1084,7 +1084,7 @@ function buildCards() {
 // Les UUIDs IWLS sont permanents — jamais supprimés
 try {
   Object.keys(localStorage).forEach(k => {
-    // Purger weather_ pour forcer un re-fetch avec le nouveau champ probabilité (one-shot)
+    // Purger weather_ pour forcer un re-fetch (changement modèle météo)
     if (k.startsWith('weather_')) localStorage.removeItem(k);
     if (k.startsWith('montaisons_') && !k.includes(todayStr)) localStorage.removeItem(k);
     if (k.startsWith('tides_') && !k.includes(todayStr))
