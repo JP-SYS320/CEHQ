@@ -390,7 +390,7 @@ const state = {};
 STATIONS.forEach(s => {
   state[s.id] = { debit:null, trend:null, status:'idle', msg:'', expanded:false,
                   sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null,
-                  tides:null, anglers:null, montaisons:null };
+                  tides:null, anglers:null, montaisons:null, rain:null };
 });
 
 // ─── CSS var cache — résolution unique par variable ───────────────────────────
@@ -645,6 +645,41 @@ async function fetchAnglers(s) {
   return null;
 }
 
+// ─── Précipitations 24h — Open-Meteo (modèle GEM) ───────────────────────────
+async function fetchRain(s) {
+  const key = `rain_${s.id}_${todayStr}`;
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached !== null) return parseFloat(cached);
+
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&hourly=precipitation&past_days=1&forecast_days=0&models=gem_seamless&timezone=America%2FToronto`;
+    const controller = new AbortController();
+    const tmout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+    clearTimeout(tmout);
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const times  = data.hourly?.time || [];
+    const precip = data.hourly?.precipitation || [];
+    const now    = Date.now();
+    const cutoff = now - 24 * 3600 * 1000;
+
+    let total = 0;
+    times.forEach((t, i) => {
+      const ts = new Date(t).getTime();
+      if (ts >= cutoff && ts <= now && precip[i] != null) total += precip[i];
+    });
+
+    const rounded = Math.round(total * 10) / 10;
+    // Cache 30 min — les données changent à chaque heure
+    setTimeout(() => { try { localStorage.removeItem(key); } catch(e) {} }, 30 * 60 * 1000);
+    localStorage.setItem(key, String(rounded));
+    return rounded;
+  } catch(e) {}
+  return null;
+}
+
 // ─── Charger une station ──────────────────────────────────────────────────────
 async function loadStation(stationId) {
   const s = STATION_MAP[stationId];
@@ -684,6 +719,10 @@ async function loadStation(stationId) {
       if (anglers) { state[stationId].anglers = anglers; renderCard(stationId); }
     }).catch(() => {});
   }
+
+  fetchRain(s).then(rain => {
+    if (rain !== null) { state[stationId].rain = rain; renderCard(stationId); }
+  }).catch(() => {});
 
   if (stationId === '021601' || stationId === 'MITIS') {
     fetchMontaisons(stationId).then(montaisons => {
@@ -822,6 +861,16 @@ function renderCard(stationId) {
     } else {
       tidesEl.innerHTML = '';
       tidesEl.textContent = td === null ? '···' : 'N/D';
+    }
+  }
+
+  // Pluie 24h
+  const rainEl = card.querySelector('.dv-rain');
+  if (rainEl) {
+    if (st.rain !== null) {
+      rainEl.innerHTML = `${st.rain.toFixed(1)}<span style="font-size:0.55rem;color:var(--muted);margin-left:2px;font-weight:400">mm</span>`;
+    } else {
+      rainEl.textContent = '—';
     }
   }
 
@@ -971,7 +1020,11 @@ function buildCards() {
                 <div class="dv-anglers-tomorrow" style="font-size:1.3rem;font-weight:700;color:#f0ede4">—</div>
               </div>` : ''}
             </div>
-            <div style="background:#0f1923;border-radius:6px;padding:7px 9px"></div>
+            <div style="background:#0f1923;border-radius:6px;padding:7px 9px;text-align:center">
+              <div style="font-size:1.1rem;line-height:1.3">🌧️</div>
+              <div class="detail-label" style="margin-top:2px">Pluie 24h</div>
+              <div class="dv-rain" style="font-size:1.3rem;font-weight:700;color:#7ec8e3;margin-top:2px">—</div>
+            </div>
           </div>
         </div>` : ''}
         ${s.id === '021601' || s.id === 'MITIS' ? `
