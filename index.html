@@ -40,7 +40,7 @@
   }
 
   header {
-    padding: 18px 16px 14px;
+    padding: 14px 16px;
     border-bottom: 2px solid var(--accent);
     position: sticky; top: 0;
     background: var(--surface); z-index: 100;
@@ -69,9 +69,9 @@
   .refresh-btn.loading { animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-  .last-update { font-size: 0.52rem; color: var(--muted); margin-top: 8px; letter-spacing: 0.06em; border-top: 1px solid rgba(201,168,76,0.2); padding-top: 6px; }
+  .last-update { font-size: 0.52rem; color: var(--muted); margin-top: 10px; letter-spacing: 0.06em; border-top: 1px solid rgba(201,168,76,0.2); padding-top: 10px; }
 
-  .status-bar { display: flex; padding: 8px 16px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
+  .status-bar { display: flex; padding: 10px 16px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
   .stat-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.58rem; letter-spacing: 0.06em; color: var(--muted); flex-shrink: 0; line-height: 1; }
   .stat-val { color: var(--text); font-weight: 700; }
 
@@ -450,14 +450,14 @@ async function fetchDebit(stationId) {
   const p = feat.properties;
   const debit = parseFloat(p.dern_valeur_deb);
   if (isNaN(debit) || debit < 0) throw new Error('Débit non disponible');
-  // Le timestamp MSP est en UTC — convertir en heure locale Montréal (HAE/HNE)
+  // Le timestamp MSP est en UTC — on garde l'ISO UTC pour l'historique et on affiche en HAE/HNE
   let timestamp = '—';
+  let isoUtc = null;
   if (p.dern_date_prise_valeur_utc) {
-    let isoUtc = p.dern_date_prise_valeur_utc;
+    isoUtc = p.dern_date_prise_valeur_utc;
     if (!isoUtc.endsWith('Z') && !isoUtc.match(/[+-]\d{2}:\d{2}$/)) isoUtc += 'Z';
     const utcDate = new Date(isoUtc);
     if (!isNaN(utcDate)) {
-      // Construire la chaîne en heure locale Toronto via DateTimeFormat en parts
       const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'America/Toronto',
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -476,17 +476,28 @@ async function fetchDebit(stationId) {
   let trend = null, var24h = null, max24h = null, min24h = null;
   try {
     let hist = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
-    if (!hist.some(e => e.ts === timestamp)) {
-      hist.push({ debit, ts: timestamp });
+
+    // Migration : si les anciens timestamps étaient en format "YYYY-MM-DD HH:mm UTC", on les normalise en ISO UTC
+    hist = hist.map(e => {
+      if (e.ts && typeof e.ts === 'string' && e.ts.endsWith(' UTC')) {
+        return { debit: e.debit, ts: e.ts.replace(' UTC', 'Z').replace(' ', 'T') };
+      }
+      return e;
+    });
+
+    // Stocker en ISO UTC pour des calculs fiables
+    if (isoUtc && !hist.some(e => e.ts === isoUtc)) {
+      hist.push({ debit, ts: isoUtc });
       if (hist.length > 96) hist = hist.slice(-96);
       localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
     }
+
     if (hist.length >= 2) {
       const refVal = hist[Math.max(0, hist.length - 7)].debit;
       trend = debit >= refVal ? 'up' : 'down';
       const cutoff = Date.now() - 24 * 3600 * 1000;
       const last24 = hist.filter(e => {
-        const d = new Date(e.ts.replace(' UTC', 'Z').replace(' ', 'T'));
+        const d = new Date(e.ts);
         return !isNaN(d) && d.getTime() >= cutoff;
       });
       const pool = last24.length >= 2 ? last24 : hist.slice(-96);
@@ -495,14 +506,15 @@ async function fetchDebit(stationId) {
       min24h = Math.min(...vals);
       var24h = ((debit - pool[0].debit) / (pool[0].debit || 1)) * 100;
     }
-    // Stocker l'historique en mémoire pour éviter une relecture localStorage à chaque render
     state[stationId]._histCache = hist;
   } catch(e) {}
 
   return { debit, trend, timestamp, var24h, max24h, min24h };
 }
 
-// ─── Météo — Open-Meteo : lever/coucher, pluie 24h glissantes, probabilité ──
+// ─── Météo — Open-Meteo : deux requêtes parallèles ───────────────────────────
+// 1) GEM Seamless (Environnement Canada) pour pluie 24h glissantes — précis au Québec
+// 2) Modèle ensemble (défaut) pour probabilité de précipitations max
 async function fetchWeather(s) {
   const key = `weather_${s.id}_${todayStr}`;
   try {
@@ -513,34 +525,40 @@ async function fetchWeather(s) {
       if (parsed._t && (Date.now() - parsed._t) < 30 * 60 * 1000) return parsed;
     }
 
-    // Combine daily (sunrise/sunset/probabilité) + hourly (precipitation pour 24h glissantes)
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}` +
-                `&daily=sunrise,sunset,precipitation_probability_max` +
-                `&hourly=precipitation` +
-                `&past_days=1&forecast_days=1&timezone=America%2FToronto`;
+    const base = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}` +
+                 `&past_days=1&forecast_days=1&timezone=America%2FToronto`;
+
+    // Requête 1 — GEM pour lever, coucher et pluie horaire
+    const urlGem  = `${base}&daily=sunrise,sunset&hourly=precipitation&models=gem_seamless`;
+    // Requête 2 — modèle par défaut pour probabilité (nécessite un modèle ensemble)
+    const urlProb = `${base}&daily=precipitation_probability_max`;
+
     const controller = new AbortController();
     const tmout = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-    clearTimeout(tmout);
-    if (!res.ok) return null;
-    const data = await res.json();
 
-    // Daily — chercher aujourd'hui
-    const dailyTimes = data.daily?.time || [];
+    const [resGem, resProb] = await Promise.all([
+      fetch(urlGem,  { cache: 'no-store', signal: controller.signal }).catch(() => null),
+      fetch(urlProb, { cache: 'no-store', signal: controller.signal }).catch(() => null)
+    ]);
+    clearTimeout(tmout);
+
+    // Parse GEM (obligatoire — lever/coucher/pluie)
+    if (!resGem?.ok) return null;
+    const gem = await resGem.json();
+
+    const dailyTimes = gem.daily?.time || [];
     const idx = dailyTimes.indexOf(todayStr);
     const fmtTime = iso => iso ? iso.substring(11, 16) : null;
-    const sunrise = idx !== -1 ? fmtTime(data.daily.sunrise?.[idx]) : null;
-    const sunset  = idx !== -1 ? fmtTime(data.daily.sunset?.[idx])  : null;
-    const rainProb = idx !== -1 ? (data.daily.precipitation_probability_max?.[idx] ?? null) : null;
+    const sunrise = idx !== -1 ? fmtTime(gem.daily.sunrise?.[idx]) : null;
+    const sunset  = idx !== -1 ? fmtTime(gem.daily.sunset?.[idx])  : null;
 
-    // Hourly — somme des 24 dernières heures glissantes
-    const hourlyTimes = data.hourly?.time || [];
-    const precip      = data.hourly?.precipitation || [];
+    // Pluie 24h glissantes — somme depuis maintenant - 24h
+    const hourlyTimes = gem.hourly?.time || [];
+    const precip      = gem.hourly?.precipitation || [];
     const now = Date.now();
     const cutoff = now - 24 * 3600 * 1000;
     let rainSum = 0, count = 0;
     hourlyTimes.forEach((t, i) => {
-      // Les timestamps hourly sont en heure locale (timezone=America/Toronto)
       const ts = new Date(t).getTime();
       if (ts >= cutoff && ts <= now && precip[i] != null) {
         rainSum += precip[i];
@@ -548,6 +566,17 @@ async function fetchWeather(s) {
       }
     });
     const rain = count > 0 ? Math.round(rainSum * 10) / 10 : null;
+
+    // Parse probabilité (optionnel — peut échouer sans bloquer)
+    let rainProb = null;
+    if (resProb?.ok) {
+      try {
+        const prob = await resProb.json();
+        const probTimes = prob.daily?.time || [];
+        const pIdx = probTimes.indexOf(todayStr);
+        if (pIdx !== -1) rainProb = prob.daily.precipitation_probability_max?.[pIdx] ?? null;
+      } catch(e) {}
+    }
 
     const result = { sunrise, sunset, rain, rainProb, _t: Date.now() };
     localStorage.setItem(key, JSON.stringify(result));
@@ -911,26 +940,11 @@ function renderCard(stationId) {
     }
   }
 
-  // Pluie 24h + probabilité
-  // Cas 1 : encadré pêcheurs — deux colonnes séparées (.dv-rain-mm et .dv-rain-prob)
+  // Pluie 24h + probabilité — deux colonnes séparées (.dv-rain-mm et .dv-rain-prob)
   const rainMmEl = card.querySelector('.dv-rain-mm');
   const rainProbEl = card.querySelector('.dv-rain-prob');
-  if (rainMmEl && rainProbEl) {
-    rainMmEl.innerHTML = st.rain !== null ? st.rain.toFixed(1) : '—';
-    rainProbEl.innerHTML = st.rainProb !== null ? `${st.rainProb}%` : '—';
-  }
-  // Cas 2 : encadré standalone — deux lignes empilées (.dv-rain)
-  const rainEl = card.querySelector('.dv-rain');
-  if (rainEl) {
-    if (st.rain !== null) {
-      const probHtml = st.rainProb !== null
-        ? `<div style="font-size:0.7rem;color:var(--muted);font-weight:400;margin-top:4px;padding-top:4px;border-top:1px solid rgba(201,168,76,0.15)">Prob. ${st.rainProb}%</div>`
-        : '';
-      rainEl.innerHTML = `<div>${st.rain.toFixed(1)}<span style="font-size:0.55rem;color:var(--muted);margin-left:2px;font-weight:400">mm</span></div>${probHtml}`;
-    } else {
-      rainEl.textContent = '—';
-    }
-  }
+  if (rainMmEl) rainMmEl.innerHTML = st.rain !== null ? st.rain.toFixed(1) : '—';
+  if (rainProbEl) rainProbEl.innerHTML = st.rainProb !== null ? `${st.rainProb}%` : '—';
 
   // Montaisons
   const montGrands = card.querySelector('.dv-mont-grands');
@@ -1097,12 +1111,22 @@ function buildCards() {
             </div>
           </div>
         </div>` : `
-        <div class="detail-item" style="margin-top:6px;text-align:center">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div style="font-size:1.2rem;line-height:1">🌧️</div>
-            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Précipitations 24h</div>
+        <div class="detail-item" style="margin-top:6px">
+          <div style="display:flex;align-items:center;gap:4px;justify-content:center;margin-bottom:4px">
+            <div style="font-size:1rem;line-height:1">🌧️</div>
+            <div class="detail-label" style="margin-top:0;font-size:0.48rem">Précip. 24h</div>
           </div>
-          <div class="dv-rain" style="font-size:1.6rem;font-weight:700;color:#7ec8e3">—</div>
+          <div style="display:flex;align-items:stretch;text-align:center">
+            <div style="flex:1;padding:2px 0">
+              <div class="detail-label" style="font-size:0.48rem">mm</div>
+              <div class="dv-rain-mm" style="font-size:1.05rem;font-weight:700;color:#7ec8e3;margin-top:2px">—</div>
+            </div>
+            <div style="width:1px;background:rgba(201,168,76,0.2);margin:2px 0"></div>
+            <div style="flex:1;padding:2px 0">
+              <div class="detail-label" style="font-size:0.48rem">Prob.</div>
+              <div class="dv-rain-prob" style="font-size:1.05rem;font-weight:700;color:var(--muted);margin-top:2px">—</div>
+            </div>
+          </div>
         </div>`}
         ${s.id === '021601' || s.id === 'MITIS' ? `
         <div class="detail-item dv-montaisons" style="margin-top:6px">
