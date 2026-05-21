@@ -468,22 +468,34 @@ async function fetchDebit(stationId) {
   return { debit, trend, timestamp, var24h, max24h, min24h };
 }
 
-// ─── Sunrise/Sunset — cache localStorage par jour ────────────────────────────
-async function fetchSunTimes(s) {
-  const key = `sun_${s.id}_${todayStr}`;
+// ─── Météo journalière — Open-Meteo : lever, coucher, pluie 24h ─────────────
+async function fetchWeather(s) {
+  const key = `weather_${s.id}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
-    const res = await fetch(
-      `https://api.sunrisesunset.io/json?lat=${s.lat}&lng=${s.lng}&timezone=America/Toronto&time_format=HH:mm`,
-      { cache: 'no-store' }
-    );
-    const json = await res.json();
-    if (json.status === 'OK') {
-      const sun = { sunrise: json.results.sunrise, sunset: json.results.sunset };
-      localStorage.setItem(key, JSON.stringify(sun));
-      return sun;
-    }
+
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&daily=sunrise,sunset,precipitation_sum&past_days=1&forecast_days=0&models=gem_seamless&timezone=America%2FToronto`;
+    const controller = new AbortController();
+    const tmout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
+    clearTimeout(tmout);
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const times  = data.daily?.time || [];
+    const idx    = times.indexOf(todayStr);
+    if (idx === -1) return null;
+
+    // Lever/coucher — format HH:mm depuis ISO datetime
+    const fmtTime = iso => iso ? iso.substring(11, 16) : null;
+    const sunrise = fmtTime(data.daily.sunrise?.[idx]);
+    const sunset  = fmtTime(data.daily.sunset?.[idx]);
+    const rain    = data.daily.precipitation_sum?.[idx] ?? null;
+
+    const result = { sunrise, sunset, rain: rain !== null ? Math.round(rain * 10) / 10 : null };
+    localStorage.setItem(key, JSON.stringify(result));
+    return result;
   } catch(e) {}
   return null;
 }
@@ -641,41 +653,6 @@ async function fetchAnglers(s) {
       today:    nums[0].replace(/[><\s]/g, ''),
       tomorrow: nums[1].replace(/[><\s]/g, '')
     };
-  } catch(e) {}
-  return null;
-}
-
-// ─── Précipitations 24h — Open-Meteo (modèle GEM) ───────────────────────────
-async function fetchRain(s) {
-  const key = `rain_${s.id}_${todayStr}`;
-  try {
-    const cached = localStorage.getItem(key);
-    if (cached !== null) return parseFloat(cached);
-
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&hourly=precipitation&past_days=1&forecast_days=0&models=gem_seamless&timezone=America%2FToronto`;
-    const controller = new AbortController();
-    const tmout = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
-    clearTimeout(tmout);
-    if (!res.ok) return null;
-    const data = await res.json();
-
-    const times  = data.hourly?.time || [];
-    const precip = data.hourly?.precipitation || [];
-    const now    = Date.now();
-    const cutoff = now - 24 * 3600 * 1000;
-
-    let total = 0;
-    times.forEach((t, i) => {
-      const ts = new Date(t).getTime();
-      if (ts >= cutoff && ts <= now && precip[i] != null) total += precip[i];
-    });
-
-    const rounded = Math.round(total * 10) / 10;
-    // Cache 30 min — les données changent à chaque heure
-    setTimeout(() => { try { localStorage.removeItem(key); } catch(e) {} }, 30 * 60 * 1000);
-    localStorage.setItem(key, String(rounded));
-    return rounded;
   } catch(e) {}
   return null;
 }
@@ -995,6 +972,13 @@ function buildCards() {
           </div>
           <div class="detail-item">${linksHtml}</div>
         </div>
+        <div class="detail-item" style="margin-top:6px;text-align:center">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div style="font-size:1.2rem;line-height:1">🌧️</div>
+            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Précipitations 24h</div>
+          </div>
+          <div class="dv-rain" style="font-size:1.6rem;font-weight:700;color:#7ec8e3">—</div>
+        </div>
         ${s.iwls || s.iwlsCode ? `
         <div class="detail-item" style="margin-top:6px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
@@ -1020,11 +1004,7 @@ function buildCards() {
                 <div class="dv-anglers-tomorrow" style="font-size:1.3rem;font-weight:700;color:#f0ede4">—</div>
               </div>` : ''}
             </div>
-            <div style="background:#0f1923;border-radius:6px;padding:7px 9px;text-align:center">
-              <div style="font-size:1.1rem;line-height:1.3">🌧️</div>
-              <div class="detail-label" style="margin-top:2px">Pluie 24h</div>
-              <div class="dv-rain" style="font-size:1.3rem;font-weight:700;color:#7ec8e3;margin-top:2px">—</div>
-            </div>
+            <div style="background:#0f1923;border-radius:6px;padding:7px 9px"></div>
           </div>
         </div>` : ''}
         ${s.id === '021601' || s.id === 'MITIS' ? `
