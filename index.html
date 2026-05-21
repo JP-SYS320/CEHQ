@@ -72,7 +72,7 @@
   .last-update { font-size: 0.52rem; color: var(--muted); margin-top: 8px; letter-spacing: 0.06em; border-top: 1px solid rgba(201,168,76,0.2); padding-top: 6px; }
 
   .status-bar { display: flex; padding: 8px 16px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
-  .stat-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.58rem; letter-spacing: 0.06em; color: var(--muted); flex-shrink: 0; }
+  .stat-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.58rem; letter-spacing: 0.06em; color: var(--muted); flex-shrink: 0; line-height: 1; }
   .stat-val { color: var(--text); font-weight: 700; }
 
   .filters { display: flex; gap: 8px; padding: 10px 16px; border-bottom: 2px solid var(--accent); background: var(--surface); }
@@ -393,7 +393,7 @@ STATIONS.forEach(s => {
   try { histCache = JSON.parse(localStorage.getItem(`hist_${s.id}`) || '[]'); } catch(e) {}
   state[s.id] = { debit:null, trend:null, status:'idle', msg:'', expanded:false,
                   sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null,
-                  tides:null, anglers:null, montaisons:null, rain:null,
+                  tides:null, anglers:null, montaisons:null, rain:null, rainProb:null,
                   _histCache: histCache };
 });
 
@@ -490,7 +490,7 @@ async function fetchWeather(s) {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
 
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&daily=sunrise,sunset,precipitation_sum&past_days=1&forecast_days=0&models=gem_seamless&timezone=America%2FToronto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&daily=sunrise,sunset,precipitation_sum,precipitation_probability_max&past_days=1&forecast_days=0&models=gem_seamless&timezone=America%2FToronto`;
     const controller = new AbortController();
     const tmout = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
@@ -507,8 +507,13 @@ async function fetchWeather(s) {
     const sunrise = fmtTime(data.daily.sunrise?.[idx]);
     const sunset  = fmtTime(data.daily.sunset?.[idx]);
     const rain    = data.daily.precipitation_sum?.[idx] ?? null;
+    const rainProb = data.daily.precipitation_probability_max?.[idx] ?? null;
 
-    const result = { sunrise, sunset, rain: rain !== null ? Math.round(rain * 10) / 10 : null };
+    const result = {
+      sunrise, sunset,
+      rain: rain !== null ? Math.round(rain * 10) / 10 : null,
+      rainProb
+    };
     localStorage.setItem(key, JSON.stringify(result));
     return result;
   } catch(e) {}
@@ -703,6 +708,7 @@ async function loadStation(stationId) {
       state[stationId].sunrise = w.sunrise;
       state[stationId].sunset  = w.sunset;
       state[stationId].rain    = w.rain;
+      state[stationId].rainProb = w.rainProb;
       scheduleRender(stationId);
     }
   }).catch(() => {});
@@ -869,11 +875,14 @@ function renderCard(stationId) {
     }
   }
 
-  // Pluie 24h
+  // Pluie 24h + probabilité
   const rainEl = card.querySelector('.dv-rain');
   if (rainEl) {
     if (st.rain !== null) {
-      rainEl.innerHTML = `${st.rain.toFixed(1)}<span style="font-size:0.55rem;color:var(--muted);margin-left:2px;font-weight:400">mm</span>`;
+      const probHtml = st.rainProb !== null
+        ? `<span style="font-size:0.6rem;color:var(--muted);margin-left:6px;font-weight:400">${st.rainProb}%</span>`
+        : '';
+      rainEl.innerHTML = `${st.rain.toFixed(1)}<span style="font-size:0.55rem;color:var(--muted);margin-left:2px;font-weight:400">mm</span>${probHtml}`;
     } else {
       rainEl.textContent = '—';
     }
@@ -1075,8 +1084,9 @@ function buildCards() {
 // Les UUIDs IWLS sont permanents — jamais supprimés
 try {
   Object.keys(localStorage).forEach(k => {
-    if ((k.startsWith('weather_') || k.startsWith('montaisons_')) && !k.includes(todayStr))
-      localStorage.removeItem(k);
+    // Purger weather_ pour forcer un re-fetch avec le nouveau champ probabilité (one-shot)
+    if (k.startsWith('weather_')) localStorage.removeItem(k);
+    if (k.startsWith('montaisons_') && !k.includes(todayStr)) localStorage.removeItem(k);
     if (k.startsWith('tides_') && !k.includes(todayStr))
       localStorage.removeItem(k);
   });
