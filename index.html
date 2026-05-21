@@ -450,27 +450,20 @@ async function fetchDebit(stationId) {
   const p = feat.properties;
   const debit = parseFloat(p.dern_valeur_deb);
   if (isNaN(debit) || debit < 0) throw new Error('Débit non disponible');
-  // Convertir le timestamp UTC en heure locale Montréal (HAE/HNE selon saison)
+  // Le timestamp MSP est étiqueté "utc" mais semble en heure normale HNE — on affiche tel quel avec suffixe selon saison
   let timestamp = '—';
   if (p.dern_date_prise_valeur_utc) {
-    // Forcer le parsing UTC en ajoutant Z si absent
-    let isoUtc = p.dern_date_prise_valeur_utc;
-    if (!isoUtc.endsWith('Z') && !isoUtc.match(/[+-]\d{2}:\d{2}$/)) isoUtc += 'Z';
-    const utcDate = new Date(isoUtc);
-    if (!isNaN(utcDate)) {
-      const localStr = utcDate.toLocaleString('fr-CA', {
-        timeZone: 'America/Toronto',
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false
-      });
-      // Détecter HAE vs HNE en comparant l'offset Toronto à utcDate avec l'offset standard (HNE = -5h)
-      const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/Toronto', timeZoneName: 'short'
-      }).formatToParts(utcDate);
-      const tzShort = parts.find(p => p.type === 'timeZoneName')?.value || '';
-      const tz = tzShort === 'EDT' ? 'HAE' : 'HNE';
-      timestamp = `${localStr.replace(',', '')} ${tz}`;
-    }
+    const raw = p.dern_date_prise_valeur_utc;
+    // Format raw : "2026-05-21T11:00:00" → "2026-05-21 11:00"
+    const formatted = raw.replace('T', ' ').substring(0, 16);
+    // Détecter saison HAE (mars-novembre) vs HNE
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Toronto', timeZoneName: 'short'
+    }).formatToParts(now);
+    const tzShort = parts.find(p => p.type === 'timeZoneName')?.value || '';
+    const tz = tzShort === 'EDT' ? 'HAE' : 'HNE';
+    timestamp = `${formatted} ${tz}`;
   }
 
   let trend = null, var24h = null, max24h = null, min24h = null;
