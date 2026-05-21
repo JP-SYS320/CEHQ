@@ -450,20 +450,27 @@ async function fetchDebit(stationId) {
   const p = feat.properties;
   const debit = parseFloat(p.dern_valeur_deb);
   if (isNaN(debit) || debit < 0) throw new Error('Débit non disponible');
-  // Le timestamp MSP est étiqueté "utc" mais semble en heure normale HNE — on affiche tel quel avec suffixe selon saison
+  // Le timestamp MSP est en UTC — convertir en heure locale Montréal (HAE/HNE)
   let timestamp = '—';
   if (p.dern_date_prise_valeur_utc) {
-    const raw = p.dern_date_prise_valeur_utc;
-    // Format raw : "2026-05-21T11:00:00" → "2026-05-21 11:00"
-    const formatted = raw.replace('T', ' ').substring(0, 16);
-    // Détecter saison HAE (mars-novembre) vs HNE
-    const now = new Date();
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Toronto', timeZoneName: 'short'
-    }).formatToParts(now);
-    const tzShort = parts.find(p => p.type === 'timeZoneName')?.value || '';
-    const tz = tzShort === 'EDT' ? 'HAE' : 'HNE';
-    timestamp = `${formatted} ${tz}`;
+    let isoUtc = p.dern_date_prise_valeur_utc;
+    if (!isoUtc.endsWith('Z') && !isoUtc.match(/[+-]\d{2}:\d{2}$/)) isoUtc += 'Z';
+    const utcDate = new Date(isoUtc);
+    if (!isNaN(utcDate)) {
+      // Construire la chaîne en heure locale Toronto via DateTimeFormat en parts
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Toronto',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+        timeZoneName: 'short'
+      }).formatToParts(utcDate);
+      const get = type => parts.find(p => p.type === type)?.value || '';
+      const y = get('year'), m = get('month'), d = get('day');
+      const h = get('hour'), min = get('minute');
+      const tzShort = get('timeZoneName');
+      const tz = tzShort === 'EDT' ? 'HAE' : 'HNE';
+      timestamp = `${y}-${m}-${d} ${h}:${min} ${tz}`;
+    }
   }
 
   let trend = null, var24h = null, max24h = null, min24h = null;
@@ -904,7 +911,15 @@ function renderCard(stationId) {
     }
   }
 
-  // Pluie 24h + probabilité (deux lignes séparées)
+  // Pluie 24h + probabilité
+  // Cas 1 : encadré pêcheurs — deux colonnes séparées (.dv-rain-mm et .dv-rain-prob)
+  const rainMmEl = card.querySelector('.dv-rain-mm');
+  const rainProbEl = card.querySelector('.dv-rain-prob');
+  if (rainMmEl && rainProbEl) {
+    rainMmEl.innerHTML = st.rain !== null ? st.rain.toFixed(1) : '—';
+    rainProbEl.innerHTML = st.rainProb !== null ? `${st.rainProb}%` : '—';
+  }
+  // Cas 2 : encadré standalone — deux lignes empilées (.dv-rain)
   const rainEl = card.querySelector('.dv-rain');
   if (rainEl) {
     if (st.rain !== null) {
@@ -1063,10 +1078,22 @@ function buildCards() {
                 <div class="dv-anglers-tomorrow" style="font-size:1.3rem;font-weight:700;color:#f0ede4">—</div>
               </div>` : ''}
             </div>
-            <div style="background:#0f1923;border-radius:6px;padding:7px 9px;text-align:center">
-              <div style="font-size:1.2rem;line-height:1">🌧️</div>
-              <div class="detail-label" style="margin-top:2px;font-size:0.5rem">Précip. 24h</div>
-              <div class="dv-rain" style="font-size:1.3rem;font-weight:700;color:#7ec8e3;margin-top:2px">—</div>
+            <div style="background:#0f1923;border-radius:6px;padding:7px 9px">
+              <div style="display:flex;align-items:center;gap:4px;justify-content:center;margin-bottom:4px">
+                <div style="font-size:1rem;line-height:1">🌧️</div>
+                <div class="detail-label" style="margin-top:0;font-size:0.48rem">Précip. 24h</div>
+              </div>
+              <div style="display:flex;align-items:stretch;text-align:center">
+                <div style="flex:1;padding:2px 0">
+                  <div class="detail-label" style="font-size:0.48rem">mm</div>
+                  <div class="dv-rain-mm" style="font-size:1.05rem;font-weight:700;color:#7ec8e3;margin-top:2px">—</div>
+                </div>
+                <div style="width:1px;background:rgba(201,168,76,0.2);margin:2px 0"></div>
+                <div style="flex:1;padding:2px 0">
+                  <div class="detail-label" style="font-size:0.48rem">Prob.</div>
+                  <div class="dv-rain-prob" style="font-size:1.05rem;font-weight:700;color:var(--muted);margin-top:2px">—</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>` : `
