@@ -936,22 +936,36 @@ function refreshAll() {
 // Toutes les barres en doré sombre / discret (rgba doré avec faible opacité)
 // sauf la dernière qui prend la couleur de la tendance globale
 // (verte=montante, rouge=descendante, bleue=N/D).
+// Si moins de 24 mesures, on remplit avec des barres "fantômes" pour éviter
+// l'effet boîte (où peu de barres s'étirent sur toute la largeur).
 function buildSpark(history, trend) {
   if (!history?.length) return '';
-  const pastCol = 'rgba(201,168,76,0.25)';  // doré très atténué — comme à l'origine
+  const TARGET = 24;
+  const pastCol = 'rgba(201,168,76,0.25)';
+  const ghostCol = 'rgba(201,168,76,0.06)';  // barres fantômes très discrètes
   const lastCol = trend === 'up'   ? '#4ade9a'
                 : trend === 'down' ? '#f06260'
                 :                    getCSSVar('--debit-color');
   const max = Math.max(...history);
   const min = Math.min(...history);
   const range = max - min;
-  return history.map((v, i) => {
+
+  // Barres fantômes en avant (slots vides en attente de futures mesures)
+  const ghostCount = Math.max(0, TARGET - history.length);
+  const ghosts = Array(ghostCount).fill(0).map(() =>
+    `<div class="spark-bar" style="height:8%;background:${ghostCol}"></div>`
+  ).join('');
+
+  // Barres réelles
+  const real = history.map((v, i) => {
     const pct = range > 0
-      ? Math.max(8, ((v - min) / range) * 88 + 8)  // 8% min, 96% max
+      ? Math.max(8, ((v - min) / range) * 88 + 8)
       : 50;
     const c = i === history.length - 1 ? lastCol : pastCol;
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
+
+  return ghosts + real;
 }
 
 // ─── Render batching — groupe les renders dans un même frame ─────────────────
