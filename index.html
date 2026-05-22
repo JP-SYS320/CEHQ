@@ -97,6 +97,14 @@
     height: 1px;
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
   }
+  /* Saumon minimaliste à droite de "Run" */
+  .brand-salmon {
+    width: 26px;
+    height: 16px;
+    margin-left: 6px;
+    align-self: center;
+    flex-shrink: 0;
+  }
 
   /* Version XL pour l'écran de mot de passe */
   .brand-xl { font-size: 2.4rem; }
@@ -307,6 +315,13 @@ if (sessionStorage.getItem('auth') === '1') {
       <div>
         <div class="site-title brand">
           <span class="brand-current">Current</span><span class="brand-run">Run</span>
+          <svg class="brand-salmon" viewBox="0 0 64 40" xmlns="http://www.w3.org/2000/svg" aria-label="saumon">
+            <path d="M 6 20 Q 14 8, 32 8 Q 48 8, 52 18 L 58 12 L 60 20 L 58 28 L 52 22 Q 48 32, 32 32 Q 14 32, 6 20 Z"
+                  fill="none" stroke="#c9a84c" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M 28 8 L 32 2 L 38 8"
+                  fill="none" stroke="#c9a84c" stroke-width="2" stroke-linejoin="round"/>
+            <circle cx="14" cy="18" r="1.8" fill="#c9a84c"/>
+          </svg>
         </div>
       </div>
     </div>
