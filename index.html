@@ -1429,6 +1429,18 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('service-worker.js')
       .catch(() => {});  // Échec silencieux — l'app fonctionne sans SW
   });
+
+  // Écoute les messages du Service Worker :
+  // - APP_UPDATED : l'app shell a changé en arrière-plan → reload pour appliquer
+  // On évite la boucle infinie avec un flag (un seul reload par session)
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type === 'APP_UPDATED' && !reloaded) {
+      reloaded = true;
+      // Petit délai pour laisser le SW finir d'écrire le nouveau cache
+      setTimeout(() => location.reload(), 500);
+    }
+  });
 }
 </script>
 </body>
