@@ -1042,10 +1042,19 @@ function renderCard(stationId) {
 
   // Sparkline historique — utilise le cache mémoire (évite localStorage à chaque render)
   // Couleur déterminée par la tendance actuelle (montante = vert, descendante = rouge, N/D = bleu)
+  // Cas spécial : station sans débit (ex. Mitis qui n'a pas de station CEHQ)
+  //   → 24 barres fantômes uniquement, pas de barre "dernière valeur" colorée
   const hist = st._histCache || [];
   const vals = hist.slice(-24).map(h => h.debit);
-  card.querySelector('.spark-bars').innerHTML =
-    buildSpark(vals.length ? vals : (st.debit ? [st.debit] : [1]), st.trend);
+  const sparkEl = card.querySelector('.spark-bars');
+  if (st.debit === null && !vals.length) {
+    // Aucune donnée — afficher 24 barres fantômes uniformes
+    sparkEl.innerHTML = Array(24).fill(0).map(() =>
+      `<div class="spark-bar" style="height:8%;background:rgba(201,168,76,0.06)"></div>`
+    ).join('');
+  } else {
+    sparkEl.innerHTML = buildSpark(vals.length ? vals : [st.debit], st.trend);
+  }
 
   // Message statut
   const msg = card.querySelector('.status-msg');
