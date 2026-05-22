@@ -1013,10 +1013,9 @@ function buildSpark(history, trend) {
   const range = max - min;
   const avg = history.reduce((a, b) => a + b, 0) / history.length;
 
-  // Si la variation est trop petite (< 1% de la moyenne), on évite d'amplifier
-  // pour ne pas créer un effet "tout ou rien" sur du bruit insignifiant.
-  // En bas de 1%, c'est généralement du bruit de mesure, pas une vraie tendance.
-  const significantVariation = avg > 0 && (range / avg) > 0.01;
+  // Pour la pêche au saumon, même de toutes petites variations comptent.
+  // Seuil très bas (0.3%) — en bas de ça c'est du bruit pur de capteur.
+  const significantVariation = avg > 0 && (range / avg) > 0.003;
 
   const ghostCount = Math.max(0, TARGET - history.length);
   const ghosts = Array(ghostCount).fill(0).map(() =>
@@ -1025,8 +1024,8 @@ function buildSpark(history, trend) {
 
   const real = history.map((v, i) => {
     const pct = significantVariation
-      ? Math.max(30, ((v - min) / range) * 50 + 30)  // amplification douce 30-80%
-      : 50;                                            // ligne plate si peu de variation
+      ? Math.max(8, ((v - min) / range) * 88 + 8)  // amplification maximale 8-96%
+      : 50;                                          // ligne plate si peu de variation
     const c = i === history.length - 1 ? lastCol : pastCol;
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
