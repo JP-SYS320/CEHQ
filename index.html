@@ -212,15 +212,6 @@
   .detail-link:active { opacity: 0.65; }
   .detail-nd { font-size: 0.78rem; color: var(--muted); letter-spacing: 0.04em; }
 
-  .reload-btn {
-    width: 100%; background: none; border: 1px solid var(--accent); color: var(--accent);
-    font-family: inherit; font-size: 0.62rem; padding: 7px; border-radius: 6px;
-    cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase;
-    margin-top: 8px; text-align: center;
-    -webkit-appearance: none; appearance: none;
-  }
-  .reload-btn:active { background: rgba(201,168,76,0.08); }
-
   footer { padding: 16px; text-align: center; font-size: 0.52rem; color: var(--muted); letter-spacing: 0.08em; border-top: 1px solid var(--border); margin-top: 8px; }
 
   /* ─── Écran mot de passe ─── */
@@ -1323,7 +1314,6 @@ function buildCards() {
           </div>
           <div class="dv-mont-date" style="font-size:0.5rem;color:#7a9ab0;margin-top:5px;text-align:right"></div>
         </div>` : ''}
-        <div class="reload-btn" onclick="event.stopPropagation();loadStation('${s.id}')">↻ Recharger cette station</div>
       </div>`;
     grid.appendChild(div);
   });
