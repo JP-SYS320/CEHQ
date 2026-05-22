@@ -401,7 +401,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v8</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v9</div>
 </footer>
 
 <script>
@@ -1437,10 +1437,85 @@ window.addEventListener('focus', autoRefreshIfStale);
 // ─── PWA Service Worker ──────────────────────────────────────────────────────
 // Enregistré après le chargement initial pour ne pas bloquer le rendu.
 // Le SW gère le cache offline et permet l'installation sur écran d'accueil.
+
+// ─── PANNEAU DEBUG TEMPORAIRE ────────────────────────────────────────────────
+// À enlever après diagnostic. Affiche l'état du SW en bas à droite.
+(function() {
+  const dbg = document.createElement('div');
+  dbg.id = 'sw-debug';
+  dbg.style.cssText = `
+    position: fixed; bottom: 6px; left: 6px; right: 6px;
+    background: rgba(15,25,35,0.95); border: 1px solid #c9a84c;
+    padding: 8px 10px; border-radius: 6px;
+    font-family: monospace; font-size: 0.55rem; color: #f0ede4;
+    z-index: 9999; line-height: 1.5;
+    max-height: 30vh; overflow-y: auto;
+  `;
+  dbg.innerHTML = '<b style="color:#c9a84c">SW DEBUG</b><br>Initializing...';
+  document.body.appendChild(dbg);
+
+  const log = (msg) => {
+    const time = new Date().toLocaleTimeString('fr-CA', {hour12:false});
+    dbg.innerHTML += `<br>[${time}] ${msg}`;
+    dbg.scrollTop = dbg.scrollHeight;
+  };
+
+  if (!('serviceWorker' in navigator)) {
+    log('❌ ServiceWorker non supporté');
+    return;
+  }
+
+  // Lister les SW déjà enregistrés
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    log(`📋 SWs enregistrés: ${regs.length}`);
+    regs.forEach((r, i) => {
+      log(`  #${i}: scope=${r.scope.split('/').pop() || '/'}`);
+      log(`     active=${r.active?.state || 'null'} waiting=${r.waiting?.state || 'null'}`);
+    });
+  });
+
+  // Lister les caches
+  if ('caches' in self) {
+    caches.keys().then(keys => {
+      log(`📦 Caches: ${keys.length}`);
+      keys.forEach(k => log(`  ${k}`));
+    });
+  }
+
+  // Écouter les messages SW
+  navigator.serviceWorker.addEventListener('message', event => {
+    log(`📨 Message: ${JSON.stringify(event.data)}`);
+  });
+
+  // Écouter changement de SW contrôlant
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    log('🔄 controllerchange (new SW took control)');
+  });
+
+  log('App version: v8 (footer)');
+})();
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('service-worker.js')
-      .catch(() => {});  // Échec silencieux — l'app fonctionne sans SW
+      .then(reg => {
+        const dbg = document.getElementById('sw-debug');
+        if (dbg) dbg.innerHTML += `<br>[register] OK, scope=${reg.scope.split('/').pop() || '/'}`;
+        // Surveiller les updates
+        reg.addEventListener('updatefound', () => {
+          if (dbg) dbg.innerHTML += `<br>🆕 updatefound (new SW installing)`;
+          const newSW = reg.installing;
+          if (newSW) {
+            newSW.addEventListener('statechange', () => {
+              if (dbg) dbg.innerHTML += `<br>  new SW state: ${newSW.state}`;
+            });
+          }
+        });
+      })
+      .catch((e) => {
+        const dbg = document.getElementById('sw-debug');
+        if (dbg) dbg.innerHTML += `<br>❌ register failed: ${e.message}`;
+      });
   });
 
   // Écoute les messages du Service Worker :
