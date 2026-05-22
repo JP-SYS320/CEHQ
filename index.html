@@ -4,9 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CurrentRun — Débits CEHQ</title>
+<!-- DNS prefetch + preconnect pour les API externes — économise 100-300ms par domaine au premier appel -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://geoegl.msp.gouv.qc.ca">
+<link rel="preconnect" href="https://api.open-meteo.com">
+<link rel="preconnect" href="https://api-iwls.dfo-mpo.gc.ca">
+<link rel="dns-prefetch" href="https://api.allorigins.win">
+<link rel="dns-prefetch" href="https://pav.manisoft.ca">
+<link rel="dns-prefetch" href="https://pavnew.manisoft.ca">
+<link rel="dns-prefetch" href="https://pavnewtest.manisoft.ca">
+<!-- Google Fonts — 2 variantes seulement (italique 400 et italique 700) -->
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #142230;
@@ -41,8 +50,8 @@
     min-height: 100vh;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     background-color: var(--bg);
-    /* Galets — points dorés en grille décalée, très subtils */
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><circle cx='7' cy='7' r='1.1' fill='%23c9a84c' opacity='0.22'/><circle cx='21' cy='21' r='1.1' fill='%23c9a84c' opacity='0.22'/></svg>");
+    /* Galets de rivière — ovales et cercles irréguliers, dispersés naturellement */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'><g fill='%23c9a84c' fill-opacity='0.07'><ellipse cx='25' cy='30' rx='14' ry='9' transform='rotate(-20 25 30)'/><ellipse cx='75' cy='20' rx='10' ry='7' transform='rotate(35 75 20)'/><ellipse cx='130' cy='35' rx='16' ry='11' transform='rotate(-10 130 35)'/><ellipse cx='165' cy='75' rx='9' ry='6' transform='rotate(50 165 75)'/><ellipse cx='40' cy='75' rx='12' ry='8' transform='rotate(15 40 75)'/><ellipse cx='95' cy='65' rx='15' ry='10' transform='rotate(-30 95 65)'/><ellipse cx='145' cy='95' rx='11' ry='7' transform='rotate(25 145 95)'/><ellipse cx='20' cy='115' rx='10' ry='8' transform='rotate(-45 20 115)'/><ellipse cx='70' cy='115' rx='14' ry='9' transform='rotate(10 70 115)'/><ellipse cx='115' cy='130' rx='13' ry='8' transform='rotate(-15 115 130)'/><ellipse cx='160' cy='140' rx='12' ry='9' transform='rotate(40 160 140)'/><ellipse cx='35' cy='155' rx='15' ry='10' transform='rotate(20 35 155)'/><ellipse cx='90' cy='160' rx='10' ry='7' transform='rotate(-25 90 160)'/><ellipse cx='135' cy='165' rx='13' ry='8' transform='rotate(5 135 165)'/></g><g fill='%23c9a84c' fill-opacity='0.04'><circle cx='55' cy='45' r='4'/><circle cx='110' cy='90' r='5'/><circle cx='10' cy='85' r='3'/><circle cx='155' cy='115' r='4'/><circle cx='55' cy='140' r='3'/></g></svg>");
     background-repeat: repeat;
   }
 
@@ -154,10 +163,22 @@
   .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
   .toggle-label {
     position: absolute; bottom: -32px; right: 0;
-    font-size: 0.75rem; color: var(--muted); line-height: 1;
+    color: var(--muted); line-height: 1;
     border: 1px solid rgba(122,154,176,0.35); border-radius: 4px;
-    padding: 2px 7px; background: var(--surface);
+    padding: 4px 8px; background: var(--surface);
     cursor: pointer; user-select: none;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .toggle-label svg {
+    width: 12px; height: 12px;
+    transition: transform 0.25s ease;
+  }
+  .card.expanded .toggle-label svg {
+    transform: rotate(180deg);
+  }
+  .card.expanded .toggle-label {
+    color: var(--accent);
+    border-color: rgba(201,168,76,0.4);
   }
 
   .status-msg { font-size: 0.58rem; color: var(--muted); padding: 4px 0 0; letter-spacing: 0.04em; min-height: 16px; }
@@ -550,22 +571,32 @@ async function fetchDebit(stationId) {
 
   let trend = null, var24h = null, max24h = null, min24h = null;
   try {
-    let hist = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
+    // Utiliser le cache mémoire si disponible (déjà chargé au démarrage)
+    // — évite JSON.parse + localStorage.getItem à chaque fetch
+    let hist = state[stationId]._histCache;
+    if (!hist || !hist.length) {
+      hist = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
+    }
 
     // Migration : si les anciens timestamps étaient en format "YYYY-MM-DD HH:mm UTC", on les normalise en ISO UTC
+    let migrated = false;
     hist = hist.map(e => {
       if (e.ts && typeof e.ts === 'string' && e.ts.endsWith(' UTC')) {
+        migrated = true;
         return { debit: e.debit, ts: e.ts.replace(' UTC', 'Z').replace(' ', 'T') };
       }
       return e;
     });
 
     // Stocker en ISO UTC pour des calculs fiables
+    let modified = migrated;
     if (isoUtc && !hist.some(e => e.ts === isoUtc)) {
       hist.push({ debit, ts: isoUtc });
       if (hist.length > 96) hist = hist.slice(-96);
-      localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
+      modified = true;
     }
+    // Une seule écriture localStorage si quelque chose a changé
+    if (modified) localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
 
     if (hist.length >= 2) {
       const refVal = hist[Math.max(0, hist.length - 7)].debit;
@@ -893,16 +924,14 @@ function refreshAll() {
 }
 
 // ─── Mini sparkline ───────────────────────────────────────────────────────────
-// Chaque barre est colorée selon sa variation par rapport à la précédente :
-//   - plus haute → vert (montante)
-//   - plus basse → rouge (descendante)
-//   - égale     → bleu (stable)
-// La première barre n'a pas de précédente : on lui donne la couleur stable.
+// Toutes les barres en bleu uniforme (couleur débit) sauf la dernière
+// qui prend la couleur de la tendance globale (verte=montante, rouge=descendante).
 function buildSpark(history, trend) {
   if (!history?.length) return '';
-  const UP    = '#4ade9a';
-  const DOWN  = '#f06260';
-  const FLAT  = getCSSVar('--debit-color');
+  const baseCol = getCSSVar('--debit-color');
+  const lastCol = trend === 'up'   ? '#4ade9a'
+                : trend === 'down' ? '#f06260'
+                :                    baseCol;
   const max = Math.max(...history);
   const min = Math.min(...history);
   const range = max - min;
@@ -910,12 +939,7 @@ function buildSpark(history, trend) {
     const pct = range > 0
       ? Math.max(8, ((v - min) / range) * 88 + 8)  // 8% min, 96% max
       : 50;
-    // Couleur par comparaison avec la barre précédente
-    let c;
-    if (i === 0)               c = FLAT;
-    else if (v > history[i-1]) c = UP;
-    else if (v < history[i-1]) c = DOWN;
-    else                       c = FLAT;
+    const c = i === history.length - 1 ? lastCol : baseCol;
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
 }
@@ -1051,18 +1075,17 @@ function renderCard(stationId) {
 }
 
 // ─── Toggle carte ─────────────────────────────────────────────────────────────
+// La rotation du chevron est gérée par CSS via .card.expanded
 function toggleCard(id) {
   const st = state[id];
   st.expanded = !st.expanded;
   const card = document.getElementById(`card-${id}`);
   if (st.expanded) {
     card.classList.add('expanded');
-    card.querySelector('.toggle-label').textContent = '▲';
     if (st.status === 'idle') loadStation(id);
     else renderCard(id);
   } else {
     card.classList.remove('expanded');
-    card.querySelector('.toggle-label').textContent = '▼';
   }
 }
 
@@ -1118,7 +1141,7 @@ function buildCards() {
       </div>
       <div class="sparkline-row">
         <div class="spark-bars"></div>
-        <div class="toggle-label">▼</div>
+        <div class="toggle-label"><svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 8 11 13 6"/></svg></div>
       </div>
       <div class="status-msg"></div>
       <div class="detail">
@@ -1246,17 +1269,22 @@ function buildCards() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-// Purger caches expirés (soleil et montaisons d'autres jours)
-// Les marées sont gardées si elles sont du jour courant
-// Les UUIDs IWLS sont permanents — jamais supprimés
+// Purger caches expirés en UNE passe — on collecte d'abord puis on supprime
+// (modifier localStorage pendant l'itération via Object.keys est inefficace)
 try {
-  Object.keys(localStorage).forEach(k => {
-    // Purger weather_ pour forcer un re-fetch (passage en pluie glissante 24h)
-    if (k.startsWith('weather_')) localStorage.removeItem(k);
-    if (k.startsWith('montaisons_') && !k.includes(todayStr)) localStorage.removeItem(k);
-    if (k.startsWith('tides_') && !k.includes(todayStr))
-      localStorage.removeItem(k);
-  });
+  const toRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k) continue;
+    // weather_ : toujours purgé (force re-fetch pluie glissante)
+    if (k.startsWith('weather_')) { toRemove.push(k); continue; }
+    // montaisons_ et tides_ : purgés si pas du jour courant
+    if ((k.startsWith('montaisons_') || k.startsWith('tides_')) && !k.includes(todayStr)) {
+      toRemove.push(k);
+    }
+    // Les UUIDs IWLS (iwls_uuid_*) et l'historique (hist_*) sont permanents
+  }
+  toRemove.forEach(k => localStorage.removeItem(k));
 } catch(e) {}
 
 primeColorCache();
