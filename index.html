@@ -100,7 +100,7 @@
   /* Saumon minimaliste à droite de "Run" */
   .brand-salmon {
     width: 26px;
-    height: 16px;
+    height: 20px;
     margin-left: 6px;
     align-self: center;
     flex-shrink: 0;
@@ -315,12 +315,20 @@ if (sessionStorage.getItem('auth') === '1') {
       <div>
         <div class="site-title brand">
           <span class="brand-current">Current</span><span class="brand-run">Run</span>
-          <svg class="brand-salmon" viewBox="0 0 64 40" xmlns="http://www.w3.org/2000/svg" aria-label="saumon">
+          <svg class="brand-salmon" viewBox="0 0 64 50" xmlns="http://www.w3.org/2000/svg" aria-label="saumon">
+            <!-- Corps du saumon -->
             <path d="M 6 20 Q 14 8, 32 8 Q 48 8, 52 18 L 58 12 L 60 20 L 58 28 L 52 22 Q 48 32, 32 32 Q 14 32, 6 20 Z"
                   fill="none" stroke="#c9a84c" stroke-width="2" stroke-linejoin="round"/>
+            <!-- Nageoire dorsale -->
             <path d="M 28 8 L 32 2 L 38 8"
                   fill="none" stroke="#c9a84c" stroke-width="2" stroke-linejoin="round"/>
+            <!-- Œil -->
             <circle cx="14" cy="18" r="1.8" fill="#c9a84c"/>
+            <!-- Vaguelettes en dessous (le courant) -->
+            <path d="M 4 40 Q 12 36, 20 40 T 36 40 T 52 40 T 62 40"
+                  fill="none" stroke="#c9a84c" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+            <path d="M 8 46 Q 16 43, 24 46 T 40 46 T 56 46"
+                  fill="none" stroke="#c9a84c" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
           </svg>
         </div>
       </div>
