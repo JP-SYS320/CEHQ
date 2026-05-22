@@ -113,7 +113,7 @@
   .refresh-btn.loading { animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-  .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+  .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; flex-shrink: 0; }
   .last-update { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; text-align: right; white-space: nowrap; }
 
   .status-bar { display: flex; padding: 10px 16px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
@@ -920,14 +920,15 @@ function refreshAll() {
 }
 
 // ─── Mini sparkline ───────────────────────────────────────────────────────────
-// Toutes les barres en bleu uniforme (couleur débit) sauf la dernière
-// qui prend la couleur de la tendance globale (verte=montante, rouge=descendante).
+// Toutes les barres en doré sombre / discret (rgba doré avec faible opacité)
+// sauf la dernière qui prend la couleur de la tendance globale
+// (verte=montante, rouge=descendante, bleue=N/D).
 function buildSpark(history, trend) {
   if (!history?.length) return '';
-  const baseCol = getCSSVar('--debit-color');
+  const pastCol = 'rgba(201,168,76,0.25)';  // doré très atténué — comme à l'origine
   const lastCol = trend === 'up'   ? '#4ade9a'
                 : trend === 'down' ? '#f06260'
-                :                    baseCol;
+                :                    getCSSVar('--debit-color');
   const max = Math.max(...history);
   const min = Math.min(...history);
   const range = max - min;
@@ -935,7 +936,7 @@ function buildSpark(history, trend) {
     const pct = range > 0
       ? Math.max(8, ((v - min) / range) * 88 + 8)  // 8% min, 96% max
       : 50;
-    const c = i === history.length - 1 ? lastCol : baseCol;
+    const c = i === history.length - 1 ? lastCol : pastCol;
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
 }
