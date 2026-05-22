@@ -668,9 +668,11 @@ async function fetchWeather(s) {
 
     // Parse sunrise/sunset/probabilité depuis modèle par défaut
     let sunrise = null, sunset = null, rainProb = null;
+    console.log(`[${s.name}] PROB status: ${resProb?.status}`);
     if (resProb?.ok) {
       try {
         const prob = await resProb.json();
+        console.log(`[${s.name}] PROB daily:`, JSON.stringify(prob.daily));
         const dailyTimes = prob.daily?.time || [];
         const idx = dailyTimes.indexOf(todayStr);
         const fmtTime = iso => iso ? iso.substring(11, 16) : null;
@@ -679,7 +681,7 @@ async function fetchWeather(s) {
           sunset   = fmtTime(prob.daily.sunset?.[idx]);
           rainProb = prob.daily.precipitation_probability_max?.[idx] ?? null;
         }
-      } catch(e) {}
+      } catch(e) { console.warn(`[${s.name}] PROB parse:`, e); }
     }
 
     const result = { sunrise, sunset, rain, rainProb, _t: Date.now() };
