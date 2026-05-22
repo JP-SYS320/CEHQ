@@ -12,7 +12,7 @@
  * un re-téléchargement chez tous les utilisateurs.
  */
 
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const APP_CACHE = `currentrun-app-${CACHE_VERSION}`;
 const DATA_CACHE = `currentrun-data-${CACHE_VERSION}`;
 
