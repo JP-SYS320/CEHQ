@@ -401,7 +401,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v9</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v10</div>
 </footer>
 
 <script>
@@ -1492,7 +1492,9 @@ window.addEventListener('focus', autoRefreshIfStale);
     log('🔄 controllerchange (new SW took control)');
   });
 
-  log('App version: v8 (footer)');
+  // Lire la version depuis le footer (plus fiable que hardcoder)
+  const footerVersion = document.querySelector('footer > div:last-child')?.textContent || '?';
+  log(`App version footer: ${footerVersion}`);
 })();
 
 if ('serviceWorker' in navigator) {
