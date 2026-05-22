@@ -614,10 +614,12 @@ async function fetchDebit(stationId) {
   return { debit, trend, timestamp, var24h, max24h, min24h };
 }
 
-// ─── Météo — Open-Meteo : deux requêtes parallèles ───────────────────────────
+// ─── Météo — Open-Meteo : deux requêtes parallèles indépendantes ─────────────
 // 1) GEM Seamless (Environnement Canada) pour pluie 24h glissantes — précis au Québec
 // 2) Modèle par défaut pour sunrise/sunset + probabilité de précipitations max
 //    (sunrise/sunset ne sont PAS disponibles avec models=gem_seamless)
+// Chaque requête a son propre AbortController pour éviter qu'un timeout
+// global tue les deux ensemble.
 async function fetchWeather(s) {
   const key = `weather_${s.id}_${todayStr}`;
   try {
@@ -628,22 +630,23 @@ async function fetchWeather(s) {
       if (parsed._t && (Date.now() - parsed._t) < 30 * 60 * 1000) return parsed;
     }
 
-    const base = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}` +
-                 `&past_days=1&forecast_days=1&timezone=America%2FToronto`;
+    const base = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&timezone=America%2FToronto`;
+    const urlGem = `${base}&past_days=1&forecast_days=1&hourly=precipitation&models=gem_seamless`;
+    const urlSun = `${base}&forecast_days=1&daily=sunrise,sunset,precipitation_probability_max`;
 
-    // Requête 1 — GEM pour pluie horaire (précis au Québec)
-    const urlGem  = `${base}&hourly=precipitation&models=gem_seamless`;
-    // Requête 2 — modèle par défaut pour sunrise/sunset + probabilité de précip
-    const urlSun  = `${base}&daily=sunrise,sunset,precipitation_probability_max`;
-
-    const controller = new AbortController();
-    const tmout = setTimeout(() => controller.abort(), 8000);
+    // Helper : fetch avec timeout individuel
+    const fetchWithTimeout = (url, ms = 8000) => {
+      const ctrl = new AbortController();
+      const tmr = setTimeout(() => ctrl.abort(), ms);
+      return fetch(url, { cache: 'no-store', signal: ctrl.signal })
+        .finally(() => clearTimeout(tmr))
+        .catch(() => null);
+    };
 
     const [resGem, resSun] = await Promise.all([
-      fetch(urlGem,  { cache: 'no-store', signal: controller.signal }).catch(() => null),
-      fetch(urlSun,  { cache: 'no-store', signal: controller.signal }).catch(() => null)
+      fetchWithTimeout(urlGem),
+      fetchWithTimeout(urlSun)
     ]);
-    clearTimeout(tmout);
 
     // Parse sunrise/sunset/probabilité (modèle par défaut)
     let sunrise = null, sunset = null, rainProb = null;
@@ -683,7 +686,10 @@ async function fetchWeather(s) {
     }
 
     const result = { sunrise, sunset, rain, rainProb, _t: Date.now() };
-    localStorage.setItem(key, JSON.stringify(result));
+    // Ne mettre en cache que si au moins une donnée a été récupérée
+    if (sunrise || sunset || rain !== null || rainProb !== null) {
+      localStorage.setItem(key, JSON.stringify(result));
+    }
     return result;
   } catch(e) {}
   return null;
