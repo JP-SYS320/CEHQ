@@ -614,12 +614,9 @@ async function fetchDebit(stationId) {
   return { debit, trend, timestamp, var24h, max24h, min24h };
 }
 
-// ─── Météo — Open-Meteo : deux requêtes parallèles indépendantes ─────────────
+// ─── Météo — Open-Meteo : deux requêtes parallèles ───────────────────────────
 // 1) GEM Seamless (Environnement Canada) pour pluie 24h glissantes — précis au Québec
-// 2) Modèle par défaut pour sunrise/sunset + probabilité de précipitations max
-//    (sunrise/sunset ne sont PAS disponibles avec models=gem_seamless)
-// Chaque requête a son propre AbortController pour éviter qu'un timeout
-// global tue les deux ensemble.
+// 2) Modèle ensemble (défaut) pour probabilité de précipitations max
 async function fetchWeather(s) {
   const key = `weather_${s.id}_${todayStr}`;
   try {
@@ -630,61 +627,61 @@ async function fetchWeather(s) {
       if (parsed._t && (Date.now() - parsed._t) < 30 * 60 * 1000) return parsed;
     }
 
-    // Cache-buster : URL change à chaque heure → force fetch frais
-    const cb = Math.floor(Date.now() / 3600000);
-    const base = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&timezone=America%2FToronto&_=${cb}`;
-    const urlGem = `${base}&past_days=1&forecast_days=1&hourly=precipitation&models=gem_seamless`;
-    const urlSun = `${base}&forecast_days=1&daily=sunrise,sunset,precipitation_probability_max`;
+    const base = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}` +
+                 `&past_days=1&forecast_days=1&timezone=America%2FToronto`;
 
-    // IMPORTANT : Safari iOS plante avec DataCloneError quand on combine
-    // Promise.all + AbortController + même domaine. Solution : fetchs séquentiels
-    // simples, sans signal d'abort. Le navigateur a son propre timeout réseau (~30s).
-    let resSun = null, resGem = null;
-    try { resSun = await fetch(urlSun); } catch(e) {}
-    try { resGem = await fetch(urlGem); } catch(e) {}
+    // Requête 1 — GEM pour lever, coucher et pluie horaire
+    const urlGem  = `${base}&daily=sunrise,sunset&hourly=precipitation&models=gem_seamless`;
+    // Requête 2 — modèle par défaut pour probabilité (nécessite un modèle ensemble)
+    const urlProb = `${base}&daily=precipitation_probability_max`;
 
-    // Parse sunrise/sunset/probabilité (modèle par défaut)
-    let sunrise = null, sunset = null, rainProb = null;
-    if (resSun?.ok) {
+    const controller = new AbortController();
+    const tmout = setTimeout(() => controller.abort(), 8000);
+
+    const [resGem, resProb] = await Promise.all([
+      fetch(urlGem,  { cache: 'no-store', signal: controller.signal }).catch(() => null),
+      fetch(urlProb, { cache: 'no-store', signal: controller.signal }).catch(() => null)
+    ]);
+    clearTimeout(tmout);
+
+    // Parse GEM (obligatoire — lever/coucher/pluie)
+    if (!resGem?.ok) return null;
+    const gem = await resGem.json();
+
+    const dailyTimes = gem.daily?.time || [];
+    const idx = dailyTimes.indexOf(todayStr);
+    const fmtTime = iso => iso ? iso.substring(11, 16) : null;
+    const sunrise = idx !== -1 ? fmtTime(gem.daily.sunrise?.[idx]) : null;
+    const sunset  = idx !== -1 ? fmtTime(gem.daily.sunset?.[idx])  : null;
+
+    // Pluie 24h glissantes — somme depuis maintenant - 24h
+    const hourlyTimes = gem.hourly?.time || [];
+    const precip      = gem.hourly?.precipitation || [];
+    const now = Date.now();
+    const cutoff = now - 24 * 3600 * 1000;
+    let rainSum = 0, count = 0;
+    hourlyTimes.forEach((t, i) => {
+      const ts = new Date(t).getTime();
+      if (ts >= cutoff && ts <= now && precip[i] != null) {
+        rainSum += precip[i];
+        count++;
+      }
+    });
+    const rain = count > 0 ? Math.round(rainSum * 10) / 10 : null;
+
+    // Parse probabilité (optionnel — peut échouer sans bloquer)
+    let rainProb = null;
+    if (resProb?.ok) {
       try {
-        const sun = await resSun.json();
-        const dailyTimes = sun.daily?.time || [];
-        const idx = dailyTimes.indexOf(todayStr);
-        const fmtTime = iso => iso ? iso.substring(11, 16) : null;
-        if (idx !== -1) {
-          sunrise  = fmtTime(sun.daily.sunrise?.[idx]);
-          sunset   = fmtTime(sun.daily.sunset?.[idx]);
-          rainProb = sun.daily.precipitation_probability_max?.[idx] ?? null;
-        }
-      } catch(e) {}
-    }
-
-    // Parse pluie 24h glissantes (modèle GEM)
-    let rain = null;
-    if (resGem?.ok) {
-      try {
-        const gem = await resGem.json();
-        const hourlyTimes = gem.hourly?.time || [];
-        const precip      = gem.hourly?.precipitation || [];
-        const now = Date.now();
-        const cutoff = now - 24 * 3600 * 1000;
-        let rainSum = 0, count = 0;
-        hourlyTimes.forEach((t, i) => {
-          const ts = new Date(t).getTime();
-          if (ts >= cutoff && ts <= now && precip[i] != null) {
-            rainSum += precip[i];
-            count++;
-          }
-        });
-        if (count > 0) rain = Math.round(rainSum * 10) / 10;
+        const prob = await resProb.json();
+        const probTimes = prob.daily?.time || [];
+        const pIdx = probTimes.indexOf(todayStr);
+        if (pIdx !== -1) rainProb = prob.daily.precipitation_probability_max?.[pIdx] ?? null;
       } catch(e) {}
     }
 
     const result = { sunrise, sunset, rain, rainProb, _t: Date.now() };
-    // Ne mettre en cache que si au moins une donnée a été récupérée
-    if (sunrise || sunset || rain !== null || rainProb !== null) {
-      localStorage.setItem(key, JSON.stringify(result));
-    }
+    localStorage.setItem(key, JSON.stringify(result));
     return result;
   } catch(e) {}
   return null;
