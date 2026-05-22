@@ -616,7 +616,8 @@ async function fetchDebit(stationId) {
 
 // ─── Météo — Open-Meteo : deux requêtes parallèles ───────────────────────────
 // 1) GEM Seamless (Environnement Canada) pour pluie 24h glissantes — précis au Québec
-// 2) Modèle ensemble (défaut) pour probabilité de précipitations max
+// 2) Modèle par défaut pour sunrise/sunset + probabilité de précipitations max
+//    (sunrise/sunset ne sont PAS disponibles avec models=gem_seamless)
 async function fetchWeather(s) {
   const key = `weather_${s.id}_${todayStr}`;
   try {
@@ -630,53 +631,54 @@ async function fetchWeather(s) {
     const base = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}` +
                  `&past_days=1&forecast_days=1&timezone=America%2FToronto`;
 
-    // Requête 1 — GEM pour lever, coucher et pluie horaire
-    const urlGem  = `${base}&daily=sunrise,sunset&hourly=precipitation&models=gem_seamless`;
-    // Requête 2 — modèle par défaut pour probabilité (nécessite un modèle ensemble)
-    const urlProb = `${base}&daily=precipitation_probability_max`;
+    // Requête 1 — GEM pour pluie horaire (précis au Québec)
+    const urlGem  = `${base}&hourly=precipitation&models=gem_seamless`;
+    // Requête 2 — modèle par défaut pour sunrise/sunset + probabilité de précip
+    const urlSun  = `${base}&daily=sunrise,sunset,precipitation_probability_max`;
 
     const controller = new AbortController();
     const tmout = setTimeout(() => controller.abort(), 8000);
 
-    const [resGem, resProb] = await Promise.all([
+    const [resGem, resSun] = await Promise.all([
       fetch(urlGem,  { cache: 'no-store', signal: controller.signal }).catch(() => null),
-      fetch(urlProb, { cache: 'no-store', signal: controller.signal }).catch(() => null)
+      fetch(urlSun,  { cache: 'no-store', signal: controller.signal }).catch(() => null)
     ]);
     clearTimeout(tmout);
 
-    // Parse GEM (obligatoire — lever/coucher/pluie)
-    if (!resGem?.ok) return null;
-    const gem = await resGem.json();
-
-    const dailyTimes = gem.daily?.time || [];
-    const idx = dailyTimes.indexOf(todayStr);
-    const fmtTime = iso => iso ? iso.substring(11, 16) : null;
-    const sunrise = idx !== -1 ? fmtTime(gem.daily.sunrise?.[idx]) : null;
-    const sunset  = idx !== -1 ? fmtTime(gem.daily.sunset?.[idx])  : null;
-
-    // Pluie 24h glissantes — somme depuis maintenant - 24h
-    const hourlyTimes = gem.hourly?.time || [];
-    const precip      = gem.hourly?.precipitation || [];
-    const now = Date.now();
-    const cutoff = now - 24 * 3600 * 1000;
-    let rainSum = 0, count = 0;
-    hourlyTimes.forEach((t, i) => {
-      const ts = new Date(t).getTime();
-      if (ts >= cutoff && ts <= now && precip[i] != null) {
-        rainSum += precip[i];
-        count++;
-      }
-    });
-    const rain = count > 0 ? Math.round(rainSum * 10) / 10 : null;
-
-    // Parse probabilité (optionnel — peut échouer sans bloquer)
-    let rainProb = null;
-    if (resProb?.ok) {
+    // Parse sunrise/sunset/probabilité (modèle par défaut)
+    let sunrise = null, sunset = null, rainProb = null;
+    if (resSun?.ok) {
       try {
-        const prob = await resProb.json();
-        const probTimes = prob.daily?.time || [];
-        const pIdx = probTimes.indexOf(todayStr);
-        if (pIdx !== -1) rainProb = prob.daily.precipitation_probability_max?.[pIdx] ?? null;
+        const sun = await resSun.json();
+        const dailyTimes = sun.daily?.time || [];
+        const idx = dailyTimes.indexOf(todayStr);
+        const fmtTime = iso => iso ? iso.substring(11, 16) : null;
+        if (idx !== -1) {
+          sunrise  = fmtTime(sun.daily.sunrise?.[idx]);
+          sunset   = fmtTime(sun.daily.sunset?.[idx]);
+          rainProb = sun.daily.precipitation_probability_max?.[idx] ?? null;
+        }
+      } catch(e) {}
+    }
+
+    // Parse pluie 24h glissantes (modèle GEM)
+    let rain = null;
+    if (resGem?.ok) {
+      try {
+        const gem = await resGem.json();
+        const hourlyTimes = gem.hourly?.time || [];
+        const precip      = gem.hourly?.precipitation || [];
+        const now = Date.now();
+        const cutoff = now - 24 * 3600 * 1000;
+        let rainSum = 0, count = 0;
+        hourlyTimes.forEach((t, i) => {
+          const ts = new Date(t).getTime();
+          if (ts >= cutoff && ts <= now && precip[i] != null) {
+            rainSum += precip[i];
+            count++;
+          }
+        });
+        if (count > 0) rain = Math.round(rainSum * 10) / 10;
       } catch(e) {}
     }
 
