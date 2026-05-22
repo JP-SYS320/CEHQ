@@ -636,14 +636,19 @@ async function fetchWeather(s) {
     //   (Open-Meteo ne supporte plus sunrise/sunset avec models=gem_seamless)
     const urlProb = `${base}&daily=sunrise,sunset,precipitation_probability_max`;
 
-    const controller = new AbortController();
-    const tmout = setTimeout(() => controller.abort(), 8000);
+    // Un AbortController par requête (un controller partagé tue la deuxième
+    // requête dès que la première reçoit ses headers sur Safari iOS)
+    const ctrlGem = new AbortController();
+    const ctrlProb = new AbortController();
+    const tmGem = setTimeout(() => ctrlGem.abort(), 8000);
+    const tmProb = setTimeout(() => ctrlProb.abort(), 8000);
 
     const [resGem, resProb] = await Promise.all([
-      fetch(urlGem,  { cache: 'no-store', signal: controller.signal }).catch(() => null),
-      fetch(urlProb, { cache: 'no-store', signal: controller.signal }).catch(() => null)
+      fetch(urlGem,  { cache: 'no-store', signal: ctrlGem.signal }).catch(() => null),
+      fetch(urlProb, { cache: 'no-store', signal: ctrlProb.signal }).catch(() => null)
     ]);
-    clearTimeout(tmout);
+    clearTimeout(tmGem);
+    clearTimeout(tmProb);
 
     // Parse pluie 24h glissantes depuis GEM
     let rain = null;
@@ -668,11 +673,9 @@ async function fetchWeather(s) {
 
     // Parse sunrise/sunset/probabilité depuis modèle par défaut
     let sunrise = null, sunset = null, rainProb = null;
-    console.log(`[${s.name}] PROB status: ${resProb?.status}`);
     if (resProb?.ok) {
       try {
         const prob = await resProb.json();
-        console.log(`[${s.name}] PROB daily:`, JSON.stringify(prob.daily));
         const dailyTimes = prob.daily?.time || [];
         const idx = dailyTimes.indexOf(todayStr);
         const fmtTime = iso => iso ? iso.substring(11, 16) : null;
@@ -681,7 +684,7 @@ async function fetchWeather(s) {
           sunset   = fmtTime(prob.daily.sunset?.[idx]);
           rainProb = prob.daily.precipitation_probability_max?.[idx] ?? null;
         }
-      } catch(e) { console.warn(`[${s.name}] PROB parse:`, e); }
+      } catch(e) {}
     }
 
     const result = { sunrise, sunset, rain, rainProb, _t: Date.now() };
