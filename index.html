@@ -616,24 +616,27 @@ async function fetchDebit(stationId) {
 
 // ─── Météo — Open-Meteo : deux requêtes parallèles ───────────────────────────
 // 1) GEM Seamless (Environnement Canada) pour pluie 24h glissantes — précis au Québec
-// 2) Modèle ensemble (défaut) pour probabilité de précipitations max
+// 2) Modèle par défaut pour sunrise/sunset/probabilité de précipitations max
+//    (Open-Meteo ne supporte plus sunrise/sunset avec models=gem_seamless)
+//
+// IMPORTANT : on ne met PAS en cache les résultats vides (null partout). Ça évitait
+// les "N/D fantômes" qui restaient coincés jusqu'à expiration du cache de 30 min.
 async function fetchWeather(s) {
   const key = `weather_${s.id}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
     if (cached) {
       const parsed = JSON.parse(cached);
-      // Cache valide 30 min — au-delà on re-fetch pour la pluie glissante
-      if (parsed._t && (Date.now() - parsed._t) < 30 * 60 * 1000) return parsed;
+      // Cache valide 30 min ET non-vide (au moins UNE valeur réelle)
+      const hasData = parsed.sunrise || parsed.sunset || parsed.rain !== null || parsed.rainProb !== null;
+      if (parsed._t && hasData && (Date.now() - parsed._t) < 30 * 60 * 1000) return parsed;
+      // Si cache vide, on le supprime pour éviter de le lire encore
+      if (!hasData) localStorage.removeItem(key);
     }
 
     const base = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}` +
                  `&past_days=1&forecast_days=1&timezone=America%2FToronto`;
-
-    // Requête 1 — GEM pour pluie horaire (modèle canadien, précis)
     const urlGem  = `${base}&hourly=precipitation&models=gem_seamless`;
-    // Requête 2 — modèle par défaut pour sunrise/sunset/probabilité de précip
-    //   (Open-Meteo ne supporte plus sunrise/sunset avec models=gem_seamless)
     const urlProb = `${base}&daily=sunrise,sunset,precipitation_probability_max`;
 
     // Un AbortController par requête (un controller partagé tue la deuxième
@@ -688,7 +691,10 @@ async function fetchWeather(s) {
     }
 
     const result = { sunrise, sunset, rain, rainProb, _t: Date.now() };
-    localStorage.setItem(key, JSON.stringify(result));
+    // CRUCIAL : ne mettre en cache QUE si on a au moins une vraie donnée.
+    // Sinon, on retentera au prochain refresh au lieu de servir un cache vide.
+    const hasData = sunrise || sunset || rain !== null || rainProb !== null;
+    if (hasData) localStorage.setItem(key, JSON.stringify(result));
     return result;
   } catch(e) {}
   return null;
