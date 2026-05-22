@@ -630,27 +630,18 @@ async function fetchWeather(s) {
       if (parsed._t && (Date.now() - parsed._t) < 30 * 60 * 1000) return parsed;
     }
 
-    // Cache-buster : URL change à chaque heure → force fetch frais sans cache:'no-store'
+    // Cache-buster : URL change à chaque heure → force fetch frais
     const cb = Math.floor(Date.now() / 3600000);
     const base = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}&timezone=America%2FToronto&_=${cb}`;
     const urlGem = `${base}&past_days=1&forecast_days=1&hourly=precipitation&models=gem_seamless`;
     const urlSun = `${base}&forecast_days=1&daily=sunrise,sunset,precipitation_probability_max`;
 
-    // Helper : fetch avec timeout individuel
-    // Note : pas de cache:'no-store' — cause DataCloneError sur Safari iOS
-    // Le cache HTTP d'Open-Meteo est court (~10 min), donc c'est OK
-    const fetchWithTimeout = (url, ms = 8000) => {
-      const ctrl = new AbortController();
-      const tmr = setTimeout(() => ctrl.abort(), ms);
-      return fetch(url, { signal: ctrl.signal })
-        .then(r => { clearTimeout(tmr); return r; })
-        .catch(() => { clearTimeout(tmr); return null; });
-    };
-
-    const [resGem, resSun] = await Promise.all([
-      fetchWithTimeout(urlGem),
-      fetchWithTimeout(urlSun)
-    ]);
+    // IMPORTANT : Safari iOS plante avec DataCloneError quand on combine
+    // Promise.all + AbortController + même domaine. Solution : fetchs séquentiels
+    // simples, sans signal d'abort. Le navigateur a son propre timeout réseau (~30s).
+    let resSun = null, resGem = null;
+    try { resSun = await fetch(urlSun); } catch(e) {}
+    try { resGem = await fetch(urlGem); } catch(e) {}
 
     // Parse sunrise/sunset/probabilité (modèle par défaut)
     let sunrise = null, sunset = null, rainProb = null;
