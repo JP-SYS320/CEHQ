@@ -187,7 +187,20 @@
   .detail-grid { display: grid; gap: 6px; margin-bottom: 8px; }
   .detail-item { background: #142230; border-radius: 6px; padding: 7px 9px; }
   .detail-label { font-size: 0.5rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
-  .detail-val { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+  .detail-val { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+
+  /* ─── Classes uniformes pour la carte dépliée ─── */
+  .d-section-title { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 0; }
+  .d-icon { font-size: 1.15rem; line-height: 1; }
+  .d-value { font-size: 1.05rem; font-weight: 700; color: var(--text); line-height: 1.2; }
+  .d-value-accent { font-size: 1.05rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
+  .d-value-rain { font-size: 1.05rem; font-weight: 700; color: #7ec8e3; line-height: 1.2; }
+  .d-sublabel { font-size: 0.5rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .d-subbox { background: #0f1923; border-radius: 6px; padding: 7px 9px; }
+  .d-divider-v { width: 1px; background: rgba(201,168,76,0.25); margin: 2px 0; }
+  .d-section-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .d-row { display: flex; align-items: stretch; text-align: center; }
+  .d-col { flex: 1; padding: 2px 0; }
 
   .detail-links { display: flex; flex-direction: column; gap: 6px; }
   .detail-link {
@@ -654,22 +667,37 @@ async function fetchWeather(s) {
     clearTimeout(tmProb);
 
     // Parse pluie 24h glissantes depuis GEM
+    // ─────────────────────────────────────────────────────────────────────
+    // Open-Meteo retourne `precipitation` par heure, en format "preceding hour sum" :
+    //   precipitation[i] à time[i]="07:00" = pluie tombée entre 06:00 et 07:00
+    // On veut la somme glissante des 24 dernières heures (now-24h → now).
+    // ─────────────────────────────────────────────────────────────────────
     let rain = null;
     if (resGem?.ok) {
       try {
         const gem = await resGem.json();
         const hourlyTimes = gem.hourly?.time || [];
         const precip      = gem.hourly?.precipitation || [];
+        // Offset UTC retourné par Open-Meteo (en secondes). Toronto HAE = -14400.
+        // On l'utilise pour convertir les timestamps locaux en UTC absolu, fiable
+        // quel que soit le fuseau du device.
+        const utcOffsetMs = (gem.utc_offset_seconds || 0) * 1000;
         const now = Date.now();
         const cutoff = now - 24 * 3600 * 1000;
         let rainSum = 0, count = 0;
-        hourlyTimes.forEach((t, i) => {
-          const ts = new Date(t).getTime();
-          if (ts >= cutoff && ts <= now && precip[i] != null) {
+        for (let i = 0; i < hourlyTimes.length; i++) {
+          // hourlyTimes[i] est "2026-05-22T07:00" en heure locale (Toronto)
+          // On le convertit en UTC absolu : parse comme UTC puis soustrait l'offset
+          const localMs = new Date(hourlyTimes[i] + 'Z').getTime();
+          if (isNaN(localMs)) continue;
+          const tsUtc = localMs - utcOffsetMs;
+          // L'heure tsUtc représente la pluie tombée entre [tsUtc-1h, tsUtc]
+          // On l'inclut si tsUtc est dans la fenêtre (cutoff, now]
+          if (tsUtc > cutoff && tsUtc <= now && precip[i] != null) {
             rainSum += precip[i];
             count++;
           }
-        });
+        }
         if (count > 0) rain = Math.round(rainSum * 10) / 10;
       } catch(e) {}
     }
@@ -1185,17 +1213,17 @@ function buildCards() {
         </div>
         <div class="detail-grid" style="grid-template-columns:1fr 1fr;margin-top:6px">
           <div class="detail-item">
-            <div style="display:flex;align-items:stretch;text-align:center">
-              <div style="flex:1;padding:2px 0">
-                <div style="font-size:1.2rem;line-height:1.2">🌅</div>
-                <div class="detail-label" style="margin-top:2px">Lever</div>
-                <div class="dv-sunrise" style="font-size:0.9rem;font-weight:700;color:var(--text);margin-top:2px">—</div>
+            <div class="d-row">
+              <div class="d-col">
+                <div class="d-icon">🌅</div>
+                <div class="d-sublabel" style="margin-top:3px">Lever</div>
+                <div class="dv-sunrise d-value" style="margin-top:3px">—</div>
               </div>
-              <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
-              <div style="flex:1;padding:2px 0">
-                <div style="font-size:1.2rem;line-height:1.2">🌇</div>
-                <div class="detail-label" style="margin-top:2px">Coucher</div>
-                <div class="dv-sunset" style="font-size:0.9rem;font-weight:700;color:var(--text);margin-top:2px">—</div>
+              <div class="d-divider-v"></div>
+              <div class="d-col">
+                <div class="d-icon">🌇</div>
+                <div class="d-sublabel" style="margin-top:3px">Coucher</div>
+                <div class="dv-sunset d-value" style="margin-top:3px">—</div>
               </div>
             </div>
           </div>
@@ -1203,43 +1231,43 @@ function buildCards() {
         </div>
         ${s.iwls || s.iwlsCode ? `
         <div class="detail-item" style="margin-top:6px">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div style="font-size:1.2rem;line-height:1">🌊</div>
-            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Marées — ${s.iwlsName || 'Station locale'}</div>
+          <div class="d-section-head">
+            <div class="d-icon">🌊</div>
+            <div class="d-section-title">Marées — ${s.iwlsName || 'Station locale'}</div>
           </div>
           <div class="dv-tides-content" style="margin-top:4px;font-size:0.75rem;color:var(--muted)">···</div>
         </div>` : ''}
         ${s.anglers || s.anglersUrl ? `
         <div class="detail-item" style="margin-top:6px">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div style="font-size:1.2rem;line-height:1">🎣</div>
-            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Pêcheurs — ${s.name}</div>
+          <div class="d-section-head">
+            <div class="d-icon">🎣</div>
+            <div class="d-section-title">Pêcheurs — ${s.name}</div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:2px">
-            <div style="background:#0f1923;border-radius:6px;padding:7px 9px">
+            <div class="d-subbox">
               <div style="display:flex;justify-content:space-between;align-items:baseline">
-                <div class="detail-label">Auj.</div>
-                <div class="dv-anglers-today" style="font-size:1.3rem;font-weight:700;color:#f0ede4">—</div>
+                <div class="d-sublabel">Auj.</div>
+                <div class="dv-anglers-today d-value">—</div>
               </div>
               ${!s.anglersUrl ? `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;padding-top:4px;border-top:1px solid rgba(201,168,76,0.15)">
-                <div class="detail-label">Demain</div>
-                <div class="dv-anglers-tomorrow" style="font-size:1.3rem;font-weight:700;color:#f0ede4">—</div>
+                <div class="d-sublabel">Demain</div>
+                <div class="dv-anglers-tomorrow d-value">—</div>
               </div>` : ''}
             </div>
-            <div style="background:#0f1923;border-radius:6px;padding:7px 9px">
+            <div class="d-subbox">
               <div style="display:flex;align-items:center;gap:4px;justify-content:center;margin-bottom:4px">
-                <div style="font-size:1rem;line-height:1">🌧️</div>
-                <div class="detail-label" style="margin-top:0;font-size:0.48rem">Précip. 24h</div>
+                <div class="d-icon">🌧️</div>
+                <div class="d-sublabel">Précip. 24h</div>
               </div>
-              <div style="display:flex;align-items:stretch;text-align:center">
-                <div style="flex:1;padding:2px 0">
-                  <div class="detail-label" style="font-size:0.48rem">mm</div>
-                  <div class="dv-rain-mm" style="font-size:1.05rem;font-weight:700;color:#7ec8e3;margin-top:2px">—</div>
+              <div class="d-row">
+                <div class="d-col">
+                  <div class="d-sublabel">mm</div>
+                  <div class="dv-rain-mm d-value-rain" style="margin-top:3px">—</div>
                 </div>
-                <div style="width:1px;background:rgba(201,168,76,0.2);margin:2px 0"></div>
-                <div style="flex:1;padding:2px 0">
-                  <div class="detail-label" style="font-size:0.48rem">Prob.</div>
-                  <div class="dv-rain-prob" style="font-size:1.05rem;font-weight:700;color:var(--muted);margin-top:2px">—</div>
+                <div class="d-divider-v" style="background:rgba(201,168,76,0.2)"></div>
+                <div class="d-col">
+                  <div class="d-sublabel">Prob.</div>
+                  <div class="dv-rain-prob d-value" style="margin-top:3px;color:var(--muted)">—</div>
                 </div>
               </div>
             </div>
@@ -1247,41 +1275,41 @@ function buildCards() {
         </div>` : `
         <div class="detail-item" style="margin-top:6px">
           <div style="display:flex;align-items:center;gap:4px;justify-content:center;margin-bottom:4px">
-            <div style="font-size:1rem;line-height:1">🌧️</div>
-            <div class="detail-label" style="margin-top:0;font-size:0.48rem">Précip. 24h</div>
+            <div class="d-icon">🌧️</div>
+            <div class="d-sublabel">Précip. 24h</div>
           </div>
-          <div style="display:flex;align-items:stretch;text-align:center">
-            <div style="flex:1;padding:2px 0">
-              <div class="detail-label" style="font-size:0.48rem">mm</div>
-              <div class="dv-rain-mm" style="font-size:1.05rem;font-weight:700;color:#7ec8e3;margin-top:2px">—</div>
+          <div class="d-row">
+            <div class="d-col">
+              <div class="d-sublabel">mm</div>
+              <div class="dv-rain-mm d-value-rain" style="margin-top:3px">—</div>
             </div>
-            <div style="width:1px;background:rgba(201,168,76,0.2);margin:2px 0"></div>
-            <div style="flex:1;padding:2px 0">
-              <div class="detail-label" style="font-size:0.48rem">Prob.</div>
-              <div class="dv-rain-prob" style="font-size:1.05rem;font-weight:700;color:var(--muted);margin-top:2px">—</div>
+            <div class="d-divider-v" style="background:rgba(201,168,76,0.2)"></div>
+            <div class="d-col">
+              <div class="d-sublabel">Prob.</div>
+              <div class="dv-rain-prob d-value" style="margin-top:3px;color:var(--muted)">—</div>
             </div>
           </div>
         </div>`}
         ${s.id === '021601' || s.id === 'MITIS' ? `
         <div class="detail-item dv-montaisons" style="margin-top:6px">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div style="font-size:1.2rem;line-height:1">🐟</div>
-            <div class="detail-label" style="margin-top:0;font-size:0.65rem">Montaisons saison 2026</div>
+          <div class="d-section-head">
+            <div class="d-icon">🐟</div>
+            <div class="d-section-title">Montaisons saison 2026</div>
           </div>
-          <div style="display:flex;align-items:stretch;text-align:center">
-            <div style="flex:1;padding:2px 0">
-              <div class="detail-label">Grands</div>
-              <div class="dv-mont-grands" style="font-size:1.6rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
+          <div class="d-row">
+            <div class="d-col">
+              <div class="d-sublabel">Grands</div>
+              <div class="dv-mont-grands d-value" style="font-size:1.4rem;margin-top:3px">—</div>
             </div>
-            <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
-            <div style="flex:1;padding:2px 0">
-              <div class="detail-label">${s.id === 'MITIS' ? 'Mad.' : 'Grilses'}</div>
-              <div class="dv-mont-grilses" style="font-size:1.6rem;font-weight:700;color:#f0ede4;margin-top:2px">—</div>
+            <div class="d-divider-v"></div>
+            <div class="d-col">
+              <div class="d-sublabel">${s.id === 'MITIS' ? 'Mad.' : 'Grilses'}</div>
+              <div class="dv-mont-grilses d-value" style="font-size:1.4rem;margin-top:3px">—</div>
             </div>
-            <div style="width:1px;background:rgba(201,168,76,0.25);margin:2px 0"></div>
-            <div style="flex:1;padding:2px 0">
-              <div class="detail-label">Total</div>
-              <div class="dv-mont-total" style="font-size:1.6rem;font-weight:700;color:#c9a84c;margin-top:2px">—</div>
+            <div class="d-divider-v"></div>
+            <div class="d-col">
+              <div class="d-sublabel">Total</div>
+              <div class="dv-mont-total d-value-accent" style="font-size:1.4rem;margin-top:3px">—</div>
             </div>
           </div>
           <div class="dv-mont-date" style="font-size:0.5rem;color:#7a9ab0;margin-top:5px;text-align:right"></div>
