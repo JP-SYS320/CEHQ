@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>CurrentRun — Débits CEHQ</title>
 
 <!-- ─── PWA Manifest et meta tags ─────────────────────────────────────────── -->
@@ -401,7 +404,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v10</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v11</div>
 </footer>
 
 <script>
@@ -1503,7 +1506,6 @@ if ('serviceWorker' in navigator) {
       .then(reg => {
         const dbg = document.getElementById('sw-debug');
         if (dbg) dbg.innerHTML += `<br>[register] OK, scope=${reg.scope.split('/').pop() || '/'}`;
-        // Surveiller les updates
         reg.addEventListener('updatefound', () => {
           if (dbg) dbg.innerHTML += `<br>🆕 updatefound (new SW installing)`;
           const newSW = reg.installing;
@@ -1513,6 +1515,18 @@ if ('serviceWorker' in navigator) {
             });
           }
         });
+        // Demander au SW de vérifier les updates 3 secondes après chargement
+        setTimeout(() => {
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'CHECK_UPDATE' });
+          }
+        }, 3000);
+        // Vérifier les updates toutes les 5 minutes
+        setInterval(() => {
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'CHECK_UPDATE' });
+          }
+        }, 5 * 60 * 1000);
       })
       .catch((e) => {
         const dbg = document.getElementById('sw-debug');
@@ -1522,12 +1536,10 @@ if ('serviceWorker' in navigator) {
 
   // Écoute les messages du Service Worker :
   // - APP_UPDATED : l'app shell a changé en arrière-plan → reload pour appliquer
-  // On évite la boucle infinie avec un flag (un seul reload par session)
   let reloaded = false;
   navigator.serviceWorker.addEventListener('message', event => {
     if (event.data?.type === 'APP_UPDATED' && !reloaded) {
       reloaded = true;
-      // Petit délai pour laisser le SW finir d'écrire le nouveau cache
       setTimeout(() => location.reload(), 500);
     }
   });
