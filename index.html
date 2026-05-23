@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v38</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v39</div>
 </footer>
 
 <script>
@@ -667,15 +667,30 @@ async function hydrateHistoryIfNeeded(stationId) {
       return;
     }
 
-    // Parser CEHQ : on cherche les triplets date+heure+débit dans l'ordre,
-    // peu importe les balises HTML entre eux (CEHQ utilise du HTML très imbriqué).
+    // Parser CEHQ — approche en 2 étapes pour gérer les stations à 1 ou 2 colonnes :
+    // - Bonaventure, Cascapédia... : Date | Heure | Débit (1 nombre)
+    // - Dartmouth, Rimouski... :     Date | Heure | Niveau | Débit (2 nombres)
+    // On trouve chaque "date+heure" et on prend le DERNIER nombre décimal qui suit
+    // jusqu'à la prochaine date (qui marque la ligne suivante).
     const parsed = [];
-    const rowRegex = /(\d{4}-\d{2}-\d{2})[\s\S]{1,500}?(\d{2}:\d{2}):\d{2}[\s\S]{1,500}?(\d+[,.]\d+)/g;
-    let match;
-    while ((match = rowRegex.exec(html)) !== null) {
-      const [, dateStr, timeStr, debitStr] = match;
-      const debit = parseFloat(debitStr.replace(',', '.'));
+    // Étape 1 : trouver toutes les positions de "date + heure"
+    const headerRegex = /(\d{4}-\d{2}-\d{2})[\s\S]{1,300}?(\d{2}:\d{2}):\d{2}/g;
+    const matches = [];
+    let m;
+    while ((m = headerRegex.exec(html)) !== null) {
+      matches.push({ dateStr: m[1], timeStr: m[2], end: m.index + m[0].length });
+    }
+    // Étape 2 : pour chaque entête, extraire les nombres jusqu'à la prochaine entête
+    for (let i = 0; i < matches.length; i++) {
+      const start = matches[i].end;
+      const stop = (i + 1 < matches.length) ? matches[i + 1].end - matches[i + 1].dateStr.length - 50 : Math.min(start + 500, html.length);
+      const segment = html.substring(start, stop);
+      // Récupérer tous les nombres décimaux dans le segment
+      const nums = [...segment.matchAll(/(\d+[,.]\d+)/g)].map(m => parseFloat(m[1].replace(',', '.')));
+      // Le débit est le dernier nombre (niveau d'eau vient avant débit dans CEHQ)
+      const debit = nums.length ? nums[nums.length - 1] : NaN;
       if (isNaN(debit) || debit < 0 || debit > 10000) continue;
+      const { dateStr, timeStr } = matches[i];
       const [y, mo, d] = dateStr.split('-').map(Number);
       const [h, mi] = timeStr.split(':').map(Number);
       const utcMs = Date.UTC(y, mo - 1, d, h + 5, mi, 0);
@@ -687,16 +702,32 @@ async function hydrateHistoryIfNeeded(stationId) {
 
     if (!parsed.length) return;
 
-    // Dédupliquer par timestamp (le regex flexible peut matcher plusieurs fois)
+    // Dédupliquer par timestamp (le regex peut matcher plusieurs fois)
     const uniqueByTs = new Map();
     parsed.forEach(e => { if (!uniqueByTs.has(e.ts)) uniqueByTs.set(e.ts, e); });
     const unique = [...uniqueByTs.values()];
 
     unique.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+
+    // Vérifier si l'historique existant a des valeurs très différentes des nouvelles.
+    // Si oui (ex. bug précédent stockait le niveau d'eau au lieu du débit),
+    // on jette l'ancien historique et on repart sur les vraies données.
+    let useExisting = true;
+    if (existing.length && unique.length) {
+      const newAvg = unique.reduce((s, e) => s + e.debit, 0) / unique.length;
+      const oldAvg = existing.reduce((s, e) => s + e.debit, 0) / existing.length;
+      // Si l'ancien a >50% de différence avec le nouveau, c'est probablement corrompu
+      if (Math.abs(oldAvg - newAvg) / newAvg > 0.5) {
+        useExisting = false;
+      }
+    }
+
     const merged = [...unique];
-    existing.forEach(e => {
-      if (e.ts && !merged.some(m => m.ts === e.ts)) merged.push(e);
-    });
+    if (useExisting) {
+      existing.forEach(e => {
+        if (e.ts && !merged.some(m => m.ts === e.ts)) merged.push(e);
+      });
+    }
     merged.sort((a, b) => new Date(a.ts) - new Date(b.ts));
     const final = merged.slice(-96);
 
