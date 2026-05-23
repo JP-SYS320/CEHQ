@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v39</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.00</div>
 </footer>
 
 <script>
@@ -805,14 +805,13 @@ async function fetchDebit(stationId) {
     if (modified) localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
 
     if (hist.length >= 2) {
-      // Tendance basée sur la comparaison avec ~6h en arrière (24 mesures aux 15 min)
-      // Plus stable que comparer à il y a 15 min (qui capte le bruit)
-      // Si on n'a pas encore 24 mesures, on compare au premier point disponible
-      const refIdx = Math.max(0, hist.length - 24);
+      // Tendance basée sur la comparaison avec ~3h en arrière (12 mesures aux 15 min)
+      // Compromis entre réactivité (capter les vrais changements) et stabilité (ignorer le bruit)
+      // Si on n'a pas encore 12 mesures, on compare au premier point disponible
+      const refIdx = Math.max(0, hist.length - 12);
       const refVal = hist[refIdx].debit;
-      // Marge morte de 0.5% pour éviter de basculer up/down sur du bruit
-      const delta = (debit - refVal) / (refVal || 1);
-      trend = delta > 0.005 ? 'up' : (delta < -0.005 ? 'down' : null);
+      // Tendance binaire : montante ou descendante (une rivière bouge toujours)
+      trend = debit >= refVal ? 'up' : 'down';
 
       const cutoff = Date.now() - 24 * 3600 * 1000;
       const last24 = hist.filter(e => {
@@ -1294,7 +1293,6 @@ function renderCard(stationId) {
   const tb = card.querySelector('.trend-badge');
   if (st.trend === 'up')        { tb.className = 'trend-badge trend-up';   tb.textContent = 'Montante'; }
   else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.textContent = 'Descendante'; }
-  else if (st.debit !== null)   { tb.className = 'trend-badge trend-nd';   tb.textContent = 'Stable'; }
   else                          { tb.className = 'trend-badge trend-nd';   tb.textContent = 'N/D'; }
 
   // Sparkline historique — utilise le cache mémoire (évite localStorage à chaque render)
