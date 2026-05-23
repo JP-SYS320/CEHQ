@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v35</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v36</div>
 </footer>
 
 <script>
@@ -690,11 +690,9 @@ async function hydrateHistoryIfNeeded(stationId) {
     }
 
     const parsed = [];
-    // Regex strict : ne match QUE les vraies lignes du tableau
-    // (date + heure complète HH:MM:SS + débit décimal avec virgule ou point)
-    // Évite de matcher les <option>YYYY-MM-DD</option> du sélecteur de dates.
-    // Le tableau a cette structure : <td>2026-05-23</td><td>10:00:00</td><td>70,74</td>
-    const rowRegex = /(\d{4}-\d{2}-\d{2})\s*<\/td>\s*<td[^>]*>\s*(\d{2}:\d{2}):\d{2}\s*<\/td>\s*<td[^>]*>\s*(\d+[,.]\d+)/g;
+    // Format CEHQ réel : <td>...<font>YYYY-MM-DD</font></td><td>...<font>HH:MM:SS</font></td><td>...<font>débit</font></td>
+    // On capture date + heure + débit en ignorant tout ce qui est entre (balises font, attributs, etc.)
+    const rowRegex = /(\d{4}-\d{2}-\d{2})\s*<\/font>\s*<\/td>[\s\S]*?(\d{2}:\d{2}):\d{2}\s*<\/font>\s*<\/td>[\s\S]*?(\d+[,.]\d+)\s*<\/font>/g;
     let match;
     while ((match = rowRegex.exec(html)) !== null) {
       const [, dateStr, timeStr, debitStr] = match;
