@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v27</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v28</div>
 </footer>
 
 <script>
@@ -623,32 +623,47 @@ async function fetchAllStations() {
 // quelle que soit la saison, même en mai. On convertit en UTC absolu pour
 // stockage cohérent (utilisé en interne par l'app).
 const HYDRATING = new Set();
+
+// Mini panneau de debug temporaire (à enlever après diagnostic)
+function hydrateDebugLog(msg) {
+  let dbg = document.getElementById('hyd-debug');
+  if (!dbg) {
+    dbg = document.createElement('div');
+    dbg.id = 'hyd-debug';
+    dbg.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.95);border:1px solid #c9a84c;padding:8px 10px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:30vh;overflow-y:auto;';
+    dbg.innerHTML = '<b style="color:#c9a84c">HYDRATE DEBUG</b>';
+    document.body.appendChild(dbg);
+  }
+  const time = new Date().toLocaleTimeString('fr-CA', {hour12:false});
+  dbg.innerHTML += `<br>[${time}] ${msg}`;
+  dbg.scrollTop = dbg.scrollHeight;
+}
+
 async function hydrateHistoryIfNeeded(stationId) {
   if (stationId === 'MITIS') return;
   if (HYDRATING.has(stationId)) return;
 
   try {
     const existing = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
-    // Conditions pour ré-hydrater :
-    // 1. Moins de 24 mesures (premier démarrage ou semi-rempli)
-    // 2. La dernière mesure date de plus de 2h (app pas ouverte depuis longtemps)
     const lastTs = existing.length ? new Date(existing[existing.length - 1].ts).getTime() : 0;
     const ageHours = (Date.now() - lastTs) / 3600000;
     const needsHydration = existing.length < 24 || ageHours > 2;
-    if (!needsHydration) return;
+    if (!needsHydration) {
+      hydrateDebugLog(`${stationId}: skip (${existing.length} mesures, age ${ageHours.toFixed(1)}h)`);
+      return;
+    }
+    hydrateDebugLog(`${stationId}: fetch... (existant: ${existing.length})`);
 
     HYDRATING.add(stationId);
-    // tableau.asp avec 4 espaces (encodés %20%20%20%20) — convention CEHQ vue dans le code
     const url = `https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${stationId}%20%20%20%20`;
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
 
     const res = await fetch(proxyUrl, { cache: 'no-store' });
+    hydrateDebugLog(`${stationId}: HTTP ${res.status}`);
     if (!res.ok) return;
     const html = await res.text();
+    hydrateDebugLog(`${stationId}: HTML ${html.length} chars`);
 
-    // Parse le HTML : chaque ligne du tableau a la forme
-    // <td>YYYY-MM-DD</td>...<td>HH:MM:SS</td>...<td>débit</td>
-    // On extrait avec un regex robuste qui capture date + heure + débit (avec virgule décimale)
     const parsed = [];
     const rowRegex = /(\d{4}-\d{2}-\d{2})[^0-9]+(\d{2}:\d{2}):\d{2}[^0-9]+(\d+[,.]\d+)/g;
     let match;
@@ -656,22 +671,17 @@ async function hydrateHistoryIfNeeded(stationId) {
       const [, dateStr, timeStr, debitStr] = match;
       const debit = parseFloat(debitStr.replace(',', '.'));
       if (isNaN(debit) || debit < 0) continue;
-      // Construire la date en interprétant l'heure CEHQ comme UTC-5 (HNE fixe)
-      // YYYY-MM-DD HH:MM en HNE = (HH+5):MM UTC
       const [y, mo, d] = dateStr.split('-').map(Number);
       const [h, mi] = timeStr.split(':').map(Number);
-      // Date.UTC retourne un timestamp absolu, on ajoute 5h pour passer de HNE à UTC
       const utcMs = Date.UTC(y, mo - 1, d, h + 5, mi, 0);
       const iso = new Date(utcMs).toISOString();
       parsed.push({ debit, ts: iso });
     }
+    hydrateDebugLog(`${stationId}: parsed ${parsed.length} mesures`);
 
     if (!parsed.length) return;
 
-    // Trier par timestamp ascendant (plus ancien en premier)
     parsed.sort((a, b) => new Date(a.ts) - new Date(b.ts));
-
-    // Fusionner avec l'existant (évite les doublons par timestamp)
     const merged = [...parsed];
     existing.forEach(e => {
       if (e.ts && !merged.some(m => m.ts === e.ts)) merged.push(e);
@@ -681,8 +691,9 @@ async function hydrateHistoryIfNeeded(stationId) {
 
     localStorage.setItem(`hist_${stationId}`, JSON.stringify(final));
     if (state[stationId]) state[stationId]._histCache = final;
+    hydrateDebugLog(`${stationId}: ✓ ${final.length} mesures stockées`);
   } catch(e) {
-    // Échec silencieux — on garde l'historique progressif normal
+    hydrateDebugLog(`${stationId}: ❌ ${e.message}`);
   } finally {
     HYDRATING.delete(stationId);
   }
