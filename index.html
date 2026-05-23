@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v37</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v38</div>
 </footer>
 
 <script>
@@ -617,31 +617,20 @@ async function fetchAllStations() {
 }
 
 // ─── Hydrater l'historique depuis CEHQ tableau.asp ──────────────────────────
+// Appelé si historique localStorage incomplet ou trop vieux.
+// Récupère ~96 mesures (1 toutes les 15 min × 24h) en HTML via le proxy Cloudflare Worker.
+// IMPORTANT: les heures CEHQ sont en HNE (heure normale de l'Est, UTC-5)
+// quelle que soit la saison, même en mai. On convertit en UTC absolu pour
+// stockage cohérent.
 const HYDRATING = new Set();
 
-// Mini panneau de debug temporaire
-function hydrateDebugLog(msg) {
-  let dbg = document.getElementById('hyd-debug');
-  if (!dbg) {
-    dbg = document.createElement('div');
-    dbg.id = 'hyd-debug';
-    dbg.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.95);border:1px solid #c9a84c;padding:8px 10px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:30vh;overflow-y:auto;';
-    dbg.innerHTML = '<b style="color:#c9a84c">HYDRATE DEBUG</b>';
-    document.body.appendChild(dbg);
-  }
-  const time = new Date().toLocaleTimeString('fr-CA', {hour12:false});
-  dbg.innerHTML += `<br>[${time}] ${msg}`;
-  dbg.scrollTop = dbg.scrollHeight;
-}
-
 // Sérialisation : on fait une station après l'autre avec un petit délai
-// pour éviter de saturer allorigins.win (rate-limited à 60 req/min)
+// pour éviter de saturer le Worker (limite Cloudflare: 100k req/jour, largement suffisant)
 let hydrateQueue = Promise.resolve();
 function queueHydration(stationId) {
   hydrateQueue = hydrateQueue.then(async () => {
     await hydrateHistoryIfNeeded(stationId);
-    // Petit délai entre stations pour éviter rate-limit du proxy
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 300));
   });
   return hydrateQueue;
 }
@@ -652,20 +641,17 @@ async function hydrateHistoryIfNeeded(stationId) {
 
   try {
     const existing = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
+    // Conditions pour ré-hydrater :
+    // 1. Moins de 24 mesures (premier démarrage ou semi-rempli)
+    // 2. La dernière mesure date de plus de 2h (app pas ouverte depuis longtemps)
     const lastTs = existing.length ? new Date(existing[existing.length - 1].ts).getTime() : 0;
     const ageHours = (Date.now() - lastTs) / 3600000;
     const needsHydration = existing.length < 24 || ageHours > 2;
-    if (!needsHydration) {
-      hydrateDebugLog(`${stationId}: skip (${existing.length}, ${ageHours.toFixed(1)}h)`);
-      return;
-    }
-    hydrateDebugLog(`${stationId}: fetch (existant: ${existing.length})`);
+    if (!needsHydration) return;
 
     HYDRATING.add(stationId);
     const cehqUrl = `https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${stationId}%20%20%20%20`;
-
     // Worker Cloudflare personnel — proxy CORS fiable pour CEHQ
-    // Configuration: voir https://currentrun-proxy.jptremblay18-cc2.workers.dev
     const proxyUrl = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(cehqUrl)}`;
 
     let html = null;
@@ -674,61 +660,40 @@ async function hydrateHistoryIfNeeded(stationId) {
       const tmout = setTimeout(() => ctrl.abort(), 10000);
       const res = await fetch(proxyUrl, { cache: 'no-store', signal: ctrl.signal });
       clearTimeout(tmout);
-      if (!res.ok) {
-        hydrateDebugLog(`${stationId}: ✗ HTTP ${res.status}`);
-        return;
-      }
+      if (!res.ok || res.status >= 400) return;
       html = await res.text();
-      if (html.length < 10000) {
-        hydrateDebugLog(`${stationId}: ✗ trop court (${html.length}c)`);
-        return;
-      }
-      hydrateDebugLog(`${stationId}: ✓ ${html.length}c`);
+      if (html.length < 10000) return;
     } catch(e) {
-      hydrateDebugLog(`${stationId}: ✗ ${e.message?.substring(0, 30) || 'err'}`);
       return;
     }
 
+    // Parser CEHQ : on cherche les triplets date+heure+débit dans l'ordre,
+    // peu importe les balises HTML entre eux (CEHQ utilise du HTML très imbriqué).
     const parsed = [];
-    // Approche pragmatique : chercher les motifs date+heure+débit dans l'ordre
-    // sans se soucier de la structure HTML exacte entre eux.
-    // CEHQ a beaucoup de balises <font></font> imbriquées qui rendent le HTML
-    // imprévisible. On se contente de matcher : date, puis dans les 500 caractères
-    // qui suivent, une heure HH:MM:SS, puis un débit décimal.
     const rowRegex = /(\d{4}-\d{2}-\d{2})[\s\S]{1,500}?(\d{2}:\d{2}):\d{2}[\s\S]{1,500}?(\d+[,.]\d+)/g;
     let match;
     while ((match = rowRegex.exec(html)) !== null) {
       const [, dateStr, timeStr, debitStr] = match;
       const debit = parseFloat(debitStr.replace(',', '.'));
-      if (isNaN(debit) || debit < 0 || debit > 10000) continue;  // sanity check
+      if (isNaN(debit) || debit < 0 || debit > 10000) continue;
       const [y, mo, d] = dateStr.split('-').map(Number);
       const [h, mi] = timeStr.split(':').map(Number);
-      // Validation : la date doit être récente (dernière semaine)
       const utcMs = Date.UTC(y, mo - 1, d, h + 5, mi, 0);
       const ageHours = (Date.now() - utcMs) / 3600000;
-      if (ageHours < -2 || ageHours > 24 * 8) continue;  // ignorer trop vieux ou futur
+      if (ageHours < -2 || ageHours > 24 * 8) continue;
       const iso = new Date(utcMs).toISOString();
       parsed.push({ debit, ts: iso });
-    }
-    hydrateDebugLog(`${stationId}: parsed ${parsed.length}`);
-
-    // Si rien parsé, logger un échantillon pour debug
-    if (parsed.length === 0) {
-      // Le tableau de données est dans la 2e moitié du HTML (après les <option>)
-      const half = html.substring(Math.floor(html.length / 2));
-      const dateIdx = half.search(/\d{4}-\d{2}-\d{2}/);
-      if (dateIdx >= 0) {
-        const sample = half.substring(dateIdx, dateIdx + 300).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
-        hydrateDebugLog(`SAMPLE: ${sample}`);
-      } else {
-        hydrateDebugLog(`SAMPLE: pas de date dans la 2e moitié`);
-      }
     }
 
     if (!parsed.length) return;
 
-    parsed.sort((a, b) => new Date(a.ts) - new Date(b.ts));
-    const merged = [...parsed];
+    // Dédupliquer par timestamp (le regex flexible peut matcher plusieurs fois)
+    const uniqueByTs = new Map();
+    parsed.forEach(e => { if (!uniqueByTs.has(e.ts)) uniqueByTs.set(e.ts, e); });
+    const unique = [...uniqueByTs.values()];
+
+    unique.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    const merged = [...unique];
     existing.forEach(e => {
       if (e.ts && !merged.some(m => m.ts === e.ts)) merged.push(e);
     });
@@ -737,9 +702,8 @@ async function hydrateHistoryIfNeeded(stationId) {
 
     localStorage.setItem(`hist_${stationId}`, JSON.stringify(final));
     if (state[stationId]) state[stationId]._histCache = final;
-    hydrateDebugLog(`${stationId}: 💾 ${final.length}`);
   } catch(e) {
-    hydrateDebugLog(`${stationId}: ❌ ${e.message}`);
+    // Échec silencieux — on garde l'historique progressif normal
   } finally {
     HYDRATING.delete(stationId);
   }
@@ -810,8 +774,15 @@ async function fetchDebit(stationId) {
     if (modified) localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
 
     if (hist.length >= 2) {
-      const refVal = hist[Math.max(0, hist.length - 7)].debit;
-      trend = debit >= refVal ? 'up' : 'down';
+      // Tendance basée sur la comparaison avec ~6h en arrière (24 mesures aux 15 min)
+      // Plus stable que comparer à il y a 15 min (qui capte le bruit)
+      // Si on n'a pas encore 24 mesures, on compare au premier point disponible
+      const refIdx = Math.max(0, hist.length - 24);
+      const refVal = hist[refIdx].debit;
+      // Marge morte de 0.5% pour éviter de basculer up/down sur du bruit
+      const delta = (debit - refVal) / (refVal || 1);
+      trend = delta > 0.005 ? 'up' : (delta < -0.005 ? 'down' : null);
+
       const cutoff = Date.now() - 24 * 3600 * 1000;
       const last24 = hist.filter(e => {
         const d = new Date(e.ts);
@@ -1214,8 +1185,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // Toutes les barres en doré sombre / discret (rgba doré avec faible opacité)
 // sauf la dernière qui prend la couleur de la tendance globale
 // (verte=montante, rouge=descendante, bleue=N/D).
-// Si moins de 24 mesures, on remplit avec des barres "fantômes" pour éviter
-// l'effet boîte (où peu de barres s'étirent sur toute la largeur).
+// Avec l'hydratation CEHQ on a typiquement 24h de mesures aux 15 min (96 points),
+// on affiche les 24 dernières (= 6 dernières heures).
 function buildSpark(history, trend) {
   if (!history?.length) return '';
   const TARGET = 24;
@@ -1229,10 +1200,11 @@ function buildSpark(history, trend) {
   const range = max - min;
   const avg = history.reduce((a, b) => a + b, 0) / history.length;
 
-  // Pour la pêche au saumon, même de toutes petites variations comptent.
-  // Seuil très bas (0.3%) — en bas de ça c'est du bruit pur de capteur.
-  const significantVariation = avg > 0 && (range / avg) > 0.003;
+  // Seuil de variation significative : 1% du débit moyen.
+  // En bas de ça, c'est du bruit/dérive de capteur — ligne plate plus lisible.
+  const significantVariation = avg > 0 && (range / avg) > 0.01;
 
+  // Barres fantômes au début si on a moins de 24 mesures (premier démarrage avant hydratation)
   const ghostCount = Math.max(0, TARGET - history.length);
   const ghosts = Array(ghostCount).fill(0).map(() =>
     `<div class="spark-bar" style="height:8%;background:${ghostCol}"></div>`
@@ -1240,8 +1212,8 @@ function buildSpark(history, trend) {
 
   const real = history.map((v, i) => {
     const pct = significantVariation
-      ? Math.max(8, ((v - min) / range) * 88 + 8)  // amplification maximale 8-96%
-      : 50;                                          // ligne plate si peu de variation
+      ? Math.max(15, ((v - min) / range) * 75 + 15)  // amplification 15-90% (plus douce)
+      : 50;                                            // ligne plate si peu de variation
     const c = i === history.length - 1 ? lastCol : pastCol;
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
@@ -1291,6 +1263,7 @@ function renderCard(stationId) {
   const tb = card.querySelector('.trend-badge');
   if (st.trend === 'up')        { tb.className = 'trend-badge trend-up';   tb.textContent = 'Montante'; }
   else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.textContent = 'Descendante'; }
+  else if (st.debit !== null)   { tb.className = 'trend-badge trend-nd';   tb.textContent = 'Stable'; }
   else                          { tb.className = 'trend-badge trend-nd';   tb.textContent = 'N/D'; }
 
   // Sparkline historique — utilise le cache mémoire (évite localStorage à chaque render)
