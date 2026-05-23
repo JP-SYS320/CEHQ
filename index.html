@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v26</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v27</div>
 </footer>
 
 <script>
@@ -616,15 +616,15 @@ async function fetchAllStations() {
   return wfsPending;
 }
 
-// ─── Hydrater l'historique depuis CEHQ fichier_donnees ──────────────────────
-// Appelé seulement si hist_{stationId} contient moins de 24 mesures.
-// CEHQ retourne ~96 mesures (4 par heure × 24h) en format texte tabulé.
-// Note: l'API CEHQ n'a pas CORS, on passe par allorigins.win.
-const HYDRATING = new Set();  // Évite les fetchs multiples concurrents
+// ─── Hydrater l'historique depuis CEHQ tableau.asp ──────────────────────────
+// Appelé si historique localStorage incomplet ou trop vieux.
+// CEHQ retourne ~96 mesures (1 toutes les 15 min × 24h) en HTML tabulaire.
+// IMPORTANT: les heures CEHQ sont en HNE (heure normale de l'Est, UTC-5)
+// quelle que soit la saison, même en mai. On convertit en UTC absolu pour
+// stockage cohérent (utilisé en interne par l'app).
+const HYDRATING = new Set();
 async function hydrateHistoryIfNeeded(stationId) {
-  // Mitis n'a pas de station CEHQ
   if (stationId === 'MITIS') return;
-  // Éviter les appels multiples en parallèle pour la même station
   if (HYDRATING.has(stationId)) return;
 
   try {
@@ -638,45 +638,41 @@ async function hydrateHistoryIfNeeded(stationId) {
     if (!needsHydration) return;
 
     HYDRATING.add(stationId);
-    const url = `https://www.cehq.gouv.qc.ca/depot/historique_donnees/fichier_donnees.asp?NoStation=${stationId}`;
+    // tableau.asp avec 4 espaces (encodés %20%20%20%20) — convention CEHQ vue dans le code
+    const url = `https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${stationId}%20%20%20%20`;
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
 
     const res = await fetch(proxyUrl, { cache: 'no-store' });
     if (!res.ok) return;
-    const text = await res.text();
+    const html = await res.text();
 
-    // Parse le format CEHQ : lignes "YYYY-MM-DD HH:MM\tDÉBIT"
-    // On garde l'entête pour validation puis on parse chaque ligne
-    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    // Parse le HTML : chaque ligne du tableau a la forme
+    // <td>YYYY-MM-DD</td>...<td>HH:MM:SS</td>...<td>débit</td>
+    // On extrait avec un regex robuste qui capture date + heure + débit (avec virgule décimale)
     const parsed = [];
-    for (const line of lines) {
-      // Ligne typique : "2026-05-23 07:00\t71.2" ou "2026-05-23 07:00 71.2"
-      const m = line.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+([\d,.]+)/);
-      if (!m) continue;
-      const [, dateStr, timeStr, debitStr] = m;
+    const rowRegex = /(\d{4}-\d{2}-\d{2})[^0-9]+(\d{2}:\d{2}):\d{2}[^0-9]+(\d+[,.]\d+)/g;
+    let match;
+    while ((match = rowRegex.exec(html)) !== null) {
+      const [, dateStr, timeStr, debitStr] = match;
       const debit = parseFloat(debitStr.replace(',', '.'));
       if (isNaN(debit) || debit < 0) continue;
-      // Le timestamp CEHQ est en heure locale Toronto (HAE/HNE)
-      // On le convertit en UTC pour le stockage cohérent avec le reste
+      // Construire la date en interprétant l'heure CEHQ comme UTC-5 (HNE fixe)
+      // YYYY-MM-DD HH:MM en HNE = (HH+5):MM UTC
       const [y, mo, d] = dateStr.split('-').map(Number);
       const [h, mi] = timeStr.split(':').map(Number);
-      // Construit comme heure locale Toronto → JS le convertit en UTC absolu
-      const localDate = new Date(y, mo - 1, d, h, mi, 0);
-      if (isNaN(localDate)) continue;
-      parsed.push({ debit, ts: localDate.toISOString() });
+      // Date.UTC retourne un timestamp absolu, on ajoute 5h pour passer de HNE à UTC
+      const utcMs = Date.UTC(y, mo - 1, d, h + 5, mi, 0);
+      const iso = new Date(utcMs).toISOString();
+      parsed.push({ debit, ts: iso });
     }
 
     if (!parsed.length) return;
 
-    // Trier par timestamp (plus ancien en premier pour l'historique)
+    // Trier par timestamp ascendant (plus ancien en premier)
     parsed.sort((a, b) => new Date(a.ts) - new Date(b.ts));
 
-    // Garder les 96 dernières mesures
-    const newHist = parsed.slice(-96);
-
-    // Fusionner avec l'existant (au cas où il y aurait des nouvelles entrées
-    // déjà ajoutées par fetchDebit avant l'hydratation)
-    const merged = [...newHist];
+    // Fusionner avec l'existant (évite les doublons par timestamp)
+    const merged = [...parsed];
     existing.forEach(e => {
       if (e.ts && !merged.some(m => m.ts === e.ts)) merged.push(e);
     });
@@ -684,7 +680,6 @@ async function hydrateHistoryIfNeeded(stationId) {
     const final = merged.slice(-96);
 
     localStorage.setItem(`hist_${stationId}`, JSON.stringify(final));
-    // Mettre à jour le cache mémoire si la station a déjà été chargée
     if (state[stationId]) state[stationId]._histCache = final;
   } catch(e) {
     // Échec silencieux — on garde l'historique progressif normal
