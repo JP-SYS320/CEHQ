@@ -404,7 +404,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v17</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v18</div>
 </footer>
 
 <script>
@@ -1439,105 +1439,30 @@ window.addEventListener('focus', autoRefreshIfStale);
 
 // ─── PWA Service Worker ──────────────────────────────────────────────────────
 // Enregistré après le chargement initial pour ne pas bloquer le rendu.
-
-// ─── PANNEAU DEBUG TEMPORAIRE ────────────────────────────────────────────────
-let debugLog;  // fonction globale pour logger depuis n'importe où
-
-(function() {
-  const dbg = document.createElement('div');
-  dbg.id = 'sw-debug';
-  dbg.style.cssText = `
-    position: fixed; bottom: 6px; left: 6px; right: 6px;
-    background: rgba(15,25,35,0.95); border: 1px solid #c9a84c;
-    padding: 8px 10px; border-radius: 6px;
-    font-family: monospace; font-size: 0.55rem; color: #f0ede4;
-    z-index: 9999; line-height: 1.5;
-    max-height: 40vh; overflow-y: auto;
-  `;
-  dbg.innerHTML = '<b style="color:#c9a84c">SW DEBUG</b><br>Initializing...';
-  document.body.appendChild(dbg);
-
-  debugLog = (msg, color) => {
-    const time = new Date().toLocaleTimeString('fr-CA', {hour12:false});
-    const c = color ? ` style="color:${color}"` : '';
-    dbg.innerHTML += `<br><span${c}>[${time}] ${msg}</span>`;
-    dbg.scrollTop = dbg.scrollHeight;
-  };
-
-  if (!('serviceWorker' in navigator)) {
-    debugLog('❌ ServiceWorker non supporté', '#f06260');
-    return;
-  }
-
-  // Lire la version depuis le footer
-  const footerVersion = document.querySelector('footer > div:last-child')?.textContent || '?';
-  debugLog(`App version footer: ${footerVersion}`, '#c9a84c');
-
-  // Lister les SW
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    debugLog(`SWs enregistrés au démarrage: ${regs.length}`);
-  });
-
-  // Lister les caches
-  caches.keys().then(keys => {
-    debugLog(`Caches au démarrage: ${keys.length}`);
-    keys.forEach(k => debugLog(`  ${k}`));
-  });
-
-  // Écouter TOUS les messages SW avec details
-  navigator.serviceWorker.addEventListener('message', event => {
-    const data = event.data;
-    if (data?.type === 'APP_UPDATED') {
-      debugLog(`📨 APP_UPDATED reçu! L'app va recharger.`, '#4ade9a');
-    } else if (data?.type === 'SW_LOG') {
-      debugLog(`[SW] ${data.msg}`, data.color || '#7a9ab0');
-    } else {
-      debugLog(`📨 Message: ${JSON.stringify(data)}`);
-    }
-  });
-
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    debugLog('🔄 controllerchange', '#4ade9a');
-  });
-})();
-
+// Le SW gère le cache offline, l'installation sur écran d'accueil et les
+// mises à jour automatiques (détection du changement d'index.html en arrière-plan).
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    debugLog('window.load fired, registering SW...');
     navigator.serviceWorker.register('service-worker.js')
       .then(reg => {
-        debugLog(`✓ register OK, scope=${reg.scope.split('/').pop() || '/'}`, '#4ade9a');
-        reg.addEventListener('updatefound', () => {
-          debugLog(`🆕 updatefound`, '#c9a84c');
-          const newSW = reg.installing;
-          if (newSW) {
-            newSW.addEventListener('statechange', () => {
-              debugLog(`  new SW state: ${newSW.state}`);
-            });
-          }
-        });
         // Demander au SW de vérifier les updates 3 secondes après chargement
         setTimeout(() => {
           if (navigator.serviceWorker.controller) {
-            debugLog('→ Envoi CHECK_UPDATE au SW (après 3s)');
             navigator.serviceWorker.controller.postMessage({ type: 'CHECK_UPDATE' });
-          } else {
-            debugLog('⚠ Pas de controller, CHECK_UPDATE ignoré', '#f06260');
           }
         }, 3000);
-        // Vérifier toutes les 5 minutes
+        // Vérifier les updates toutes les 5 minutes pendant que l'app est ouverte
         setInterval(() => {
           if (navigator.serviceWorker.controller) {
-            debugLog('→ Envoi CHECK_UPDATE (périodique)');
             navigator.serviceWorker.controller.postMessage({ type: 'CHECK_UPDATE' });
           }
         }, 5 * 60 * 1000);
       })
-      .catch((e) => {
-        debugLog(`❌ register failed: ${e.message}`, '#f06260');
-      });
+      .catch(() => {});  // Échec silencieux — l'app fonctionne sans SW
   });
 
+  // Écoute le message APP_UPDATED : l'app shell a changé en arrière-plan,
+  // on recharge automatiquement pour appliquer la nouvelle version
   let reloaded = false;
   navigator.serviceWorker.addEventListener('message', event => {
     if (event.data?.type === 'APP_UPDATED' && !reloaded) {
