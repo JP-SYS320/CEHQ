@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v33</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v34</div>
 </footer>
 
 <script>
@@ -664,52 +664,28 @@ async function hydrateHistoryIfNeeded(stationId) {
     HYDRATING.add(stationId);
     const cehqUrl = `https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${stationId}%20%20%20%20`;
 
-    // Cascade de stratégies : on essaie dans l'ordre, le premier qui marche gagne.
-    // 1. Fetch direct (au cas où CEHQ aurait CORS un jour)
-    // 2. corsproxy.io
-    // 3. api.codetabs.com (autre proxy CORS)
-    // 4. api.allorigins.win (notre proxy historique)
-    const strategies = [
-      { name: 'direct', url: cehqUrl },
-      { name: 'corsproxy', url: `https://corsproxy.io/?${encodeURIComponent(cehqUrl)}` },
-      { name: 'codetabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(cehqUrl)}` },
-      { name: 'allorigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(cehqUrl)}` }
-    ];
+    // Worker Cloudflare personnel — proxy CORS fiable pour CEHQ
+    // Configuration: voir https://currentrun-proxy.jptremblay18-cc2.workers.dev
+    const proxyUrl = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(cehqUrl)}`;
 
     let html = null;
-    let strategyUsed = null;
-    for (const strat of strategies) {
-      try {
-        const ctrl = new AbortController();
-        const tmout = setTimeout(() => ctrl.abort(), 6000);
-        const res = await fetch(strat.url, { cache: 'no-store', signal: ctrl.signal });
-        clearTimeout(tmout);
-        if (!res.ok) {
-          hydrateDebugLog(`${stationId}: ✗ ${strat.name} HTTP ${res.status}`);
-          continue;
-        }
-        const text = await res.text();
-        // Vérifier qu'on a bien du contenu CEHQ (pas une page d'erreur courte)
-        if (text.length < 10000) {
-          hydrateDebugLog(`${stationId}: ✗ ${strat.name} trop court (${text.length}c)`);
-          continue;
-        }
-        // Vérifier qu'on a au moins un pattern de tableau de données
-        if (!text.match(/\d{4}-\d{2}-\d{2}\s*<\/td>/)) {
-          hydrateDebugLog(`${stationId}: ✗ ${strat.name} pas de tableau`);
-          continue;
-        }
-        html = text;
-        strategyUsed = strat.name;
-        hydrateDebugLog(`${stationId}: ✓ ${strat.name} ${text.length}c`);
-        break;  // Succès, on arrête
-      } catch(e) {
-        hydrateDebugLog(`${stationId}: ✗ ${strat.name} ${e.message?.substring(0, 30) || 'err'}`);
+    try {
+      const ctrl = new AbortController();
+      const tmout = setTimeout(() => ctrl.abort(), 10000);
+      const res = await fetch(proxyUrl, { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(tmout);
+      if (!res.ok) {
+        hydrateDebugLog(`${stationId}: ✗ HTTP ${res.status}`);
+        return;
       }
-    }
-
-    if (!html) {
-      hydrateDebugLog(`${stationId}: ❌ aucun proxy n'a marché`);
+      html = await res.text();
+      if (html.length < 10000 || !html.match(/\d{4}-\d{2}-\d{2}\s*<\/td>/)) {
+        hydrateDebugLog(`${stationId}: ✗ contenu invalide (${html.length}c)`);
+        return;
+      }
+      hydrateDebugLog(`${stationId}: ✓ ${html.length}c`);
+    } catch(e) {
+      hydrateDebugLog(`${stationId}: ✗ ${e.message?.substring(0, 30) || 'err'}`);
       return;
     }
 
