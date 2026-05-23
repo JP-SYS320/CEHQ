@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v30</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v31</div>
 </footer>
 
 <script>
@@ -694,7 +694,11 @@ async function hydrateHistoryIfNeeded(stationId) {
     if (!html) return;
 
     const parsed = [];
-    const rowRegex = /(\d{4}-\d{2}-\d{2})[^0-9]+(\d{2}:\d{2}):\d{2}[^0-9]+(\d+[,.]\d+)/g;
+    // Regex strict : ne match QUE les vraies lignes du tableau
+    // (date + heure complète HH:MM:SS + débit décimal avec virgule ou point)
+    // Évite de matcher les <option>YYYY-MM-DD</option> du sélecteur de dates.
+    // Le tableau a cette structure : <td>2026-05-23</td><td>10:00:00</td><td>70,74</td>
+    const rowRegex = /(\d{4}-\d{2}-\d{2})\s*<\/td>\s*<td[^>]*>\s*(\d{2}:\d{2}):\d{2}\s*<\/td>\s*<td[^>]*>\s*(\d+[,.]\d+)/g;
     let match;
     while ((match = rowRegex.exec(html)) !== null) {
       const [, dateStr, timeStr, debitStr] = match;
@@ -710,12 +714,13 @@ async function hydrateHistoryIfNeeded(stationId) {
 
     // Si rien parsé, logger un échantillon pour debug
     if (parsed.length === 0) {
-      const dateIdx = html.search(/\d{4}-\d{2}-\d{2}/);
-      if (dateIdx >= 0) {
-        const sample = html.substring(dateIdx, dateIdx + 200).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
+      // Chercher une portion qui ressemble à du tableau
+      const tableIdx = html.search(/\d{4}-\d{2}-\d{2}\s*<\/td>/);
+      if (tableIdx >= 0) {
+        const sample = html.substring(tableIdx, tableIdx + 250).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
         hydrateDebugLog(`SAMPLE: ${sample}`);
       } else {
-        hydrateDebugLog(`SAMPLE: aucune date trouvée dans le HTML`);
+        hydrateDebugLog(`SAMPLE: aucune structure de tableau trouvée`);
       }
     }
 
