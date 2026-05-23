@@ -404,7 +404,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v20</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v21</div>
 </footer>
 
 <script>
@@ -819,11 +819,14 @@ async function fetchTides(s) {
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
 
-    // Fenêtre : minuit HAE aujourd'hui → minuit HAE après-demain (UTC+4h)
-    const from = `${todayStr}T04:00:00Z`;
-    const dayAfter = new Date(todayStr + 'T04:00:00Z');
-    dayAfter.setDate(dayAfter.getDate() + 2);
-    const to = dayAfter.toISOString().substring(0, 19) + 'Z';
+    // Fenêtre : minuit aujourd'hui Toronto → minuit après-demain Toronto
+    // On construit ces dates en heure locale (l'iPhone est sur America/Toronto)
+    // pour que ça marche autant en HAE qu'en HNE.
+    const [fyStr, fmStr, fdStr] = todayStr.split('-');
+    const fromDate = new Date(parseInt(fyStr, 10), parseInt(fmStr, 10) - 1, parseInt(fdStr, 10), 0, 0, 0);
+    const toDate   = new Date(parseInt(fyStr, 10), parseInt(fmStr, 10) - 1, parseInt(fdStr, 10) + 2, 0, 0, 0);
+    const from = fromDate.toISOString().substring(0, 19) + 'Z';
+    const to   = toDate.toISOString().substring(0, 19) + 'Z';
 
     const res = await fetch(
       `https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/${uuid}/data?time-series-code=wlp-hilo&from=${from}&to=${to}`,
@@ -836,16 +839,33 @@ async function fetchTides(s) {
     const values = data.map(t => t.value);
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
 
-    // Seuil minuit HAE = 04:00 UTC du lendemain
-    const tomorrowThreshold = new Date(todayStr + 'T04:00:00Z');
-    tomorrowThreshold.setDate(tomorrowThreshold.getDate() + 1);
+    // Seuil = minuit HAE/HNE du lendemain en heure locale Toronto
+    // On construit cette date proprement en demandant à Intl de nous donner
+    // "où est minuit local Toronto" sur l'axe UTC absolu.
+    // Méthode : on parse "23 mai 2026 00:00" comme étant local, ce qui donne
+    // le bon timestamp UTC pour l'iPhone (qui est sur America/Toronto).
+    const [yStr, mStr, dStr] = todayStr.split('-');
+    const tomorrowThreshold = new Date(
+      parseInt(yStr, 10),
+      parseInt(mStr, 10) - 1,
+      parseInt(dStr, 10) + 1,
+      0, 0, 0
+    );
+
+    // Formatter qui convertit UTC → heure locale Toronto (HAE en été, HNE en hiver)
+    // automatiquement, sans hard-coder le décalage en heures.
+    const torontoTimeFmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Toronto',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
 
     const today = [], tomorrow = [];
     data.forEach(t => {
       const d = new Date(t.eventDate);
-      const hae = new Date(d.getTime() - 4 * 3600000);
-      const hh = hae.getUTCHours().toString().padStart(2, '0');
-      const mm = hae.getUTCMinutes().toString().padStart(2, '0');
+      // formatToParts pour extraire heures et minutes proprement
+      const parts = torontoTimeFmt.formatToParts(d);
+      const hh = parts.find(p => p.type === 'hour')?.value || '00';
+      const mm = parts.find(p => p.type === 'minute')?.value || '00';
       const entry = { time: `${hh}:${mm}`, value: t.value.toFixed(2), type: t.value >= avg ? 'HM' : 'BM' };
       (d < tomorrowThreshold ? today : tomorrow).push(entry);
     });
