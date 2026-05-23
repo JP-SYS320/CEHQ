@@ -404,12 +404,22 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v19</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v20</div>
 </footer>
 
 <script>
 // ─── Constantes ───────────────────────────────────────────────────────────────
-const todayStr = new Date().toISOString().substring(0, 10);
+// IMPORTANT : utiliser la date LOCALE (HAE), pas UTC.
+// En soirée HAE, .toISOString() bascule au lendemain en UTC, ce qui faisait
+// que l'app cherchait les données du mauvais jour (lever/coucher N/D,
+// marées de demain au lieu d'aujourd'hui, etc.)
+const todayStr = (() => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+})();
 const MOIS = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
 const MOON = {
   new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
