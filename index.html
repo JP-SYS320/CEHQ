@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v24</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v26</div>
 </footer>
 
 <script>
@@ -629,7 +629,13 @@ async function hydrateHistoryIfNeeded(stationId) {
 
   try {
     const existing = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
-    if (existing.length >= 24) return;  // Déjà suffisamment d'historique
+    // Conditions pour ré-hydrater :
+    // 1. Moins de 24 mesures (premier démarrage ou semi-rempli)
+    // 2. La dernière mesure date de plus de 2h (app pas ouverte depuis longtemps)
+    const lastTs = existing.length ? new Date(existing[existing.length - 1].ts).getTime() : 0;
+    const ageHours = (Date.now() - lastTs) / 3600000;
+    const needsHydration = existing.length < 24 || ageHours > 2;
+    if (!needsHydration) return;
 
     HYDRATING.add(stationId);
     const url = `https://www.cehq.gouv.qc.ca/depot/historique_donnees/fichier_donnees.asp?NoStation=${stationId}`;
