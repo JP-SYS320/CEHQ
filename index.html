@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v31</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v32</div>
 </footer>
 
 <script>
@@ -714,13 +714,19 @@ async function hydrateHistoryIfNeeded(stationId) {
 
     // Si rien parsé, logger un échantillon pour debug
     if (parsed.length === 0) {
-      // Chercher une portion qui ressemble à du tableau
-      const tableIdx = html.search(/\d{4}-\d{2}-\d{2}\s*<\/td>/);
-      if (tableIdx >= 0) {
-        const sample = html.substring(tableIdx, tableIdx + 250).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
-        hydrateDebugLog(`SAMPLE: ${sample}`);
+      // Si le HTML est très court c'est probablement une erreur
+      if (html.length < 5000) {
+        hydrateDebugLog(`SAMPLE: HTML trop court (${html.length}c) — ${html.substring(0, 200).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`);
       } else {
-        hydrateDebugLog(`SAMPLE: aucune structure de tableau trouvée`);
+        // Chercher dans la 2e moitié du HTML (le tableau est après les <option>)
+        const half = html.substring(Math.floor(html.length / 2));
+        const dateIdx = half.search(/\d{4}-\d{2}-\d{2}/);
+        if (dateIdx >= 0) {
+          const sample = half.substring(dateIdx, dateIdx + 300).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
+          hydrateDebugLog(`SAMPLE: ${sample}`);
+        } else {
+          hydrateDebugLog(`SAMPLE: pas de date dans la 2e moitié (HTML ${html.length}c)`);
+        }
       }
     }
 
