@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v34</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v35</div>
 </footer>
 
 <script>
@@ -679,8 +679,8 @@ async function hydrateHistoryIfNeeded(stationId) {
         return;
       }
       html = await res.text();
-      if (html.length < 10000 || !html.match(/\d{4}-\d{2}-\d{2}\s*<\/td>/)) {
-        hydrateDebugLog(`${stationId}: ✗ contenu invalide (${html.length}c)`);
+      if (html.length < 10000) {
+        hydrateDebugLog(`${stationId}: ✗ trop court (${html.length}c)`);
         return;
       }
       hydrateDebugLog(`${stationId}: ✓ ${html.length}c`);
@@ -710,19 +710,14 @@ async function hydrateHistoryIfNeeded(stationId) {
 
     // Si rien parsé, logger un échantillon pour debug
     if (parsed.length === 0) {
-      // Si le HTML est très court c'est probablement une erreur
-      if (html.length < 5000) {
-        hydrateDebugLog(`SAMPLE: HTML trop court (${html.length}c) — ${html.substring(0, 200).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`);
+      // Le tableau de données est dans la 2e moitié du HTML (après les <option>)
+      const half = html.substring(Math.floor(html.length / 2));
+      const dateIdx = half.search(/\d{4}-\d{2}-\d{2}/);
+      if (dateIdx >= 0) {
+        const sample = half.substring(dateIdx, dateIdx + 300).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
+        hydrateDebugLog(`SAMPLE: ${sample}`);
       } else {
-        // Chercher dans la 2e moitié du HTML (le tableau est après les <option>)
-        const half = html.substring(Math.floor(html.length / 2));
-        const dateIdx = half.search(/\d{4}-\d{2}-\d{2}/);
-        if (dateIdx >= 0) {
-          const sample = half.substring(dateIdx, dateIdx + 300).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
-          hydrateDebugLog(`SAMPLE: ${sample}`);
-        } else {
-          hydrateDebugLog(`SAMPLE: pas de date dans la 2e moitié (HTML ${html.length}c)`);
-        }
+        hydrateDebugLog(`SAMPLE: pas de date dans la 2e moitié`);
       }
     }
 
