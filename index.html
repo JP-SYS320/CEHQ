@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v23</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v24</div>
 </footer>
 
 <script>
@@ -614,6 +614,77 @@ async function fetchAllStations() {
     }
   })();
   return wfsPending;
+}
+
+// ─── Hydrater l'historique depuis CEHQ fichier_donnees ──────────────────────
+// Appelé seulement si hist_{stationId} contient moins de 24 mesures.
+// CEHQ retourne ~96 mesures (4 par heure × 24h) en format texte tabulé.
+// Note: l'API CEHQ n'a pas CORS, on passe par allorigins.win.
+const HYDRATING = new Set();  // Évite les fetchs multiples concurrents
+async function hydrateHistoryIfNeeded(stationId) {
+  // Mitis n'a pas de station CEHQ
+  if (stationId === 'MITIS') return;
+  // Éviter les appels multiples en parallèle pour la même station
+  if (HYDRATING.has(stationId)) return;
+
+  try {
+    const existing = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
+    if (existing.length >= 24) return;  // Déjà suffisamment d'historique
+
+    HYDRATING.add(stationId);
+    const url = `https://www.cehq.gouv.qc.ca/depot/historique_donnees/fichier_donnees.asp?NoStation=${stationId}`;
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+
+    const res = await fetch(proxyUrl, { cache: 'no-store' });
+    if (!res.ok) return;
+    const text = await res.text();
+
+    // Parse le format CEHQ : lignes "YYYY-MM-DD HH:MM\tDÉBIT"
+    // On garde l'entête pour validation puis on parse chaque ligne
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    const parsed = [];
+    for (const line of lines) {
+      // Ligne typique : "2026-05-23 07:00\t71.2" ou "2026-05-23 07:00 71.2"
+      const m = line.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\s+([\d,.]+)/);
+      if (!m) continue;
+      const [, dateStr, timeStr, debitStr] = m;
+      const debit = parseFloat(debitStr.replace(',', '.'));
+      if (isNaN(debit) || debit < 0) continue;
+      // Le timestamp CEHQ est en heure locale Toronto (HAE/HNE)
+      // On le convertit en UTC pour le stockage cohérent avec le reste
+      const [y, mo, d] = dateStr.split('-').map(Number);
+      const [h, mi] = timeStr.split(':').map(Number);
+      // Construit comme heure locale Toronto → JS le convertit en UTC absolu
+      const localDate = new Date(y, mo - 1, d, h, mi, 0);
+      if (isNaN(localDate)) continue;
+      parsed.push({ debit, ts: localDate.toISOString() });
+    }
+
+    if (!parsed.length) return;
+
+    // Trier par timestamp (plus ancien en premier pour l'historique)
+    parsed.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+
+    // Garder les 96 dernières mesures
+    const newHist = parsed.slice(-96);
+
+    // Fusionner avec l'existant (au cas où il y aurait des nouvelles entrées
+    // déjà ajoutées par fetchDebit avant l'hydratation)
+    const merged = [...newHist];
+    existing.forEach(e => {
+      if (e.ts && !merged.some(m => m.ts === e.ts)) merged.push(e);
+    });
+    merged.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+    const final = merged.slice(-96);
+
+    localStorage.setItem(`hist_${stationId}`, JSON.stringify(final));
+    // Mettre à jour le cache mémoire si la station a déjà été chargée
+    if (state[stationId]) state[stationId]._histCache = final;
+  } catch(e) {
+    // Échec silencieux — on garde l'historique progressif normal
+  } finally {
+    HYDRATING.delete(stationId);
+  }
 }
 
 // ─── Débit + historique localStorage ─────────────────────────────────────────
@@ -1001,6 +1072,15 @@ async function loadStation(stationId) {
     state[stationId].msg = 'Erreur — ' + (e.message || 'inconnu');
   }
   renderCard(stationId);
+
+  // Hydrater l'historique CEHQ si on a moins de 24 mesures (1er démarrage,
+  // ou après une période d'inactivité). Tourne en arrière-plan, re-render
+  // quand prêt pour afficher la sparkline complète.
+  hydrateHistoryIfNeeded(stationId).then(() => {
+    if (state[stationId]?._histCache?.length > 1) {
+      scheduleRender(stationId);
+    }
+  });
 
   // Fetches secondaires — tous en parallèle, en arrière-plan
   // scheduleRender groupe les mises à jour pour éviter des re-renders en cascade
