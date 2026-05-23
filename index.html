@@ -144,8 +144,16 @@
     -webkit-touch-callout: none;
     user-select: none;
     -webkit-user-select: none;
+    outline: none;
   }
-  .refresh-btn:hover { background: rgba(201,168,76,0.08); }
+  /* :hover seulement sur appareils avec vrai pointeur (souris/trackpad)
+     Sur tactile, :hover peut rester collé après un tap = bug visuel */
+  @media (hover: hover) {
+    .refresh-btn:hover { background: rgba(201,168,76,0.08); }
+  }
+  /* Pas de style de focus collant */
+  .refresh-btn:focus,
+  .refresh-btn:focus-visible { outline: none; background: none; }
   /* Feedback visuel pressé géré par classe JS (plus fiable sur iOS PWA que :active) */
   .refresh-btn.pressed {
     background: rgba(201,168,76,0.2);
@@ -408,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v22</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v23</div>
 </footer>
 
 <script>
@@ -1027,8 +1035,10 @@ async function loadStation(stationId) {
 // ─── Actualiser tout ──────────────────────────────────────────────────────────
 function refreshAll() {
   const btn = document.getElementById('refreshAll');
+  // Forcer le blur pour retirer focus collé sur iOS PWA
+  btn.blur();
   btn.classList.add('loading');
-  btn.classList.remove('pressed');  // S'assurer que pressed n'est pas collé
+  btn.classList.remove('pressed');
   btn.textContent = '↻ Chargement...';
 
   const markDone = () => {
