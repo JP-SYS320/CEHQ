@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v28</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v29</div>
 </footer>
 
 <script>
@@ -617,14 +617,9 @@ async function fetchAllStations() {
 }
 
 // ─── Hydrater l'historique depuis CEHQ tableau.asp ──────────────────────────
-// Appelé si historique localStorage incomplet ou trop vieux.
-// CEHQ retourne ~96 mesures (1 toutes les 15 min × 24h) en HTML tabulaire.
-// IMPORTANT: les heures CEHQ sont en HNE (heure normale de l'Est, UTC-5)
-// quelle que soit la saison, même en mai. On convertit en UTC absolu pour
-// stockage cohérent (utilisé en interne par l'app).
 const HYDRATING = new Set();
 
-// Mini panneau de debug temporaire (à enlever après diagnostic)
+// Mini panneau de debug temporaire
 function hydrateDebugLog(msg) {
   let dbg = document.getElementById('hyd-debug');
   if (!dbg) {
@@ -639,6 +634,18 @@ function hydrateDebugLog(msg) {
   dbg.scrollTop = dbg.scrollHeight;
 }
 
+// Sérialisation : on fait une station après l'autre avec un petit délai
+// pour éviter de saturer allorigins.win (rate-limited à 60 req/min)
+let hydrateQueue = Promise.resolve();
+function queueHydration(stationId) {
+  hydrateQueue = hydrateQueue.then(async () => {
+    await hydrateHistoryIfNeeded(stationId);
+    // Petit délai entre stations pour éviter rate-limit du proxy
+    await new Promise(r => setTimeout(r, 800));
+  });
+  return hydrateQueue;
+}
+
 async function hydrateHistoryIfNeeded(stationId) {
   if (stationId === 'MITIS') return;
   if (HYDRATING.has(stationId)) return;
@@ -649,20 +656,42 @@ async function hydrateHistoryIfNeeded(stationId) {
     const ageHours = (Date.now() - lastTs) / 3600000;
     const needsHydration = existing.length < 24 || ageHours > 2;
     if (!needsHydration) {
-      hydrateDebugLog(`${stationId}: skip (${existing.length} mesures, age ${ageHours.toFixed(1)}h)`);
+      hydrateDebugLog(`${stationId}: skip (${existing.length}, ${ageHours.toFixed(1)}h)`);
       return;
     }
-    hydrateDebugLog(`${stationId}: fetch... (existant: ${existing.length})`);
+    hydrateDebugLog(`${stationId}: fetch (existant: ${existing.length})`);
 
     HYDRATING.add(stationId);
-    const url = `https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${stationId}%20%20%20%20`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const cehqUrl = `https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${stationId}%20%20%20%20`;
 
-    const res = await fetch(proxyUrl, { cache: 'no-store' });
-    hydrateDebugLog(`${stationId}: HTTP ${res.status}`);
-    if (!res.ok) return;
-    const html = await res.text();
-    hydrateDebugLog(`${stationId}: HTML ${html.length} chars`);
+    // Stratégie : essayer fetch direct (si CEHQ a CORS), puis allorigins en fallback
+    let html = null;
+    try {
+      const res = await fetch(cehqUrl, { cache: 'no-store' });
+      if (res.ok) {
+        html = await res.text();
+        hydrateDebugLog(`${stationId}: ✓ direct ${html.length}c`);
+      }
+    } catch(e) {
+      // CORS bloqué probablement — fallback
+    }
+
+    if (!html) {
+      try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(cehqUrl)}`;
+        const res = await fetch(proxyUrl, { cache: 'no-store' });
+        if (res.ok) {
+          html = await res.text();
+          hydrateDebugLog(`${stationId}: ✓ proxy ${html.length}c`);
+        } else {
+          hydrateDebugLog(`${stationId}: ❌ proxy HTTP ${res.status}`);
+        }
+      } catch(e) {
+        hydrateDebugLog(`${stationId}: ❌ proxy ${e.message}`);
+      }
+    }
+
+    if (!html) return;
 
     const parsed = [];
     const rowRegex = /(\d{4}-\d{2}-\d{2})[^0-9]+(\d{2}:\d{2}):\d{2}[^0-9]+(\d+[,.]\d+)/g;
@@ -677,7 +706,7 @@ async function hydrateHistoryIfNeeded(stationId) {
       const iso = new Date(utcMs).toISOString();
       parsed.push({ debit, ts: iso });
     }
-    hydrateDebugLog(`${stationId}: parsed ${parsed.length} mesures`);
+    hydrateDebugLog(`${stationId}: parsed ${parsed.length}`);
 
     if (!parsed.length) return;
 
@@ -691,7 +720,7 @@ async function hydrateHistoryIfNeeded(stationId) {
 
     localStorage.setItem(`hist_${stationId}`, JSON.stringify(final));
     if (state[stationId]) state[stationId]._histCache = final;
-    hydrateDebugLog(`${stationId}: ✓ ${final.length} mesures stockées`);
+    hydrateDebugLog(`${stationId}: 💾 ${final.length}`);
   } catch(e) {
     hydrateDebugLog(`${stationId}: ❌ ${e.message}`);
   } finally {
@@ -1085,10 +1114,9 @@ async function loadStation(stationId) {
   }
   renderCard(stationId);
 
-  // Hydrater l'historique CEHQ si on a moins de 24 mesures (1er démarrage,
-  // ou après une période d'inactivité). Tourne en arrière-plan, re-render
-  // quand prêt pour afficher la sparkline complète.
-  hydrateHistoryIfNeeded(stationId).then(() => {
+  // Hydrater l'historique CEHQ via une queue sérialisée (un fetch à la fois,
+  // avec petit délai entre stations pour éviter le rate-limit du proxy).
+  queueHydration(stationId).then(() => {
     if (state[stationId]?._histCache?.length > 1) {
       scheduleRender(stationId);
     }
