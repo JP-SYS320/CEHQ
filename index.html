@@ -154,8 +154,8 @@
   .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; flex-shrink: 0; }
   .last-update { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; text-align: right; white-space: nowrap; }
 
-  .status-bar { display: flex; padding: 10px 16px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
-  .stat-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.58rem; letter-spacing: 0.06em; color: var(--muted); flex-shrink: 0; line-height: 1; }
+  .status-bar { display: flex; padding: 10px 12px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
+  .stat-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.54rem; letter-spacing: 0.05em; color: var(--muted); flex-shrink: 0; line-height: 1; }
   .stat-val { color: var(--text); font-weight: 700; }
 
   .filters { display: flex; gap: 8px; padding: 10px 16px; border-bottom: 2px solid var(--accent); background: var(--surface); }
@@ -378,7 +378,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
 
 <div class="status-bar">
   <div class="stat-pill">🌑 Nouv. lune&nbsp;<span class="stat-val" id="nextNew">—</span>&nbsp;<span id="nextNewDays"></span></div>
-  <div class="stat-pill" style="margin-left:10px;padding-left:10px;border-left:1px solid #d8dee0">🌕 Pleine lune&nbsp;<span class="stat-val" id="nextFull">—</span>&nbsp;<span id="nextFullDays"></span></div>
+  <div class="stat-pill" style="margin-left:8px;padding-left:8px;border-left:1px solid #d8dee0">🌕 Pleine lune&nbsp;<span class="stat-val" id="nextFull">—</span>&nbsp;<span id="nextFullDays"></span></div>
 </div>
 
 <div class="filters">
@@ -404,7 +404,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v18</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v19</div>
 </footer>
 
 <script>
