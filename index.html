@@ -34,7 +34,6 @@
 <link rel="preconnect" href="https://api.open-meteo.com">
 <link rel="preconnect" href="https://api-iwls.dfo-mpo.gc.ca">
 <link rel="dns-prefetch" href="https://currentrun-proxy.jptremblay18-cc2.workers.dev">
-<link rel="dns-prefetch" href="https://api.allorigins.win">
 <link rel="dns-prefetch" href="https://pav.manisoft.ca">
 <link rel="dns-prefetch" href="https://pavnew.manisoft.ca">
 <link rel="dns-prefetch" href="https://pavnewtest.manisoft.ca">
@@ -417,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.00</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.01</div>
 </footer>
 
 <script>
@@ -1037,7 +1036,7 @@ async function fetchMontaisons(stationId) {
     const controller = new AbortController();
     const tmout = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`,
       { cache: 'no-store', signal: controller.signal }
     );
     clearTimeout(tmout);
@@ -1068,13 +1067,13 @@ async function fetchMontaisons(stationId) {
 
 // ─── Pêcheurs — Manisoft standard + scraping CGRMP (Matapédia) ───────────────
 async function fetchAnglers(s) {
-  // Matapédia — scraping CGRMP via allorigins
+  // Matapédia — scraping CGRMP via Worker Cloudflare
   if (s.anglersUrl) {
     try {
       const controller = new AbortController();
       const tmout = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(s.anglersUrl)}`,
+        `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(s.anglersUrl)}`,
         { cache: 'no-store', signal: controller.signal }
       );
       clearTimeout(tmout);
