@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v36</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v37</div>
 </footer>
 
 <script>
@@ -690,17 +690,23 @@ async function hydrateHistoryIfNeeded(stationId) {
     }
 
     const parsed = [];
-    // Format CEHQ réel : <td>...<font>YYYY-MM-DD</font></td><td>...<font>HH:MM:SS</font></td><td>...<font>débit</font></td>
-    // On capture date + heure + débit en ignorant tout ce qui est entre (balises font, attributs, etc.)
-    const rowRegex = /(\d{4}-\d{2}-\d{2})\s*<\/font>\s*<\/td>[\s\S]*?(\d{2}:\d{2}):\d{2}\s*<\/font>\s*<\/td>[\s\S]*?(\d+[,.]\d+)\s*<\/font>/g;
+    // Approche pragmatique : chercher les motifs date+heure+débit dans l'ordre
+    // sans se soucier de la structure HTML exacte entre eux.
+    // CEHQ a beaucoup de balises <font></font> imbriquées qui rendent le HTML
+    // imprévisible. On se contente de matcher : date, puis dans les 500 caractères
+    // qui suivent, une heure HH:MM:SS, puis un débit décimal.
+    const rowRegex = /(\d{4}-\d{2}-\d{2})[\s\S]{1,500}?(\d{2}:\d{2}):\d{2}[\s\S]{1,500}?(\d+[,.]\d+)/g;
     let match;
     while ((match = rowRegex.exec(html)) !== null) {
       const [, dateStr, timeStr, debitStr] = match;
       const debit = parseFloat(debitStr.replace(',', '.'));
-      if (isNaN(debit) || debit < 0) continue;
+      if (isNaN(debit) || debit < 0 || debit > 10000) continue;  // sanity check
       const [y, mo, d] = dateStr.split('-').map(Number);
       const [h, mi] = timeStr.split(':').map(Number);
+      // Validation : la date doit être récente (dernière semaine)
       const utcMs = Date.UTC(y, mo - 1, d, h + 5, mi, 0);
+      const ageHours = (Date.now() - utcMs) / 3600000;
+      if (ageHours < -2 || ageHours > 24 * 8) continue;  // ignorer trop vieux ou futur
       const iso = new Date(utcMs).toISOString();
       parsed.push({ debit, ts: iso });
     }
