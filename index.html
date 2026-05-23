@@ -404,7 +404,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v14</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v15</div>
 </footer>
 
 <script>
@@ -1439,10 +1439,10 @@ window.addEventListener('focus', autoRefreshIfStale);
 
 // ─── PWA Service Worker ──────────────────────────────────────────────────────
 // Enregistré après le chargement initial pour ne pas bloquer le rendu.
-// Le SW gère le cache offline et permet l'installation sur écran d'accueil.
 
 // ─── PANNEAU DEBUG TEMPORAIRE ────────────────────────────────────────────────
-// À enlever après diagnostic. Affiche l'état du SW en bas à droite.
+let debugLog;  // fonction globale pour logger depuis n'importe où
+
 (function() {
   const dbg = document.createElement('div');
   dbg.id = 'sw-debug';
@@ -1452,90 +1452,92 @@ window.addEventListener('focus', autoRefreshIfStale);
     padding: 8px 10px; border-radius: 6px;
     font-family: monospace; font-size: 0.55rem; color: #f0ede4;
     z-index: 9999; line-height: 1.5;
-    max-height: 30vh; overflow-y: auto;
+    max-height: 40vh; overflow-y: auto;
   `;
   dbg.innerHTML = '<b style="color:#c9a84c">SW DEBUG</b><br>Initializing...';
   document.body.appendChild(dbg);
 
-  const log = (msg) => {
+  debugLog = (msg, color) => {
     const time = new Date().toLocaleTimeString('fr-CA', {hour12:false});
-    dbg.innerHTML += `<br>[${time}] ${msg}`;
+    const c = color ? ` style="color:${color}"` : '';
+    dbg.innerHTML += `<br><span${c}>[${time}] ${msg}</span>`;
     dbg.scrollTop = dbg.scrollHeight;
   };
 
   if (!('serviceWorker' in navigator)) {
-    log('❌ ServiceWorker non supporté');
+    debugLog('❌ ServiceWorker non supporté', '#f06260');
     return;
   }
 
-  // Lister les SW déjà enregistrés
+  // Lire la version depuis le footer
+  const footerVersion = document.querySelector('footer > div:last-child')?.textContent || '?';
+  debugLog(`App version footer: ${footerVersion}`, '#c9a84c');
+
+  // Lister les SW
   navigator.serviceWorker.getRegistrations().then(regs => {
-    log(`📋 SWs enregistrés: ${regs.length}`);
-    regs.forEach((r, i) => {
-      log(`  #${i}: scope=${r.scope.split('/').pop() || '/'}`);
-      log(`     active=${r.active?.state || 'null'} waiting=${r.waiting?.state || 'null'}`);
-    });
+    debugLog(`SWs enregistrés au démarrage: ${regs.length}`);
   });
 
   // Lister les caches
-  if ('caches' in self) {
-    caches.keys().then(keys => {
-      log(`📦 Caches: ${keys.length}`);
-      keys.forEach(k => log(`  ${k}`));
-    });
-  }
+  caches.keys().then(keys => {
+    debugLog(`Caches au démarrage: ${keys.length}`);
+    keys.forEach(k => debugLog(`  ${k}`));
+  });
 
-  // Écouter les messages SW
+  // Écouter TOUS les messages SW avec details
   navigator.serviceWorker.addEventListener('message', event => {
-    log(`📨 Message: ${JSON.stringify(event.data)}`);
+    const data = event.data;
+    if (data?.type === 'APP_UPDATED') {
+      debugLog(`📨 APP_UPDATED reçu! L'app va recharger.`, '#4ade9a');
+    } else if (data?.type === 'SW_LOG') {
+      debugLog(`[SW] ${data.msg}`, data.color || '#7a9ab0');
+    } else {
+      debugLog(`📨 Message: ${JSON.stringify(data)}`);
+    }
   });
 
-  // Écouter changement de SW contrôlant
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    log('🔄 controllerchange (new SW took control)');
+    debugLog('🔄 controllerchange', '#4ade9a');
   });
-
-  // Lire la version depuis le footer (plus fiable que hardcoder)
-  const footerVersion = document.querySelector('footer > div:last-child')?.textContent || '?';
-  log(`App version footer: ${footerVersion}`);
 })();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    debugLog('window.load fired, registering SW...');
     navigator.serviceWorker.register('service-worker.js')
       .then(reg => {
-        const dbg = document.getElementById('sw-debug');
-        if (dbg) dbg.innerHTML += `<br>[register] OK, scope=${reg.scope.split('/').pop() || '/'}`;
+        debugLog(`✓ register OK, scope=${reg.scope.split('/').pop() || '/'}`, '#4ade9a');
         reg.addEventListener('updatefound', () => {
-          if (dbg) dbg.innerHTML += `<br>🆕 updatefound (new SW installing)`;
+          debugLog(`🆕 updatefound`, '#c9a84c');
           const newSW = reg.installing;
           if (newSW) {
             newSW.addEventListener('statechange', () => {
-              if (dbg) dbg.innerHTML += `<br>  new SW state: ${newSW.state}`;
+              debugLog(`  new SW state: ${newSW.state}`);
             });
           }
         });
         // Demander au SW de vérifier les updates 3 secondes après chargement
         setTimeout(() => {
           if (navigator.serviceWorker.controller) {
+            debugLog('→ Envoi CHECK_UPDATE au SW (après 3s)');
             navigator.serviceWorker.controller.postMessage({ type: 'CHECK_UPDATE' });
+          } else {
+            debugLog('⚠ Pas de controller, CHECK_UPDATE ignoré', '#f06260');
           }
         }, 3000);
-        // Vérifier les updates toutes les 5 minutes
+        // Vérifier toutes les 5 minutes
         setInterval(() => {
           if (navigator.serviceWorker.controller) {
+            debugLog('→ Envoi CHECK_UPDATE (périodique)');
             navigator.serviceWorker.controller.postMessage({ type: 'CHECK_UPDATE' });
           }
         }, 5 * 60 * 1000);
       })
       .catch((e) => {
-        const dbg = document.getElementById('sw-debug');
-        if (dbg) dbg.innerHTML += `<br>❌ register failed: ${e.message}`;
+        debugLog(`❌ register failed: ${e.message}`, '#f06260');
       });
   });
 
-  // Écoute les messages du Service Worker :
-  // - APP_UPDATED : l'app shell a changé en arrière-plan → reload pour appliquer
   let reloaded = false;
   navigator.serviceWorker.addEventListener('message', event => {
     if (event.data?.type === 'APP_UPDATED' && !reloaded) {
