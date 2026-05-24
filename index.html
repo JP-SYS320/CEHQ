@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-4</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-5</div>
 </footer>
 
 <script>
@@ -1314,8 +1314,17 @@ async function debugPrevisionCehq() {
     panel.innerHTML += `<br><br><b>URLS DANS JS:</b><br>${[...urls].join('<br>')}`;
   }
 
-  panel.innerHTML += `<br><br><b>DÉBUT JS (1000c):</b><br>${js.substring(0, 1000).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
-}
+  // Chercher chart3 (la prévision moyen terme)
+  const chart3Idx = js.indexOf('chart3');
+  if (chart3Idx >= 0) {
+    panel.innerHTML += `<br><br><b>CHART3 @${chart3Idx}:</b><br>${js.substring(chart3Idx, chart3Idx + 1500).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
+  }
+
+  // Chercher après chart3 - les séries avec données
+  const afterChart3 = js.indexOf('series', chart3Idx);
+  if (afterChart3 >= 0) {
+    panel.innerHTML += `<br><br><b>SERIES @${afterChart3}:</b><br>${js.substring(afterChart3, afterChart3 + 1500).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
+  }
 
 // Bouton temporaire en bas à droite pour lancer le debug
 document.addEventListener('DOMContentLoaded', () => {
