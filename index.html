@@ -436,7 +436,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.04</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.05</div>
 </footer>
 
 <script>
@@ -1328,13 +1328,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ─── Mini-graphique prévision 4 jours ─────────────────────────────────────────
-// Affiche 5 points reliés : aujourd'hui (mesure réelle colorée) + J+1, J+2, J+3, J+4
-// (médiane qMCS de la prévision CEHQ, en doré sombre). Très minimaliste, position
-// dans l'en-tête de la carte à gauche du débit actuel.
+// Affiche 5 points reliés : aujourd'hui (mesure réelle, accentué) + J+1..J+4
+// (médiane qMCS de la prévision CEHQ). Les points de prévision sont colorés
+// selon la tendance globale de la prévision (montante/descendante).
 function buildPrevisionMini(currentDebit, trend, prevision) {
   if (currentDebit === null || !prevision?.length) return '';
 
-  // Composer les 5 valeurs : aujourd'hui + 4 jours de prévision
   const values = [currentDebit, ...prevision.map(p => p.value)].slice(0, 5);
   if (values.length < 2) return '';
 
@@ -1342,30 +1341,42 @@ function buildPrevisionMini(currentDebit, trend, prevision) {
   const max = Math.max(...values);
   const range = max - min || 1;
 
-  // SVG 70×28 — marges intérieures pour que les points ne touchent pas les bords
-  const W = 70, H = 28, padX = 4, padY = 4;
+  // SVG 70×28 — marges intérieures pour éviter que les points touchent les bords
+  // Marges Y un peu plus grandes pour laisser place au halo du point d'aujourd'hui
+  const W = 70, H = 28, padX = 5, padY = 5;
   const usableW = W - 2 * padX;
   const usableH = H - 2 * padY;
 
-  // Position de chaque point
   const points = values.map((v, i) => ({
     x: padX + (i / (values.length - 1)) * usableW,
     y: padY + (1 - (v - min) / range) * usableH
   }));
 
   const linePath = points.map((p, i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`)).join(' ');
-  const lineColor = 'rgba(201,168,76,0.45)';
-  const futureCol = 'rgba(201,168,76,0.85)';
+
+  // Tendance de la prévision : compare le dernier point (J+4) au premier (aujourd'hui)
+  // Si dernier > premier → prévision montante, sinon descendante
+  const previsionLast = values[values.length - 1];
+  const previsionFirst = values[0];
+  const previsionUp = previsionLast >= previsionFirst;
+  const futureCol = previsionUp ? 'rgba(74,222,154,0.85)' : 'rgba(240,98,96,0.85)';
+  const lineColor = previsionUp ? 'rgba(74,222,154,0.45)' : 'rgba(240,98,96,0.45)';
+
+  // Couleur du point d'aujourd'hui : selon la tendance actuelle (var 24h)
   const todayCol = trend === 'up'   ? '#4ade9a'
                  : trend === 'down' ? '#f06260'
                  :                    '#7a9ab0';
 
-  // Construire les cercles : le 1er coloré selon tendance, les autres en doré
   const circles = points.map((p, i) => {
     const isToday = i === 0;
-    const c = isToday ? todayCol : futureCol;
-    const r = isToday ? 2.5 : 1.8;
-    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${c}"/>`;
+    if (isToday) {
+      // Point d'aujourd'hui : plus gros + halo lumineux + contour blanc
+      return `
+        <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5" fill="${todayCol}" opacity="0.25"/>
+        <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.2" fill="${todayCol}" stroke="#ffffff" stroke-width="0.8"/>
+      `;
+    }
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="1.8" fill="${futureCol}"/>`;
   }).join('');
 
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
