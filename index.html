@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-5</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-6</div>
 </footer>
 
 <script>
@@ -1325,6 +1325,7 @@ async function debugPrevisionCehq() {
   if (afterChart3 >= 0) {
     panel.innerHTML += `<br><br><b>SERIES @${afterChart3}:</b><br>${js.substring(afterChart3, afterChart3 + 1500).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
   }
+}
 
 // Bouton temporaire en bas à droite pour lancer le debug
 document.addEventListener('DOMContentLoaded', () => {
