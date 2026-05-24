@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-2</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-3</div>
 </footer>
 
 <script>
@@ -1243,13 +1243,14 @@ async function debugPrevisionCehq() {
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'prev-debug';
-    panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:60vh;overflow-y:auto;';
+    panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:80vh;overflow-y:auto;';
     document.body.appendChild(panel);
   }
-  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Fetching...';
+  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Fetching debitPrevision.js...';
 
-  const url = 'https://www.cehq.gouv.qc.ca/suivihydro/graphique.asp?NoStation=010802';
-  const proxyUrl = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`;
+  // On va chercher le fichier JS qui gère le graphique de prévision
+  const jsUrl = 'https://www.cehq.gouv.qc.ca/suivihydro/js/graphiques/debitPrevision.js';
+  const proxyUrl = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(jsUrl)}`;
 
   try {
     const res = await fetch(proxyUrl, { cache: 'no-store' });
@@ -1257,56 +1258,35 @@ async function debugPrevisionCehq() {
       panel.innerHTML += `<br>❌ HTTP ${res.status}`;
       return;
     }
-    const html = await res.text();
-    panel.innerHTML += `<br>✓ HTML ${html.length}c reçu`;
+    const js = await res.text();
+    panel.innerHTML += `<br>✓ JS ${js.length}c reçu`;
 
-    // Chercher les mots-clés probables pour Highcharts
-    const keywords = ['series', 'data:', 'highcharts', 'Highcharts', 'prevision', 'forecast', 'median'];
-    keywords.forEach(kw => {
-      const idx = html.indexOf(kw);
-      panel.innerHTML += `<br>"${kw}": ${idx >= 0 ? `trouvé à ${idx}` : 'absent'}`;
+    // Chercher les URLs/endpoints appelés dans ce JS
+    const urlPatterns = [
+      /['"]([^'"]*\.asp\??[^'"]*)['"]/g,
+      /['"]([^'"]*\.json[^'"]*)['"]/g,
+      /['"]([^'"]*\/prevision\/[^'"]*)['"]/g,
+      /url\s*:\s*['"]([^'"]+)['"]/g,
+      /\$\.(ajax|get|post|getJSON)\s*\(\s*['"]([^'"]+)['"]/g
+    ];
+
+    const urls = new Set();
+    urlPatterns.forEach(p => {
+      [...js.matchAll(p)].forEach(m => urls.add(m[1] || m[2]));
     });
-
-    // Chercher la première référence à "series" et montrer le contexte
-    const seriesIdx = html.search(/series\s*[:=]/);
-    if (seriesIdx >= 0) {
-      const sample = html.substring(seriesIdx, seriesIdx + 400).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
-      panel.innerHTML += `<br><br><b>SAMPLE @${seriesIdx}:</b><br>${sample}`;
+    if (urls.size) {
+      panel.innerHTML += `<br><br><b>URLS TROUVÉES:</b><br>${[...urls].join('<br>')}`;
     }
 
-    // Chercher le contexte autour de "prevision"
-    const prevIdx = html.indexOf('prevision');
-    if (prevIdx >= 0) {
-      const start = Math.max(0, prevIdx - 200);
-      const sample = html.substring(start, prevIdx + 400).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
-      panel.innerHTML += `<br><br><b>PRÉVISION @${prevIdx}:</b><br>${sample}`;
+    // Chercher les variables/fonctions clés
+    const funcs = [...js.matchAll(/function\s+(\w+)\s*\(/g)].map(m => m[1]);
+    if (funcs.length) {
+      panel.innerHTML += `<br><br><b>FONCTIONS:</b><br>${funcs.slice(0, 10).join(', ')}`;
     }
 
-    // Chercher tous les fichiers JS référencés (peut-être les données sont chargées par un autre script)
-    const scripts = [...html.matchAll(/src\s*=\s*["']([^"']+\.js[^"']*)["']/g)].map(m => m[1]);
-    if (scripts.length) {
-      panel.innerHTML += `<br><br><b>SCRIPTS JS:</b><br>${scripts.join('<br>')}`;
-    }
+    // Sample du début du fichier (200 chars)
+    panel.innerHTML += `<br><br><b>DÉBUT JS:</b><br>${js.substring(0, 500).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
 
-    // Chercher des URLs AJAX ou JSON
-    const ajaxUrls = [...html.matchAll(/(?:url|ajax|fetch)\s*[:=]\s*["']([^"']+)["']/g)].map(m => m[1]).slice(0, 5);
-    if (ajaxUrls.length) {
-      panel.innerHTML += `<br><br><b>AJAX/URLS:</b><br>${ajaxUrls.join('<br>')}`;
-    }
-
-    // Chercher des patterns de données : [[timestamp, value], ...]
-    const dataIdx = html.search(/\[\[\s*\d{10,13}\s*,/);
-    if (dataIdx >= 0) {
-      const sample = html.substring(dataIdx, dataIdx + 400).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
-      panel.innerHTML += `<br><br><b>DATA ARRAY @${dataIdx}:</b><br>${sample}`;
-    }
-
-    // Chercher Date.UTC
-    const dateUtcIdx = html.search(/Date\.UTC\s*\(/);
-    if (dateUtcIdx >= 0) {
-      const sample = html.substring(dateUtcIdx, dateUtcIdx + 400).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
-      panel.innerHTML += `<br><br><b>Date.UTC @${dateUtcIdx}:</b><br>${sample}`;
-    }
   } catch(e) {
     panel.innerHTML += `<br>❌ ${e.message}`;
   }
