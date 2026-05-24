@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-9</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-10</div>
 </footer>
 
 <script>
@@ -1245,52 +1245,54 @@ async function debugPrevisionCehq() {
     panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:80vh;overflow-y:auto;';
     document.body.appendChild(panel);
   }
-  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Recherche large...';
+  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Cherche fonction debitPrevision dans graphique.js...';
 
-  // Sources à scanner
-  const files = [
-    'https://www.cehq.gouv.qc.ca/js/utilitaires.js',
-    'https://www.cehq.gouv.qc.ca/js/variables.js',
-    'https://www.cehq.gouv.qc.ca/js/produireGraphiques.js',
-    'https://www.cehq.gouv.qc.ca/js/graphique.js',
-    'https://www.cehq.gouv.qc.ca/suivihydro/graphique.asp?NoStation=010802'
-  ];
+  try {
+    const url = 'https://www.cehq.gouv.qc.ca/js/graphique.js';
+    const proxy = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxy, { cache: 'no-store' });
+    if (!res.ok) { panel.innerHTML += `<br>❌ HTTP ${res.status}`; return; }
+    const js = await res.text();
+    panel.innerHTML += `<br>✓ graphique.js ${js.length}c reçu`;
 
-  for (const url of files) {
-    try {
-      const proxy = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxy, { cache: 'no-store' });
-      if (!res.ok) { panel.innerHTML += `<br>${url.split('/').pop()} → ${res.status}`; continue; }
-      const js = await res.text();
-      const fileName = url.includes('?') ? url.split('/').pop() : url.split('/').pop();
+    // Trouver la fonction debitPrevision
+    // Pattern : function debitPrevision(json) { ... }  ou debitPrevision = function ... ou debitPrevision: function ...
+    const patterns = [
+      /function\s+debitPrevision\s*\(/g,
+      /debitPrevision\s*=\s*function/g,
+      /const\s+debitPrevision\s*=/g,
+      /let\s+debitPrevision\s*=/g,
+      /var\s+debitPrevision\s*=/g
+    ];
 
-      panel.innerHTML += `<br><br><b>━━ ${fileName} (${js.length}c) ━━</b>`;
-
-      // Chercher mots-clés
-      ['getBDHInformation', 'debitPrevision', 'bdh', 'BDH', 'previsionMoyenTerme', '.ashx', '.aspx'].forEach(kw => {
-        const idx = js.indexOf(kw);
-        if (idx >= 0) {
-          panel.innerHTML += `<br>"${kw}" @${idx}`;
-        }
-      });
-
-      // Si trouve getBDHInformation, montrer le contexte
-      const bdhIdx = js.indexOf('getBDHInformation');
-      if (bdhIdx >= 0) {
-        panel.innerHTML += `<br>CTX getBDHInformation:<br>${js.substring(bdhIdx, bdhIdx + 800).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
-      }
-
-      // Chercher des URLs spécifiques
-      const urls = new Set();
-      [/['"]([^'"]*\.(?:asp|aspx|ashx|json)\??[^'"]*)['"]/g, /url\s*:\s*['"]([^'"]+)['"]/g].forEach(p => {
-        [...js.matchAll(p)].forEach(m => urls.add(m[1]));
-      });
-      if (urls.size) {
-        panel.innerHTML += `<br>URLS: ${[...urls].slice(0, 10).join(' | ')}`;
-      }
-    } catch(e) {
-      panel.innerHTML += `<br>err: ${e.message}`;
+    let defIdx = -1;
+    for (const p of patterns) {
+      const m = p.exec(js);
+      if (m) { defIdx = m.index; break; }
     }
+
+    if (defIdx < 0) {
+      // Trouver toutes les occurrences de debitPrevision
+      const occurrences = [...js.matchAll(/debitPrevision/g)].map(m => m.index);
+      panel.innerHTML += `<br>Pas de définition trouvée directement. ${occurrences.length} occurrences de "debitPrevision" aux index : ${occurrences.slice(0, 10).join(', ')}`;
+      // Montrer la première occurrence
+      if (occurrences.length) {
+        const idx = occurrences[0];
+        panel.innerHTML += `<br><br><b>1ère occurrence @${idx}:</b><br>${js.substring(Math.max(0, idx - 100), idx + 1000).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
+      }
+      return;
+    }
+
+    // Montrer la définition + 2000 caractères de contexte
+    panel.innerHTML += `<br><br><b>FONCTION debitPrevision @${defIdx}:</b><br>${js.substring(defIdx, defIdx + 2500).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
+
+    // Aussi chercher previsionMoyenTerme et son contexte
+    const moyenTermeIdx = js.indexOf('previsionMoyenTerme');
+    if (moyenTermeIdx >= 0) {
+      panel.innerHTML += `<br><br><b>previsionMoyenTerme @${moyenTermeIdx}:</b><br>${js.substring(Math.max(0, moyenTermeIdx - 300), moyenTermeIdx + 800).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
+    }
+  } catch(e) {
+    panel.innerHTML += `<br>❌ ${e.message}`;
   }
 }
 
