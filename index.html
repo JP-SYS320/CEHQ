@@ -204,6 +204,10 @@
   .trend-down { background: #ffffff; color: #d94f4d; }
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
 
+  /* Mini-graphique prévision 4 jours - entre le nom et la valeur de débit */
+  .prevision-mini { flex: 0 0 auto; width: 70px; height: 28px; opacity: 0.85; }
+  .prevision-mini svg { width: 100%; height: 100%; display: block; }
+
   .sparkline-row { margin-top: 4px; height: 36px; position: relative; margin-bottom: 10px; }
   .spark-bars { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 2px; }
   .spark-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; }
@@ -416,7 +420,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-10</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03</div>
 </footer>
 
 <script>
@@ -572,7 +576,7 @@ STATIONS.forEach(s => {
   state[s.id] = { debit:null, trend:null, status:'idle', msg:'', expanded:false,
                   sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null,
                   tides:null, anglers:null, montaisons:null, rain:null, rainProb:null,
-                  _histCache: histCache };
+                  prevision:null, _histCache: histCache };
 });
 
 // ─── CSS var cache — résolution unique par variable ───────────────────────────
@@ -1065,6 +1069,72 @@ async function fetchMontaisons(stationId) {
   return null;
 }
 
+// ─── Prévision CEHQ — 4 prochains jours ───────────────────────────────────────
+// Récupère le JSON BDH (Base de Données Hydrométriques) de CEHQ qui contient
+// les prévisions hydrologiques (modèle médian qMCS + intervalle q25/q75).
+// On extrait 4 points : J+1, J+2, J+3, J+4 (à midi local de chaque jour).
+// Cache localStorage 12h car CEHQ met à jour la prévision 1x/jour environ.
+async function fetchPrevision(stationId) {
+  if (stationId === 'MITIS') return null;
+  const key = `prev_${stationId}_${todayStr}`;
+  const cached = localStorage.getItem(key);
+  if (cached) {
+    try { return JSON.parse(cached); } catch(e) {}
+  }
+
+  try {
+    const url = `https://www.cehq.gouv.qc.ca/depot/suivihydro/bd/JSON/${stationId}.json`;
+    const proxyUrl = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`;
+    const ctrl = new AbortController();
+    const tmout = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(proxyUrl, { cache: 'no-store', signal: ctrl.signal });
+    clearTimeout(tmout);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!Array.isArray(json.prevision) || !json.prevision.length) return null;
+
+    // Cibler 4 points : J+1, J+2, J+3, J+4 à midi local
+    // Format datePrevision : "YYYY-MM-DD HH:MM:SS" en heure locale Toronto
+    const now = new Date();
+    const targetDays = [];
+    for (let d = 1; d <= 4; d++) {
+      const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, 12, 0, 0);
+      targetDays.push(target.getTime());
+    }
+
+    // Convertir chaque point de prévision en timestamp et chercher celui le plus proche
+    // de chaque jour cible
+    const points = json.prevision.map(p => {
+      const [datePart, timePart] = p.datePrevision.split(' ');
+      const [y, mo, d] = datePart.split('-').map(Number);
+      const [h, mi] = timePart.split(':').map(Number);
+      // Date interprétée comme heure locale Toronto (puisque l'iPhone est sur ce fuseau)
+      const ts = new Date(y, mo - 1, d, h, mi, 0).getTime();
+      return { ts, value: p.qMCS };
+    });
+
+    const result = targetDays.map(targetTs => {
+      let bestPoint = null;
+      let bestDiff = Infinity;
+      points.forEach(p => {
+        const diff = Math.abs(p.ts - targetTs);
+        if (diff < bestDiff) { bestDiff = diff; bestPoint = p; }
+      });
+      // Si le point le plus proche est à plus de 6h du jour cible, on ne le garde pas
+      if (bestPoint && bestDiff < 6 * 3600 * 1000) {
+        return { ts: targetTs, value: bestPoint.value };
+      }
+      return null;
+    }).filter(p => p !== null);
+
+    if (!result.length) return null;
+    localStorage.setItem(key, JSON.stringify(result));
+    return result;
+  } catch(e) {
+    return null;
+  }
+}
+
 // ─── Pêcheurs — Manisoft standard + scraping CGRMP (Matapédia) ───────────────
 async function fetchAnglers(s) {
   // Matapédia — scraping CGRMP via Worker Cloudflare
@@ -1193,6 +1263,11 @@ async function loadStation(stationId) {
       if (montaisons) { state[stationId].montaisons = montaisons; scheduleRender(stationId); }
     }).catch(() => {});
   }
+
+  // Prévision CEHQ 4 jours (médiane qMCS)
+  fetchPrevision(stationId).then(prevision => {
+    if (prevision) { state[stationId].prevision = prevision; scheduleRender(stationId); }
+  }).catch(() => {});
 }
 
 // ─── Actualiser tout ──────────────────────────────────────────────────────────
@@ -1236,75 +1311,52 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// ─── DEBUG TEMPORAIRE — Explorer la page prévision CEHQ ──────────────────────
-async function debugPrevisionCehq() {
-  let panel = document.getElementById('prev-debug');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'prev-debug';
-    panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:80vh;overflow-y:auto;';
-    document.body.appendChild(panel);
-  }
-  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Cherche fonction debitPrevision dans graphique.js...';
+// ─── Mini-graphique prévision 4 jours ─────────────────────────────────────────
+// Affiche 5 points reliés : aujourd'hui (mesure réelle colorée) + J+1, J+2, J+3, J+4
+// (médiane qMCS de la prévision CEHQ, en doré sombre). Très minimaliste, position
+// dans l'en-tête de la carte à gauche du débit actuel.
+function buildPrevisionMini(currentDebit, trend, prevision) {
+  if (currentDebit === null || !prevision?.length) return '';
 
-  try {
-    const url = 'https://www.cehq.gouv.qc.ca/js/graphique.js';
-    const proxy = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxy, { cache: 'no-store' });
-    if (!res.ok) { panel.innerHTML += `<br>❌ HTTP ${res.status}`; return; }
-    const js = await res.text();
-    panel.innerHTML += `<br>✓ graphique.js ${js.length}c reçu`;
+  // Composer les 5 valeurs : aujourd'hui + 4 jours de prévision
+  const values = [currentDebit, ...prevision.map(p => p.value)].slice(0, 5);
+  if (values.length < 2) return '';
 
-    // Trouver la fonction debitPrevision
-    // Pattern : function debitPrevision(json) { ... }  ou debitPrevision = function ... ou debitPrevision: function ...
-    const patterns = [
-      /function\s+debitPrevision\s*\(/g,
-      /debitPrevision\s*=\s*function/g,
-      /const\s+debitPrevision\s*=/g,
-      /let\s+debitPrevision\s*=/g,
-      /var\s+debitPrevision\s*=/g
-    ];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
 
-    let defIdx = -1;
-    for (const p of patterns) {
-      const m = p.exec(js);
-      if (m) { defIdx = m.index; break; }
-    }
+  // SVG 70×28 — marges intérieures pour que les points ne touchent pas les bords
+  const W = 70, H = 28, padX = 4, padY = 4;
+  const usableW = W - 2 * padX;
+  const usableH = H - 2 * padY;
 
-    if (defIdx < 0) {
-      // Trouver toutes les occurrences de debitPrevision
-      const occurrences = [...js.matchAll(/debitPrevision/g)].map(m => m.index);
-      panel.innerHTML += `<br>Pas de définition trouvée directement. ${occurrences.length} occurrences de "debitPrevision" aux index : ${occurrences.slice(0, 10).join(', ')}`;
-      // Montrer la première occurrence
-      if (occurrences.length) {
-        const idx = occurrences[0];
-        panel.innerHTML += `<br><br><b>1ère occurrence @${idx}:</b><br>${js.substring(Math.max(0, idx - 100), idx + 1000).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
-      }
-      return;
-    }
+  // Position de chaque point
+  const points = values.map((v, i) => ({
+    x: padX + (i / (values.length - 1)) * usableW,
+    y: padY + (1 - (v - min) / range) * usableH
+  }));
 
-    // Montrer la définition + 2000 caractères de contexte
-    panel.innerHTML += `<br><br><b>FONCTION debitPrevision @${defIdx}:</b><br>${js.substring(defIdx, defIdx + 2500).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
+  const linePath = points.map((p, i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`)).join(' ');
+  const lineColor = 'rgba(201,168,76,0.45)';
+  const futureCol = 'rgba(201,168,76,0.85)';
+  const todayCol = trend === 'up'   ? '#4ade9a'
+                 : trend === 'down' ? '#f06260'
+                 :                    '#7a9ab0';
 
-    // Aussi chercher previsionMoyenTerme et son contexte
-    const moyenTermeIdx = js.indexOf('previsionMoyenTerme');
-    if (moyenTermeIdx >= 0) {
-      panel.innerHTML += `<br><br><b>previsionMoyenTerme @${moyenTermeIdx}:</b><br>${js.substring(Math.max(0, moyenTermeIdx - 300), moyenTermeIdx + 800).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
-    }
-  } catch(e) {
-    panel.innerHTML += `<br>❌ ${e.message}`;
-  }
+  // Construire les cercles : le 1er coloré selon tendance, les autres en doré
+  const circles = points.map((p, i) => {
+    const isToday = i === 0;
+    const c = isToday ? todayCol : futureCol;
+    const r = isToday ? 2.5 : 1.8;
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${c}"/>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <path d="${linePath}" fill="none" stroke="${lineColor}" stroke-width="1"/>
+    ${circles}
+  </svg>`;
 }
-
-// Bouton temporaire en bas à droite pour lancer le debug
-document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.createElement('button');
-  btn.textContent = '🔍 Debug prév.';
-  btn.style.cssText = 'position:fixed;bottom:6px;right:6px;background:rgba(15,25,35,0.9);border:1px solid #c9a84c;color:#c9a84c;padding:6px 10px;font-family:inherit;font-size:0.55rem;border-radius:4px;z-index:9998;cursor:pointer;';
-  btn.onclick = debugPrevisionCehq;
-  document.body.appendChild(btn);
-});
-
 
 // ─── Mini sparkline ───────────────────────────────────────────────────────────
 // Toutes les barres en doré sombre / discret (rgba doré avec faible opacité)
@@ -1405,6 +1457,10 @@ function renderCard(stationId) {
   } else {
     sparkEl.innerHTML = buildSpark(vals.length ? vals : [st.debit], st.trend);
   }
+
+  // Mini-graphique prévision 4 jours (à gauche du débit dans l'en-tête)
+  const prevEl = card.querySelector('.prevision-mini');
+  if (prevEl) prevEl.innerHTML = buildPrevisionMini(st.debit, st.trend, st.prevision);
 
   // Message statut
   const msg = card.querySelector('.status-msg');
@@ -1543,6 +1599,7 @@ function buildCards() {
           <div class="river-name">${nameHtml}</div>
           <div class="station-id">${s.id === 'MITIS' ? 'AUCUNE STATION CEHQ' : `STATION ${s.id}`}</div>
         </div>
+        <div class="prevision-mini"></div>
         <div class="debit-main">
           <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:4px">
             <div class="debit-value" style="color:#7a9ab0">—</div>
