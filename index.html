@@ -450,7 +450,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.14</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.15-debug</div>
 </footer>
 
 <script>
@@ -1344,6 +1344,39 @@ function refreshAll() {
 // Feedback visuel pressé du bouton via touchstart/touchend
 // (plus fiable que :active sur iOS Safari en mode PWA standalone)
 document.addEventListener('DOMContentLoaded', () => {
+  // DEBUG TEMP : bouton pour inspecter Dartmouth
+  setTimeout(() => {
+    const btn = document.createElement('button');
+    btn.textContent = '🔍 Dartmouth';
+    btn.style.cssText = 'position:fixed;bottom:6px;right:6px;background:rgba(15,25,35,0.9);border:1px solid #c9a84c;color:#c9a84c;padding:6px 10px;font-family:inherit;font-size:0.55rem;border-radius:4px;z-index:9998;cursor:pointer;';
+    btn.onclick = () => {
+      let panel = document.getElementById('prev-debug');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'prev-debug';
+        panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:80vh;overflow-y:auto;';
+        document.body.appendChild(panel);
+      }
+      panel.innerHTML = '<b style="color:#c9a84c">DARTMOUTH HISTORIQUE</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span>';
+      const hist = JSON.parse(localStorage.getItem('hist_020602') || '[]');
+      panel.innerHTML += `<br>Total : ${hist.length} mesures<br>`;
+      if (hist.length) {
+        const vals = hist.map(h => h.debit);
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+        panel.innerHTML += `min=${min.toFixed(2)} max=${max.toFixed(2)} avg=${avg.toFixed(2)} ratio=${(max/min).toFixed(1)}x<br><br>`;
+        // Montrer les 96 valeurs
+        panel.innerHTML += hist.slice(-30).map(h => {
+          const t = new Date(h.ts).toISOString().substring(11, 16);
+          return `${t} = ${h.debit}`;
+        }).join('<br>');
+        // Bouton reset
+        panel.innerHTML += `<br><br><button onclick="localStorage.removeItem('hist_020602'); alert('Reset OK, actualise');" style="background:#f06260;color:#fff;border:none;padding:8px;font-family:inherit;border-radius:4px;">⚠️ RESET historique Dartmouth</button>`;
+      }
+    };
+    document.body.appendChild(btn);
+  }, 500);
+
   const refreshBtn = document.getElementById('refreshAll');
   if (refreshBtn) {
     const press = () => refreshBtn.classList.add('pressed');
