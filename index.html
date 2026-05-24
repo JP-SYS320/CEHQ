@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.01</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.02</div>
 </footer>
 
 <script>
@@ -1068,7 +1068,19 @@ async function fetchMontaisons(stationId) {
 // ─── Pêcheurs — Manisoft standard + scraping CGRMP (Matapédia) ───────────────
 async function fetchAnglers(s) {
   // Matapédia — scraping CGRMP via Worker Cloudflare
+  // Stratégie spéciale : CGRMP ne fournit que la valeur du jour courant.
+  // On stocke chaque jour la valeur dans localStorage pour pouvoir afficher
+  // celle d'hier comme référence le lendemain.
   if (s.anglersUrl) {
+    // Récupérer la valeur d'hier depuis localStorage
+    const histKey = `anglers_hist_${s.id}`;
+    const historyData = JSON.parse(localStorage.getItem(histKey) || '{}');
+    // Calculer la date d'hier en heure locale
+    const now = new Date();
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
+    const yesterdayCount = historyData[yStr] || null;
+
     try {
       const controller = new AbortController();
       const tmout = setTimeout(() => controller.abort(), 8000);
@@ -1077,12 +1089,25 @@ async function fetchAnglers(s) {
         { cache: 'no-store', signal: controller.signal }
       );
       clearTimeout(tmout);
-      if (!res.ok) return null;
+      if (!res.ok) return { today: null, yesterday: yesterdayCount };
       const html = await res.text();
       const m = html.match(/PÊCHEURS[\s\S]*?rivière Matapédia[\s\S]*?<td[^>]*>\s*(\d+)\s*<\/td>/i);
-      if (m) return { today: m[1], tomorrow: null };
+      if (m) {
+        const todayCount = m[1];
+        // Stocker la valeur du jour pour qu'elle devienne "hier" demain
+        const tStr = todayStr;  // déjà calculé en heure locale au démarrage
+        historyData[tStr] = todayCount;
+        // Nettoyer les vieilles entrées (>14 jours) pour éviter de grossir indéfiniment
+        const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14).getTime();
+        Object.keys(historyData).forEach(k => {
+          const [y, mo, d] = k.split('-').map(Number);
+          if (new Date(y, mo - 1, d).getTime() < cutoff) delete historyData[k];
+        });
+        localStorage.setItem(histKey, JSON.stringify(historyData));
+        return { today: todayCount, yesterday: yesterdayCount };
+      }
     } catch(e) {}
-    return null;
+    return { today: null, yesterday: yesterdayCount };
   }
 
   // Manisoft standard
@@ -1387,7 +1412,8 @@ function renderCard(stationId) {
   const anglersToday    = card.querySelector('.dv-anglers-today');
   const anglersTomorrow = card.querySelector('.dv-anglers-tomorrow');
   if (anglersToday)    anglersToday.textContent    = st.anglers?.today    ?? '—';
-  if (anglersTomorrow) anglersTomorrow.textContent = st.anglers?.tomorrow ?? '—';
+  // 2e valeur : "Hier" pour Matapédia, "Demain" pour Manisoft (selon ce qui est dispo)
+  if (anglersTomorrow) anglersTomorrow.textContent = st.anglers?.yesterday ?? st.anglers?.tomorrow ?? '—';
 }
 
 // ─── Toggle carte ─────────────────────────────────────────────────────────────
@@ -1513,10 +1539,10 @@ function buildCards() {
                 <div class="d-sublabel">Auj.</div>
                 <div class="dv-anglers-today d-value">—</div>
               </div>
-              ${!s.anglersUrl ? `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;padding-top:4px;border-top:1px solid rgba(201,168,76,0.15)">
-                <div class="d-sublabel">Demain</div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;padding-top:4px;border-top:1px solid rgba(201,168,76,0.15)">
+                <div class="d-sublabel">${s.anglersUrl ? 'Hier' : 'Demain'}</div>
                 <div class="dv-anglers-tomorrow d-value">—</div>
-              </div>` : ''}
+              </div>
             </div>
             <div class="d-subbox">
               <div style="display:flex;align-items:center;gap:4px;justify-content:center;margin-bottom:4px">
