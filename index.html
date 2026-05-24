@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-7</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-8</div>
 </footer>
 
 <script>
@@ -1245,71 +1245,55 @@ async function debugPrevisionCehq() {
     panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:80vh;overflow-y:auto;';
     document.body.appendChild(panel);
   }
-  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Cherche produireGraphiques.js...';
+  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Cherche utilitaires.js + variables.js...';
 
-  // Cibler produireGraphiques.js qui injecte les données dans les charts
-  const candidates = [
-    'https://www.cehq.gouv.qc.ca/js/produireGraphiques.js',
-    'https://www.cehq.gouv.qc.ca/suivihydro/js/produireGraphiques.js',
-    'https://www.cehq.gouv.qc.ca/scripts/js/produireGraphiques.js'
+  // Récupérer les 2 fichiers candidats
+  const files = [
+    'https://www.cehq.gouv.qc.ca/js/utilitaires.js',
+    'https://www.cehq.gouv.qc.ca/js/variables.js'
   ];
 
-  let foundUrl = null;
-  let js = null;
-
-  for (const candidate of candidates) {
+  const allJs = {};
+  for (const url of files) {
     try {
-      const proxy = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(candidate)}`;
+      const proxy = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`;
       const res = await fetch(proxy, { cache: 'no-store' });
-      panel.innerHTML += `<br>${candidate.replace('https://www.cehq.gouv.qc.ca','')} → ${res.status}`;
+      panel.innerHTML += `<br>${url.replace('https://www.cehq.gouv.qc.ca','')} → ${res.status}`;
       if (res.ok) {
         const text = await res.text();
-        if (text.length > 200) {
-          foundUrl = candidate;
-          js = text;
-          panel.innerHTML += ` ✓ ${text.length}c`;
-          break;
-        }
+        allJs[url] = text;
+        panel.innerHTML += ` ✓ ${text.length}c`;
       }
     } catch(e) {
       panel.innerHTML += `<br>err: ${e.message}`;
     }
   }
 
-  if (!js) {
-    panel.innerHTML += `<br>❌ produireGraphiques.js introuvable`;
-    return;
+  // Pour chaque fichier, chercher getBDHInformation et les URLs
+  for (const [url, js] of Object.entries(allJs)) {
+    const fileName = url.split('/').pop();
+
+    // Chercher getBDHInformation
+    const bdhIdx = js.indexOf('getBDHInformation');
+    if (bdhIdx >= 0) {
+      panel.innerHTML += `<br><br><b>getBDHInformation dans ${fileName} @${bdhIdx}:</b><br>${js.substring(bdhIdx, bdhIdx + 1200).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
+    }
+
+    // Chercher les URLs
+    const urlPatterns = [
+      /['"]([^'"]*\.asp\??[^'"]*)['"]/g,
+      /['"]([^'"]*\.json[^'"]*)['"]/g,
+      /['"]([^'"]*\/depot\/[^'"]*)['"]/g,
+      /url\s*:\s*['"]([^'"]+)['"]/g
+    ];
+    const urls = new Set();
+    urlPatterns.forEach(p => {
+      [...js.matchAll(p)].forEach(m => urls.add(m[1] || m[2]));
+    });
+    if (urls.size) {
+      panel.innerHTML += `<br><br><b>URLS dans ${fileName}:</b><br>${[...urls].join('<br>')}`;
+    }
   }
-
-  // Chercher les URLs/endpoints AJAX
-  const urlPatterns = [
-    /['"]([^'"]*\.asp\??[^'"]*)['"]/g,
-    /['"]([^'"]*\.json[^'"]*)['"]/g,
-    /url\s*:\s*['"]([^'"]+)['"]/g,
-    /\$\.(?:ajax|get|post|getJSON)\s*\(\s*['"]([^'"]+)['"]/g,
-    /fetch\s*\(\s*['"]([^'"]+)['"]/g
-  ];
-
-  const urls = new Set();
-  urlPatterns.forEach(p => {
-    [...js.matchAll(p)].forEach(m => urls.add(m[1] || m[2]));
-  });
-  if (urls.size) {
-    panel.innerHTML += `<br><br><b>URLS DANS JS:</b><br>${[...urls].join('<br>')}`;
-  }
-
-  // Chercher setData (injection des données dans les charts)
-  const setDataMatches = [...js.matchAll(/\.setData\s*\(/g)];
-  panel.innerHTML += `<br><br><b>${setDataMatches.length} appels setData() trouvés</b>`;
-
-  // Chercher "moyen" (pour cibler la série prévision moyen terme)
-  const moyenIdx = js.indexOf('moyen');
-  if (moyenIdx >= 0) {
-    panel.innerHTML += `<br><br><b>MOYEN @${moyenIdx}:</b><br>${js.substring(Math.max(0, moyenIdx - 200), moyenIdx + 800).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
-  }
-
-  // Sample début
-  panel.innerHTML += `<br><br><b>DÉBUT JS:</b><br>${js.substring(0, 800).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
 }
 
 // Bouton temporaire en bas à droite pour lancer le debug
