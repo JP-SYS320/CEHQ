@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.02</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug</div>
 </footer>
 
 <script>
@@ -1235,6 +1235,72 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshBtn.addEventListener('mouseleave', release);
   }
 });
+
+// ─── DEBUG TEMPORAIRE — Explorer la page prévision CEHQ ──────────────────────
+// À retirer une fois la fonctionnalité de prévision implémentée
+async function debugPrevisionCehq() {
+  let panel = document.getElementById('prev-debug');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'prev-debug';
+    panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:60vh;overflow-y:auto;';
+    document.body.appendChild(panel);
+  }
+  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Fetching...';
+
+  const url = 'https://www.cehq.gouv.qc.ca/suivihydro/graphique.asp?NoStation=010802';
+  const proxyUrl = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`;
+
+  try {
+    const res = await fetch(proxyUrl, { cache: 'no-store' });
+    if (!res.ok) {
+      panel.innerHTML += `<br>❌ HTTP ${res.status}`;
+      return;
+    }
+    const html = await res.text();
+    panel.innerHTML += `<br>✓ HTML ${html.length}c reçu`;
+
+    // Chercher les mots-clés probables pour Highcharts
+    const keywords = ['series', 'data:', 'highcharts', 'Highcharts', 'prevision', 'forecast', 'median'];
+    keywords.forEach(kw => {
+      const idx = html.indexOf(kw);
+      panel.innerHTML += `<br>"${kw}": ${idx >= 0 ? `trouvé à ${idx}` : 'absent'}`;
+    });
+
+    // Chercher la première référence à "series" et montrer le contexte
+    const seriesIdx = html.search(/series\s*[:=]/);
+    if (seriesIdx >= 0) {
+      const sample = html.substring(seriesIdx, seriesIdx + 400).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
+      panel.innerHTML += `<br><br><b>SAMPLE @${seriesIdx}:</b><br>${sample}`;
+    }
+
+    // Chercher des patterns de données : [[timestamp, value], ...]
+    const dataIdx = html.search(/\[\[\s*\d{10,13}\s*,/);
+    if (dataIdx >= 0) {
+      const sample = html.substring(dataIdx, dataIdx + 400).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
+      panel.innerHTML += `<br><br><b>DATA ARRAY @${dataIdx}:</b><br>${sample}`;
+    }
+
+    // Chercher dates ISO ou format Highcharts
+    const dateUtcIdx = html.search(/Date\.UTC\s*\(/);
+    if (dateUtcIdx >= 0) {
+      const sample = html.substring(dateUtcIdx, dateUtcIdx + 400).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
+      panel.innerHTML += `<br><br><b>Date.UTC @${dateUtcIdx}:</b><br>${sample}`;
+    }
+  } catch(e) {
+    panel.innerHTML += `<br>❌ ${e.message}`;
+  }
+}
+
+// Bouton temporaire en bas à droite pour lancer le debug
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.createElement('button');
+  btn.textContent = '🔍 Debug prév.';
+  btn.style.cssText = 'position:fixed;bottom:6px;right:6px;background:rgba(15,25,35,0.9);border:1px solid #c9a84c;color:#c9a84c;padding:6px 10px;font-family:inherit;font-size:0.55rem;border-radius:4px;z-index:9998;cursor:pointer;';
+  btn.onclick = debugPrevisionCehq;
+  document.body.appendChild(btn);
+});
+
 
 // ─── Mini sparkline ───────────────────────────────────────────────────────────
 // Toutes les barres en doré sombre / discret (rgba doré avec faible opacité)
