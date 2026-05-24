@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-3</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-4</div>
 </footer>
 
 <script>
@@ -1237,7 +1237,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ─── DEBUG TEMPORAIRE — Explorer la page prévision CEHQ ──────────────────────
-// À retirer une fois la fonctionnalité de prévision implémentée
 async function debugPrevisionCehq() {
   let panel = document.getElementById('prev-debug');
   if (!panel) {
@@ -1246,50 +1245,76 @@ async function debugPrevisionCehq() {
     panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:80vh;overflow-y:auto;';
     document.body.appendChild(panel);
   }
-  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Fetching debitPrevision.js...';
+  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Cherche debitPrevision.js...';
 
-  // On va chercher le fichier JS qui gère le graphique de prévision
-  const jsUrl = 'https://www.cehq.gouv.qc.ca/suivihydro/js/graphiques/debitPrevision.js';
-  const proxyUrl = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(jsUrl)}`;
+  // Essayer plusieurs URLs candidates en parallèle
+  const candidates = [
+    'https://www.cehq.gouv.qc.ca/js/graphiques/debitPrevision.js',
+    'https://www.cehq.gouv.qc.ca/suivihydro/js/graphiques/debitPrevision.js',
+    'https://www.cehq.gouv.qc.ca/prevision/js/graphiques/debitPrevision.js',
+    'https://www.cehq.gouv.qc.ca/scripts/js/graphiques/debitPrevision.js',
+    'https://www.cehq.gouv.qc.ca/suivihydro/scripts/js/graphiques/debitPrevision.js',
+    'https://www.cehq.gouv.qc.ca/suivihydro/produireGraphiques.js'
+  ];
 
-  try {
-    const res = await fetch(proxyUrl, { cache: 'no-store' });
-    if (!res.ok) {
-      panel.innerHTML += `<br>❌ HTTP ${res.status}`;
-      return;
+  let foundUrl = null;
+  let js = null;
+
+  for (const candidate of candidates) {
+    try {
+      const proxy = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(candidate)}`;
+      const res = await fetch(proxy, { cache: 'no-store' });
+      panel.innerHTML += `<br>${candidate.replace('https://www.cehq.gouv.qc.ca','')} → ${res.status}`;
+      if (res.ok) {
+        const text = await res.text();
+        if (text.length > 200) {
+          foundUrl = candidate;
+          js = text;
+          panel.innerHTML += ` ✓ ${text.length}c`;
+          break;
+        }
+      }
+    } catch(e) {
+      panel.innerHTML += `<br>err: ${e.message}`;
     }
-    const js = await res.text();
-    panel.innerHTML += `<br>✓ JS ${js.length}c reçu`;
-
-    // Chercher les URLs/endpoints appelés dans ce JS
-    const urlPatterns = [
-      /['"]([^'"]*\.asp\??[^'"]*)['"]/g,
-      /['"]([^'"]*\.json[^'"]*)['"]/g,
-      /['"]([^'"]*\/prevision\/[^'"]*)['"]/g,
-      /url\s*:\s*['"]([^'"]+)['"]/g,
-      /\$\.(ajax|get|post|getJSON)\s*\(\s*['"]([^'"]+)['"]/g
-    ];
-
-    const urls = new Set();
-    urlPatterns.forEach(p => {
-      [...js.matchAll(p)].forEach(m => urls.add(m[1] || m[2]));
-    });
-    if (urls.size) {
-      panel.innerHTML += `<br><br><b>URLS TROUVÉES:</b><br>${[...urls].join('<br>')}`;
-    }
-
-    // Chercher les variables/fonctions clés
-    const funcs = [...js.matchAll(/function\s+(\w+)\s*\(/g)].map(m => m[1]);
-    if (funcs.length) {
-      panel.innerHTML += `<br><br><b>FONCTIONS:</b><br>${funcs.slice(0, 10).join(', ')}`;
-    }
-
-    // Sample du début du fichier (200 chars)
-    panel.innerHTML += `<br><br><b>DÉBUT JS:</b><br>${js.substring(0, 500).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
-
-  } catch(e) {
-    panel.innerHTML += `<br>❌ ${e.message}`;
   }
+
+  if (!js) {
+    // Plan B : récupérer la page graphique et chercher les URLs JS dans le code
+    panel.innerHTML += `<br><br>Plan B : fetch graphique.asp pour les liens JS absolus...`;
+    try {
+      const url = 'https://www.cehq.gouv.qc.ca/suivihydro/graphique.asp?NoStation=010802';
+      const proxy = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`;
+      const res = await fetch(proxy, { cache: 'no-store' });
+      const html = await res.text();
+      // Trouver toutes les balises <script src=...>
+      const scriptTags = [...html.matchAll(/<script[^>]+src\s*=\s*["']([^"']+)["']/g)].map(m => m[1]);
+      panel.innerHTML += `<br><b>${scriptTags.length} scripts trouvés:</b><br>${scriptTags.join('<br>')}`;
+    } catch(e) {
+      panel.innerHTML += `<br>❌ ${e.message}`;
+    }
+    return;
+  }
+
+  panel.innerHTML += `<br><br><b>JS trouvé via ${foundUrl}</b>`;
+
+  // Analyser le JS
+  const urlPatterns = [
+    /['"]([^'"]*\.asp\??[^'"]*)['"]/g,
+    /['"]([^'"]*\.json[^'"]*)['"]/g,
+    /url\s*:\s*['"]([^'"]+)['"]/g,
+    /\$\.(?:ajax|get|post|getJSON)\s*\(\s*['"]([^'"]+)['"]/g
+  ];
+
+  const urls = new Set();
+  urlPatterns.forEach(p => {
+    [...js.matchAll(p)].forEach(m => urls.add(m[1] || m[2]));
+  });
+  if (urls.size) {
+    panel.innerHTML += `<br><br><b>URLS DANS JS:</b><br>${[...urls].join('<br>')}`;
+  }
+
+  panel.innerHTML += `<br><br><b>DÉBUT JS (1000c):</b><br>${js.substring(0, 1000).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
 }
 
 // Bouton temporaire en bas à droite pour lancer le debug
