@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-2</div>
 </footer>
 
 <script>
@@ -1274,6 +1274,26 @@ async function debugPrevisionCehq() {
       panel.innerHTML += `<br><br><b>SAMPLE @${seriesIdx}:</b><br>${sample}`;
     }
 
+    // Chercher le contexte autour de "prevision"
+    const prevIdx = html.indexOf('prevision');
+    if (prevIdx >= 0) {
+      const start = Math.max(0, prevIdx - 200);
+      const sample = html.substring(start, prevIdx + 400).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
+      panel.innerHTML += `<br><br><b>PRÉVISION @${prevIdx}:</b><br>${sample}`;
+    }
+
+    // Chercher tous les fichiers JS référencés (peut-être les données sont chargées par un autre script)
+    const scripts = [...html.matchAll(/src\s*=\s*["']([^"']+\.js[^"']*)["']/g)].map(m => m[1]);
+    if (scripts.length) {
+      panel.innerHTML += `<br><br><b>SCRIPTS JS:</b><br>${scripts.join('<br>')}`;
+    }
+
+    // Chercher des URLs AJAX ou JSON
+    const ajaxUrls = [...html.matchAll(/(?:url|ajax|fetch)\s*[:=]\s*["']([^"']+)["']/g)].map(m => m[1]).slice(0, 5);
+    if (ajaxUrls.length) {
+      panel.innerHTML += `<br><br><b>AJAX/URLS:</b><br>${ajaxUrls.join('<br>')}`;
+    }
+
     // Chercher des patterns de données : [[timestamp, value], ...]
     const dataIdx = html.search(/\[\[\s*\d{10,13}\s*,/);
     if (dataIdx >= 0) {
@@ -1281,7 +1301,7 @@ async function debugPrevisionCehq() {
       panel.innerHTML += `<br><br><b>DATA ARRAY @${dataIdx}:</b><br>${sample}`;
     }
 
-    // Chercher dates ISO ou format Highcharts
+    // Chercher Date.UTC
     const dateUtcIdx = html.search(/Date\.UTC\s*\(/);
     if (dateUtcIdx >= 0) {
       const sample = html.substring(dateUtcIdx, dateUtcIdx + 400).replace(/[<>]/g, c => c === '<' ? '〈' : '〉');
