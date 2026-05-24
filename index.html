@@ -205,8 +205,24 @@
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
 
   /* Mini-graphique prévision 4 jours - entre le nom et la valeur de débit */
-  .prevision-mini { flex: 0 0 auto; width: 70px; height: 28px; opacity: 0.85; }
-  .prevision-mini svg { width: 100%; height: 100%; display: block; }
+  .prevision-mini {
+    flex: 0 0 auto;
+    width: 70px;
+    margin-left: auto;
+    margin-right: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0.85;
+  }
+  .prevision-mini svg { width: 100%; height: 28px; display: block; }
+  .prevision-mini-label {
+    font-size: 0.42rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    margin-top: 2px;
+    text-align: center;
+  }
 
   .sparkline-row { margin-top: 4px; height: 36px; position: relative; margin-bottom: 10px; }
   .spark-bars { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; gap: 2px; }
@@ -420,7 +436,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.04</div>
 </footer>
 
 <script>
@@ -1355,7 +1371,8 @@ function buildPrevisionMini(currentDebit, trend, prevision) {
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
     <path d="${linePath}" fill="none" stroke="${lineColor}" stroke-width="1"/>
     ${circles}
-  </svg>`;
+  </svg>
+  <div class="prevision-mini-label">PRÉVISION 4J</div>`;
 }
 
 // ─── Mini sparkline ───────────────────────────────────────────────────────────
