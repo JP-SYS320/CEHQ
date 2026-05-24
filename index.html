@@ -416,7 +416,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-6</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug-7</div>
 </footer>
 
 <script>
@@ -1245,16 +1245,13 @@ async function debugPrevisionCehq() {
     panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.55rem;color:#f0ede4;z-index:9999;line-height:1.4;max-height:80vh;overflow-y:auto;';
     document.body.appendChild(panel);
   }
-  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Cherche debitPrevision.js...';
+  panel.innerHTML = '<b style="color:#c9a84c">PRÉVISION DEBUG</b> <span onclick="document.getElementById(\'prev-debug\').remove()" style="float:right;cursor:pointer;color:#f06260">[X]</span><br>Cherche produireGraphiques.js...';
 
-  // Essayer plusieurs URLs candidates en parallèle
+  // Cibler produireGraphiques.js qui injecte les données dans les charts
   const candidates = [
-    'https://www.cehq.gouv.qc.ca/js/graphiques/debitPrevision.js',
-    'https://www.cehq.gouv.qc.ca/suivihydro/js/graphiques/debitPrevision.js',
-    'https://www.cehq.gouv.qc.ca/prevision/js/graphiques/debitPrevision.js',
-    'https://www.cehq.gouv.qc.ca/scripts/js/graphiques/debitPrevision.js',
-    'https://www.cehq.gouv.qc.ca/suivihydro/scripts/js/graphiques/debitPrevision.js',
-    'https://www.cehq.gouv.qc.ca/suivihydro/produireGraphiques.js'
+    'https://www.cehq.gouv.qc.ca/js/produireGraphiques.js',
+    'https://www.cehq.gouv.qc.ca/suivihydro/js/produireGraphiques.js',
+    'https://www.cehq.gouv.qc.ca/scripts/js/produireGraphiques.js'
   ];
 
   let foundUrl = null;
@@ -1280,30 +1277,17 @@ async function debugPrevisionCehq() {
   }
 
   if (!js) {
-    // Plan B : récupérer la page graphique et chercher les URLs JS dans le code
-    panel.innerHTML += `<br><br>Plan B : fetch graphique.asp pour les liens JS absolus...`;
-    try {
-      const url = 'https://www.cehq.gouv.qc.ca/suivihydro/graphique.asp?NoStation=010802';
-      const proxy = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxy, { cache: 'no-store' });
-      const html = await res.text();
-      // Trouver toutes les balises <script src=...>
-      const scriptTags = [...html.matchAll(/<script[^>]+src\s*=\s*["']([^"']+)["']/g)].map(m => m[1]);
-      panel.innerHTML += `<br><b>${scriptTags.length} scripts trouvés:</b><br>${scriptTags.join('<br>')}`;
-    } catch(e) {
-      panel.innerHTML += `<br>❌ ${e.message}`;
-    }
+    panel.innerHTML += `<br>❌ produireGraphiques.js introuvable`;
     return;
   }
 
-  panel.innerHTML += `<br><br><b>JS trouvé via ${foundUrl}</b>`;
-
-  // Analyser le JS
+  // Chercher les URLs/endpoints AJAX
   const urlPatterns = [
     /['"]([^'"]*\.asp\??[^'"]*)['"]/g,
     /['"]([^'"]*\.json[^'"]*)['"]/g,
     /url\s*:\s*['"]([^'"]+)['"]/g,
-    /\$\.(?:ajax|get|post|getJSON)\s*\(\s*['"]([^'"]+)['"]/g
+    /\$\.(?:ajax|get|post|getJSON)\s*\(\s*['"]([^'"]+)['"]/g,
+    /fetch\s*\(\s*['"]([^'"]+)['"]/g
   ];
 
   const urls = new Set();
@@ -1314,17 +1298,18 @@ async function debugPrevisionCehq() {
     panel.innerHTML += `<br><br><b>URLS DANS JS:</b><br>${[...urls].join('<br>')}`;
   }
 
-  // Chercher chart3 (la prévision moyen terme)
-  const chart3Idx = js.indexOf('chart3');
-  if (chart3Idx >= 0) {
-    panel.innerHTML += `<br><br><b>CHART3 @${chart3Idx}:</b><br>${js.substring(chart3Idx, chart3Idx + 1500).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
+  // Chercher setData (injection des données dans les charts)
+  const setDataMatches = [...js.matchAll(/\.setData\s*\(/g)];
+  panel.innerHTML += `<br><br><b>${setDataMatches.length} appels setData() trouvés</b>`;
+
+  // Chercher "moyen" (pour cibler la série prévision moyen terme)
+  const moyenIdx = js.indexOf('moyen');
+  if (moyenIdx >= 0) {
+    panel.innerHTML += `<br><br><b>MOYEN @${moyenIdx}:</b><br>${js.substring(Math.max(0, moyenIdx - 200), moyenIdx + 800).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
   }
 
-  // Chercher après chart3 - les séries avec données
-  const afterChart3 = js.indexOf('series', chart3Idx);
-  if (afterChart3 >= 0) {
-    panel.innerHTML += `<br><br><b>SERIES @${afterChart3}:</b><br>${js.substring(afterChart3, afterChart3 + 1500).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
-  }
+  // Sample début
+  panel.innerHTML += `<br><br><b>DÉBUT JS:</b><br>${js.substring(0, 800).replace(/[<>]/g, c => c === '<' ? '〈' : '〉')}`;
 }
 
 // Bouton temporaire en bas à droite pour lancer le debug
