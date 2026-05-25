@@ -58,18 +58,8 @@
     --accent: #c9a84c;
     --up: #4ade9a;
     --down: #f06260;
-    --bonaventure: #6ac7a0;
-    --york: #7ec8e3;
-    --matane: #a891d4;
-    --matapedia: #e8a56a;
-    --cascapedia: #e87a9a;
-    --nouvelle: #88c878;
-    --rimouski: #78aed4;
-    --dartmouth: #d4c068;
-    --petite: #c8a0d4;
-    --ste-anne: #88b8d4;
-    --mitis: #f0a070;
-    --escoumins: #60b8d0;
+    /* --debit-color est lu par buildSpark() pour colorer la dernière barre
+       de la sparkline quand la tendance est N/D. */
     --debit-color: #88b8d4;
   }
 
@@ -450,7 +440,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.00</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.01</div>
 </footer>
 
 <script>
@@ -500,7 +490,7 @@ function updateMoon() {
 // ─── Stations ────────────────────────────────────────────────────────────────
 const STATIONS = [
   // Gaspésie — ordre alphabétique
-  { id:'010802', name:'Bonaventure', color:'--bonaventure', region:'gaspesie', lat:48.0667, lng:-65.4833,
+  { id:'010802', name:'Bonaventure', region:'gaspesie', lat:48.0667, lng:-65.4833,
     iwls:'5cebf1e13d0f4a073c4bbf21', iwlsName:'Bonaventure',
     anglers:{host:'pavnew', zec:'zec-bonaventure', point:'F746BF64-1A2D-E811-9402-534E57000000'},
     links:[
@@ -508,14 +498,14 @@ const STATIONS = [
       {label:'🌐 Zec Bonaventure', url:'https://www.zecbonaventure.com'}
     ]
   },
-  { id:'011003', name:'Cascapédia', color:'--cascapedia', region:'gaspesie', lat:48.1000, lng:-65.8500,
+  { id:'011003', name:'Cascapédia', region:'gaspesie', lat:48.1000, lng:-65.8500,
     iwlsCode:'02200', iwlsName:'Carleton',
     links:[
       {label:'🎫 N/D', url:null},
       {label:'🌐 Société Casca.', url:'https://www.cascapedia.ca'}
     ]
   },
-  { id:'020602', name:'Dartmouth', color:'--dartmouth', region:'gaspesie', lat:48.7000, lng:-64.8000,
+  { id:'020602', name:'Dartmouth', region:'gaspesie', lat:48.7000, lng:-64.8000,
     iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',
     anglers:{host:'pavnewtest', zec:'zec-gaspe', point:'7021EE39-5CFE-E411-843E-90FBA62D9769'},
     links:[
@@ -523,7 +513,7 @@ const STATIONS = [
       {label:'🌐 Saumon Gaspé', url:'https://saumongaspe.com'}
     ]
   },
-  { id:'011509', name:'Matapédia', color:'--matapedia', region:'gaspesie', lat:48.0000, lng:-66.9833,
+  { id:'011509', name:'Matapédia', region:'gaspesie', lat:48.0000, lng:-66.9833,
     iwlsCode:'02175', iwlsName:'Campbellton',
     anglersUrl:'https://rivierematapedia.com/peche-information/statistiques.html',
     links:[
@@ -531,28 +521,28 @@ const STATIONS = [
       {label:'🌐 CGRMP', url:'https://rivierematapedia.com'}
     ]
   },
-  { id:'011204', name:'Nouvelle', color:'--nouvelle', region:'gaspesie', lat:48.1167, lng:-66.3167,
+  { id:'011204', name:'Nouvelle', region:'gaspesie', lat:48.1167, lng:-66.3167,
     iwlsCode:'02175', iwlsName:'Campbellton',
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-nouvelle'},
       {label:'🌐 ZEC Nouvelle', url:'https://rivierenouvelle.com'}
     ]
   },
-  { id:'010902', name:'Petite Cascapédia', color:'--petite', region:'gaspesie', lat:48.0833, lng:-65.6667,
+  { id:'010902', name:'Petite Cascapédia', region:'gaspesie', lat:48.0833, lng:-65.6667,
     iwlsCode:'02200', iwlsName:'Carleton',
     links:[
       {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=zec-petite-cascapedia'},
       {label:'🌐 Zec Petite Cas.', url:'https://zecpetitecascapedia.com'}
     ]
   },
-  { id:'021407', name:'Sainte-Anne', color:'--ste-anne', region:'gaspesie', lat:49.0000, lng:-66.7000,
+  { id:'021407', name:'Sainte-Anne', region:'gaspesie', lat:49.0000, lng:-66.7000,
     iwlsCode:'02935', iwlsName:'Ste-Anne-des-Monts',
     links:[
       {label:'🎫 N/D', url:null},
       {label:'🌐 Destination Chic', url:'https://destinationchicchocs.com'}
     ]
   },
-  { id:'020404', name:'York', color:'--york', region:'gaspesie', lat:48.8333, lng:-64.6667,
+  { id:'020404', name:'York', region:'gaspesie', lat:48.8333, lng:-64.6667,
     iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',
     anglers:{host:'pavnewtest', zec:'zec-gaspe', point:'D75D6E53-5CFE-E411-843E-90FBA62D9769'},
     links:[
@@ -561,7 +551,7 @@ const STATIONS = [
     ]
   },
   // Bas-St-Laurent — ordre alphabétique
-  { id:'021601', name:'Matane', color:'--matane', region:'bas-st-laurent', lat:48.8500, lng:-67.5333,
+  { id:'021601', name:'Matane', region:'bas-st-laurent', lat:48.8500, lng:-67.5333,
     iwlsCode:'02955', iwlsName:'Matane',
     anglers:{host:'pav', zec:'zec-matane', point:'A3965629-8308-E511-A31C-90FBA62D9769'},
     links:[
@@ -569,7 +559,7 @@ const STATIONS = [
       {label:'🌐 ZEC Matane', url:'https://www.rivierematane.com'}
     ]
   },
-  { id:'MITIS', name:'Mitis', color:'--mitis', region:'bas-st-laurent', lat:48.5833, lng:-68.1833,
+  { id:'MITIS', name:'Mitis', region:'bas-st-laurent', lat:48.5833, lng:-68.1833,
     iwlsCode:'02955', iwlsName:'Matane',
     anglers:{host:'pav', zec:'mitis', point:'AFE100E2-B427-E811-9402-534E57000000'},
     links:[
@@ -577,7 +567,7 @@ const STATIONS = [
       {label:'🌐 ZEC Mitis', url:'https://rivieremitis.com'}
     ]
   },
-  { id:'022003', name:'Rimouski', color:'--rimouski', region:'bas-st-laurent', lat:48.4500, lng:-68.5333,
+  { id:'022003', name:'Rimouski', region:'bas-st-laurent', lat:48.4500, lng:-68.5333,
     iwlsCode:'02985', iwlsName:'Rimouski',
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-rimouski'},
@@ -585,7 +575,7 @@ const STATIONS = [
     ]
   },
   // Autres
-  { id:'070204', name:'Escoumins', color:'--escoumins', region:'autres', lat:48.3500, lng:-69.4000,
+  { id:'070204', name:'Escoumins', region:'autres', lat:48.3500, lng:-69.4000,
     iwlsCode:'02900', iwlsName:'Les Escoumins',
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-escoumins'},
@@ -610,15 +600,12 @@ STATIONS.forEach(s => {
 });
 
 // ─── CSS var cache — résolution unique par variable ───────────────────────────
+// Seul --debit-color est lu via JS (dans buildSpark). Le cache évite des
+// appels répétés à getComputedStyle qui forcent un layout sur Safari iOS.
 const cssCache = {};
 function getCSSVar(name) {
   if (!cssCache[name]) cssCache[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return cssCache[name];
-}
-
-// Pré-résoudre toutes les couleurs au démarrage (évite getComputedStyle dans renderCard)
-function primeColorCache() {
-  STATIONS.forEach(s => getCSSVar(s.color));
 }
 
 // ─── API MSP — un seul fetch partagé, indexé après réception ─────────────────
@@ -656,17 +643,40 @@ async function fetchAllStations() {
 // IMPORTANT: les heures CEHQ sont en HNE (heure normale de l'Est, UTC-5)
 // quelle que soit la saison, même en mai. On convertit en UTC absolu pour
 // stockage cohérent.
+// Sérialisation des hydratations : on fait une station après l'autre avec un
+// petit délai pour éviter de saturer le Worker (limite Cloudflare: 100k req/jour).
+//
+// Implémentation par worker-loop plutôt que par chaînage de promesses :
+// - Le chaînage `hydrateQueue = hydrateQueue.then(...)` allonge la chaîne à
+//   chaque appel, ce qui peut retenir des références et accumuler des frames
+//   inutiles sur une session longue (app ouverte des heures avec auto-refresh).
+// - Avec une file FIFO + un drapeau "workerRunning", on a O(1) en mémoire
+//   peu importe le nombre de stations en file.
 const HYDRATING = new Set();
+const hydrateQueueList = [];
+let hydrateWorkerRunning = false;
 
-// Sérialisation : on fait une station après l'autre avec un petit délai
-// pour éviter de saturer le Worker (limite Cloudflare: 100k req/jour, largement suffisant)
-let hydrateQueue = Promise.resolve();
+async function hydrateWorker() {
+  if (hydrateWorkerRunning) return;
+  hydrateWorkerRunning = true;
+  try {
+    while (hydrateQueueList.length) {
+      const { stationId, resolve } = hydrateQueueList.shift();
+      try { await hydrateHistoryIfNeeded(stationId); } catch(e) {}
+      resolve();
+      // Petit délai entre stations
+      if (hydrateQueueList.length) await new Promise(r => setTimeout(r, 300));
+    }
+  } finally {
+    hydrateWorkerRunning = false;
+  }
+}
+
 function queueHydration(stationId) {
-  hydrateQueue = hydrateQueue.then(async () => {
-    await hydrateHistoryIfNeeded(stationId);
-    await new Promise(r => setTimeout(r, 300));
+  return new Promise(resolve => {
+    hydrateQueueList.push({ stationId, resolve });
+    hydrateWorker();  // démarre la boucle si pas déjà en cours
   });
-  return hydrateQueue;
 }
 
 async function hydrateHistoryIfNeeded(stationId) {
@@ -798,10 +808,21 @@ async function fetchDebit(stationId) {
   let timestamp = '—';
   let isoUtc = null;
   if (p.dern_date_prise_valeur_utc) {
-    isoUtc = p.dern_date_prise_valeur_utc;
-    if (!isoUtc.endsWith('Z') && !isoUtc.match(/[+-]\d{2}:\d{2}$/)) isoUtc += 'Z';
+    // Normalisation robuste : MSP peut renvoyer plusieurs formats au fil du temps :
+    //   "2026-05-24T19:45:00"
+    //   "2026-05-24T19:45:00Z"
+    //   "2026-05-24T19:45:00.123Z"
+    //   "2026-05-24T19:45:00+00:00"
+    // On accepte tout ce qui ressemble à un ISO 8601 (date + 'T' + heure).
+    // Si pas de timezone explicite (Z ou +/-HH:MM), on force Z (UTC).
+    const raw = String(p.dern_date_prise_valeur_utc).trim();
+    const hasTz = /Z$|[+-]\d{2}:?\d{2}$/.test(raw);
+    isoUtc = hasTz ? raw : raw + 'Z';
     const utcDate = new Date(isoUtc);
     if (!isNaN(utcDate)) {
+      // Re-générer un ISO canonique (avec Z final, sans millisecondes parasites)
+      // pour cohérence dans localStorage et déduplication par timestamp.
+      isoUtc = utcDate.toISOString();
       const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'America/Toronto',
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -814,6 +835,9 @@ async function fetchDebit(stationId) {
       const tzShort = get('timeZoneName');
       const tz = tzShort === 'EDT' ? 'HAE' : 'HNE';
       timestamp = `${y}-${m}-${d} ${h}:${min} ${tz}`;
+    } else {
+      // Date invalide — on ne stocke pas dans l'historique
+      isoUtc = null;
     }
   }
 
@@ -1016,8 +1040,13 @@ async function resolveIwlsUuid(code) {
 }
 
 async function fetchTides(s) {
+  // Trois codes de retour distincts pour permettre au rendu d'afficher
+  // le bon message :
+  // - { today, tomorrow }  → données valides (peuvent être tableaux vides si journée sans marée)
+  // - { unavailable: true } → station sans marées (pas de uuid ou data vide)
+  // - { error: true }       → erreur réseau / timeout (on pourra retenter au prochain refresh)
   const uuid = s.iwls || (s.iwlsCode ? await resolveIwlsUuid(s.iwlsCode) : null);
-  if (!uuid) return null;
+  if (!uuid) return { unavailable: true };
 
   // Cache valide pour la journée courante seulement (pas effacé au démarrage)
   const key = `tides_${s.id}_${todayStr}`;
@@ -1038,9 +1067,9 @@ async function fetchTides(s) {
       `https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/${uuid}/data?time-series-code=wlp-hilo&from=${from}&to=${to}`,
       { cache: 'no-store' }
     );
-    if (!res.ok) return null;
+    if (!res.ok) return { error: true };
     const data = await res.json();
-    if (!data?.length) return null;
+    if (!data?.length) return { unavailable: true };
 
     const values = data.map(t => t.value);
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
@@ -1079,8 +1108,9 @@ async function fetchTides(s) {
     const tides = { today, tomorrow };
     localStorage.setItem(key, JSON.stringify(tides));
     return tides;
-  } catch(e) {}
-  return null;
+  } catch(e) {
+    return { error: true };
+  }
 }
 
 // ─── Montaisons — cache localStorage par jour ─────────────────────────────────
@@ -1316,9 +1346,11 @@ async function loadStation(stationId) {
   }).catch(() => {});
 
   fetchTides(s).then(tides => {
-    state[stationId].tides = tides || null;
+    // fetchTides retourne toujours un objet (jamais null) :
+    // { today, tomorrow } | { unavailable: true } | { error: true }
+    state[stationId].tides = tides;
     scheduleRender(stationId);
-  }).catch(() => { state[stationId].tides = null; scheduleRender(stationId); });
+  }).catch(() => { state[stationId].tides = { error: true }; scheduleRender(stationId); });
 
   if (s.anglers || s.anglersUrl) {
     fetchAnglers(s).then(anglers => {
@@ -1495,12 +1527,13 @@ function scheduleRender(stationId) {
 
 // ─── Rendu carte ──────────────────────────────────────────────────────────────
 function renderCard(stationId) {
-  const s  = STATION_MAP[stationId]; // O(1)
   const st = state[stationId];
   const card = document.getElementById(`card-${stationId}`);
   if (!card) return;
 
-  const col = getCSSVar(s.color);
+  // Barre de couleur latérale : toujours la couleur générique débit (--debit-color).
+  // Les couleurs spécifiques par rivière (--bonaventure, --york, etc.) ne sont
+  // pas utilisées visuellement et ont été retirées de :root pour alléger le CSS.
   card.querySelector('.card-color-bar').style.background = 'var(--debit-color)';
 
   // Débit
@@ -1567,7 +1600,11 @@ function renderCard(stationId) {
   card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
   card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
 
-  // Marées
+  // Marées — 3 états distincts :
+  //  - tides == null         → fetch pas encore terminé (chargement initial)
+  //  - tides.unavailable     → station n'a pas de marées (N/D)
+  //  - tides.error           → erreur réseau (réessayer)
+  //  - { today, tomorrow }   → données valides à afficher
   const tidesEl = card.querySelector('.dv-tides-content');
   if (tidesEl) {
     const td = st.tides;
@@ -1594,7 +1631,9 @@ function renderCard(stationId) {
         </div>`;
     } else {
       tidesEl.innerHTML = '';
-      tidesEl.textContent = td === null ? '···' : 'N/D';
+      if (td === null)              tidesEl.textContent = '···';            // en cours
+      else if (td?.error)           tidesEl.textContent = 'Erreur réseau';  // réessayer plus tard
+      else                          tidesEl.textContent = 'N/D';             // unavailable ou data vide
     }
   }
 
@@ -1835,31 +1874,36 @@ try {
   toRemove.forEach(k => localStorage.removeItem(k));
 } catch(e) {}
 
-primeColorCache();
+// Pré-résoudre --debit-color au démarrage (évite getComputedStyle lors du
+// premier render qui pourrait forcer un layout sur Safari iOS).
+getCSSVar('--debit-color');
 buildCards();
 updateMoon();
 filterStations('gaspesie', document.querySelector('.filter-btn'));
-refreshAll();
 
 // Garder la trace du dernier refresh (mémoire seulement — pas de persistance)
 let lastRefreshTime = Date.now();
 const AUTO_REFRESH_THRESHOLD_MS = 10 * 60 * 1000;  // 10 minutes
 
-// Wrapper qui met à jour lastRefreshTime — on l'appelle au lieu de refreshAll directement
-function autoRefreshIfStale() {
-  const age = Date.now() - lastRefreshTime;
-  if (age >= AUTO_REFRESH_THRESHOLD_MS) {
-    lastRefreshTime = Date.now();
-    refreshAll();
-  }
-}
-
-// Hook : mettre à jour lastRefreshTime à chaque refresh manuel aussi
+// Installer le wrapper AVANT le premier refreshAll() pour que tous les appels,
+// y compris le tout premier, mettent à jour lastRefreshTime correctement.
+// Sans cet ordre, le premier auto-refresh sur visibilitychange pouvait se
+// déclencher trop tôt parce que lastRefreshTime restait à la valeur d'init.
 const originalRefreshAll = refreshAll;
 refreshAll = function() {
   lastRefreshTime = Date.now();
   return originalRefreshAll.apply(this, arguments);
 };
+
+function autoRefreshIfStale() {
+  const age = Date.now() - lastRefreshTime;
+  if (age >= AUTO_REFRESH_THRESHOLD_MS) {
+    refreshAll();  // le wrapper met à jour lastRefreshTime
+  }
+}
+
+// Premier chargement — passe maintenant par le wrapper
+refreshAll();
 
 // Auto-refresh on focus : quand l'utilisateur revient sur l'app
 // (changement d'onglet, retour depuis l'écran d'accueil, etc.)
@@ -1879,18 +1923,26 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('service-worker.js')
       .then(reg => {
-        // Demander au SW de vérifier les updates 3 secondes après chargement
-        setTimeout(() => {
-          if (navigator.serviceWorker.controller) {
+        // Helper : pinger le SW pour qu'il vérifie si index.html a changé
+        const pingUpdate = () => {
+          if (document.visibilityState === 'visible' && navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({ type: 'CHECK_UPDATE' });
           }
-        }, 3000);
-        // Vérifier les updates toutes les 5 minutes pendant que l'app est ouverte
-        setInterval(() => {
-          if (navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({ type: 'CHECK_UPDATE' });
-          }
-        }, 5 * 60 * 1000);
+        };
+
+        // Premier ping 3 secondes après chargement (laisse l'app se stabiliser)
+        setTimeout(pingUpdate, 3000);
+
+        // Polling toutes les 5 min — mais on skip si onglet inactif.
+        // Évite de gaspiller de la bande passante quand l'app est en arrière-plan
+        // (l'utilisateur recevra la mise à jour au retour via visibilitychange).
+        setInterval(pingUpdate, 5 * 60 * 1000);
+
+        // Vérifier immédiatement quand l'utilisateur revient sur l'app
+        // (ex. après plusieurs heures dehors avec l'app dans le dock)
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') pingUpdate();
+        });
       })
       .catch(() => {});  // Échec silencieux — l'app fonctionne sans SW
   });
