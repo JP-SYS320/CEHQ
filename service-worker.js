@@ -1,5 +1,9 @@
 /**
- * CurrentRun — Service Worker v8
+ * CurrentRun — Service Worker v9
+ *
+ * v9 (bump CACHE_VERSION → v12) :
+ * - Force le redéploiement complet du cache pour livrer index.html v1.16-outlier-fix
+ * - Aucun changement de logique, juste le bump de version
  *
  * Corrections v8 :
  * - Bypass du cache HTTP Safari iOS via {cache: 'reload'} sur les fetchs
@@ -14,7 +18,7 @@
  * - Google Fonts → Cache-first
  */
 
-const CACHE_VERSION = 'v11';
+const CACHE_VERSION = 'v12';
 const APP_CACHE = `currentrun-app-${CACHE_VERSION}`;
 const DATA_CACHE = `currentrun-data-${CACHE_VERSION}`;
 
