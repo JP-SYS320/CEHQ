@@ -439,7 +439,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.11</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.12</div>
 </footer>
 
 <script>
@@ -920,13 +920,58 @@ async function fetchDebit(stationId) {
     }
 
     if (hist.length >= 2) {
-      // Tendance basée sur la comparaison avec ~3h en arrière (12 mesures aux 15 min)
-      // Compromis entre réactivité (capter les vrais changements) et stabilité (ignorer le bruit)
-      // Si on n'a pas encore 12 mesures, on compare au premier point disponible
-      const refIdx = Math.max(0, hist.length - 12);
-      const refVal = hist[refIdx].debit;
-      // Tendance binaire : montante ou descendante (une rivière bouge toujours)
-      trend = debit >= refVal ? 'up' : 'down';
+      // ─── Tendance robuste ───────────────────────────────────────────────
+      // Avant : on comparait `debit` (mesure actuelle) avec `hist[length-12]`
+      // (12 positions plus tôt dans le tableau ≈ 3h si mesures régulières).
+      // Deux problèmes :
+      // 1. Si le tableau a des trous, "12 positions" ≠ 3h
+      // 2. Sur les capteurs à résolution limitée (Matane oscille entre
+      //    33.34 et 33.42), comparer 2 mesures isolées peut donner un
+      //    "up" alors que la rivière baisse en réalité.
+      //
+      // Nouvelle approche :
+      // - Fenêtre par TIMESTAMP : on prend la moyenne des mesures dans
+      //   la plage [now-7h, now-5h] (autour de 6h en arrière)
+      // - On compare avec la moyenne des 3 dernières mesures (≈45 min)
+      // - Le moyennage absorbe le bruit du capteur
+      // - Si pas assez de mesures pour la ref ancienne, fallback sur
+      //   la plus vieille mesure disponible
+      const now = Date.now();
+      const refStart = now - 7 * 3600 * 1000;
+      const refEnd   = now - 5 * 3600 * 1000;
+      const refSamples = hist.filter(e => {
+        const t = new Date(e.ts).getTime();
+        return !isNaN(t) && t >= refStart && t <= refEnd;
+      });
+      const recentSamples = hist.slice(-3);
+
+      let refVal, recentVal;
+      if (refSamples.length >= 1) {
+        refVal = refSamples.reduce((s, e) => s + e.debit, 0) / refSamples.length;
+      } else {
+        // Pas de mesure dans [now-7h, now-5h] → on prend la plus vieille
+        refVal = hist[0].debit;
+      }
+      recentVal = recentSamples.reduce((s, e) => s + e.debit, 0) / recentSamples.length;
+
+      // Seuil de variation significative : 0.3% de la médiane.
+      // Sous ce seuil, la "tendance" n'est que du bruit de capteur.
+      // On a quand même besoin de classer 'up' ou 'down' (le badge ne supporte
+      // pas un état neutre), donc on prend la direction du minuscule signal,
+      // mais on saura que c'est sous le seuil pour l'affichage de var24h.
+      const sortedAll = [...hist.map(e => e.debit)].sort((a, b) => a - b);
+      const medianAll = sortedAll[Math.floor(sortedAll.length / 2)] || 1;
+      const signal = recentVal - refVal;
+      const significant = Math.abs(signal) / medianAll >= 0.003;
+      // Si la variation est significative, on respecte le signe.
+      // Sinon, on regarde la pente globale du tableau pour décider :
+      // pente = (dernière - première) / nb_mesures → robuste au bruit
+      if (significant) {
+        trend = signal >= 0 ? 'up' : 'down';
+      } else {
+        const globalSlope = hist[hist.length - 1].debit - hist[0].debit;
+        trend = globalSlope >= 0 ? 'up' : 'down';
+      }
 
       // ─── Var 24h : on cherche le point le PLUS PROCHE de "il y a 24h" ─────
       // Avant : pool[0] pouvait être n'importe quelle mesure du pool (la plus
