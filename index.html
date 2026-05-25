@@ -439,7 +439,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.10</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.11</div>
 </footer>
 
 <script>
@@ -1563,12 +1563,17 @@ function buildSpark(history, trend) {
   ).join('');
 
   // Normalisation sur [min, max] avec marge visuelle 20-90%.
-  // Détection de "bruit de capteur" : si la variation absolue est ≤ 0.2 m³/s
-  // (2 unités de résolution CEHQ qui envoie avec 1 décimale), c'est du bruit
-  // et on affiche une ligne plate à 50% plutôt qu'amplifier le bruit.
-  // Pour une rivière qui bouge réellement (variation > 0.2 m³/s), on zoom
-  // au max pour voir la trajectoire.
-  const isNoise = range <= 0.2;
+  // Détection de "bruit de capteur" basée sur un seuil RELATIF :
+  // si la variation est <0.5% de la médiane, c'est du bruit/dérive de capteur
+  // et on affiche une ligne plate à 50%. Sinon on zoom au max.
+  //
+  // Pourquoi relatif : un seuil absolu (ex. 0.2 m³/s) marchait pour Dartmouth
+  // (~12 m³/s, 0.2 = 1.7%) mais pas pour Matane (~33 m³/s, 0.2 = 0.6% = bruit
+  // alors qu'on aurait voulu le seuil plus haut). Avec 0.5% de la médiane,
+  // chaque rivière a son propre seuil proportionnel à son débit.
+  const sorted = [...history].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] || 1;
+  const isNoise = range / median < 0.005;
   const real = history.map((v, i) => {
     let pct;
     if (isNoise) {
