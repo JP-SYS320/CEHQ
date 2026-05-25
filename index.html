@@ -584,7 +584,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.17</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.18</div>
 </footer>
 
 <script>
@@ -1065,128 +1065,105 @@ async function fetchDebit(stationId) {
     }
 
     if (hist.length >= 2) {
-      // ─── Tendance robuste ───────────────────────────────────────────────
-      // Avant : on comparait `debit` (mesure actuelle) avec `hist[length-12]`
-      // (12 positions plus tôt dans le tableau ≈ 3h si mesures régulières).
-      // Deux problèmes :
-      // 1. Si le tableau a des trous, "12 positions" ≠ 3h
-      // 2. Sur les capteurs à résolution limitée (Matane oscille entre
-      //    33.34 et 33.42), comparer 2 mesures isolées peut donner un
-      //    "up" alors que la rivière baisse en réalité.
-      //
-      // Nouvelle approche :
-      // - Fenêtre par TIMESTAMP : on prend la moyenne des mesures dans
-      //   la plage [now-7h, now-5h] (autour de 6h en arrière)
-      // - On compare avec la moyenne des 3 dernières mesures (≈45 min)
-      // - Le moyennage absorbe le bruit du capteur
-      // - Si pas assez de mesures pour la ref ancienne, fallback sur
-      //   la plus vieille mesure disponible
-      const now = Date.now();
-      const refStart = now - 7 * 3600 * 1000;
-      const refEnd   = now - 5 * 3600 * 1000;
-      const refSamples = hist.filter(e => {
-        const t = new Date(e.ts).getTime();
-        return !isNaN(t) && t >= refStart && t <= refEnd;
-      });
-      const recentSamples = hist.slice(-3);
-
-      let refVal, recentVal;
-      if (refSamples.length >= 1) {
-        refVal = refSamples.reduce((s, e) => s + e.debit, 0) / refSamples.length;
-      } else {
-        // Pas de mesure dans [now-7h, now-5h] → on prend la plus vieille
-        refVal = hist[0].debit;
-      }
-      recentVal = recentSamples.reduce((s, e) => s + e.debit, 0) / recentSamples.length;
-
-      // Seuil de variation significative : 0.3% de la médiane.
-      // Sous ce seuil, la "tendance" n'est que du bruit de capteur.
-      // On a quand même besoin de classer 'up' ou 'down' (le badge ne supporte
-      // pas un état neutre), donc on prend la direction du minuscule signal,
-      // mais on saura que c'est sous le seuil pour l'affichage de var24h.
-      const sortedAll = [...hist.map(e => e.debit)].sort((a, b) => a - b);
-      const medianAll = sortedAll[Math.floor(sortedAll.length / 2)] || 1;
-      const signal = recentVal - refVal;
-      const significant = Math.abs(signal) / medianAll >= 0.003;
-      // Si la variation est significative, on respecte le signe.
-      // Sinon, on regarde la pente globale du tableau pour décider :
-      // pente = (dernière - première) / nb_mesures → robuste au bruit
-      if (significant) {
-        trend = signal >= 0 ? 'up' : 'down';
-      } else {
-        const globalSlope = hist[hist.length - 1].debit - hist[0].debit;
-        trend = globalSlope >= 0 ? 'up' : 'down';
-      }
-
-      // ─── Var 24h : on cherche le point le PLUS PROCHE de "il y a 24h" ─────
-      // Avant : pool[0] pouvait être n'importe quelle mesure du pool (la plus
-      // vieille des 24 dernières heures s'il y en avait, sinon la plus
-      // vieille du tableau complet). Si le pool ne couvrait que 6h, on
-      // affichait "Var 24h" en calculant sur 6h.
-      // Maintenant : on prend le point dont le timestamp est le plus proche
-      // de Date.now() - 24h, peu importe sa position dans le tableau.
-      // S'il n'y a aucun point assez vieux, var24h reste null (N/D).
-      const target24h = Date.now() - 24 * 3600 * 1000;
-      let refPoint = null;
-      let bestDiff = Infinity;
-      hist.forEach(e => {
-        const t = new Date(e.ts).getTime();
-        if (isNaN(t)) return;
-        // On veut un point ≤ now-24h (pas dans le futur de la cible)
-        // mais on tolère ±2h pour être robuste aux trous d'hydratation
-        const diff = Math.abs(t - target24h);
-        if (diff < bestDiff && diff < 2 * 3600 * 1000) {
-          bestDiff = diff;
-          refPoint = e;
-        }
-      });
-
-      // Pool pour min/max sur 24h glissantes
-      const cutoff = target24h;
-      const last24 = hist.filter(e => {
-        const d = new Date(e.ts);
-        return !isNaN(d) && d.getTime() >= cutoff;
-      });
-      const rawPool = last24.length >= 2 ? last24 : hist.slice(-96);
-
-      // ─── Filtrer les outliers résiduels du pool ─────────────────────────
-      // Cas observé : Dartmouth affichait max24h=29.5 alors que la rivière
-      // est à 11.7. Ces 29.5 sont d'anciens 29.454 (valeur de NIVEAU injectée
-      // dans le champ débit par un glitch MSP) qui sont restés en localStorage.
-      // La détection à l'insertion (depuis v1.00) empêche les nouveaux,
-      // mais les anciens dorment dans hist[] en attendant slice(-96).
-      //
-      // On filtre maintenant ces résidus pour les calculs min/max/var24h :
-      // valeur > 2× médiane du pool ou < médiane/2 = exclue.
-      // Note : on les laisse dans hist[] (donc dans la sparkline qui affiche
-      // les 24 dernières) pour ne pas perdre les vraies données, mais
-      // on les exclut du calcul des extrêmes.
-      let pool = rawPool;
-      if (rawPool.length >= 6) {
-        const sortedPool = [...rawPool.map(e => e.debit)].sort((a, b) => a - b);
-        const medianPool = sortedPool[Math.floor(sortedPool.length / 2)];
-        if (medianPool > 0) {
-          pool = rawPool.filter(e =>
-            e.debit <= medianPool * 2 && e.debit >= medianPool / 2
-          );
-          // Sécurité : si le filtre a tout vidé (médiane = 0 ou autre cas
-          // pathologique), on revient au pool brut pour ne pas crasher.
-          if (pool.length < 2) pool = rawPool;
-        }
-      }
-
-      const vals = pool.map(e => e.debit);
-      max24h = Math.max(...vals);
-      min24h = Math.min(...vals);
-
-      // var24h seulement si on a un point de référence valide à ~24h
-      if (refPoint && refPoint.debit > 0) {
-        var24h = ((debit - refPoint.debit) / refPoint.debit) * 100;
-      }
+      const stats = computeHistStats(stationId, debit);
+      trend = stats.trend;
+      var24h = stats.var24h;
+      max24h = stats.max24h;
+      min24h = stats.min24h;
     }
   } catch(e) {}
 
   return { debit, trend, timestamp, var24h, max24h, min24h };
+}
+
+// ─── Recalcul des stats (trend, var24h, max24h, min24h) ──────────────────────
+// Extrait dans une fonction réutilisable parce qu'il faut le faire à 2 moments :
+// 1. Dans fetchDebit après insertion de la nouvelle mesure MSP
+// 2. Après que l'hydratation CEHQ remplace l'historique avec 96 mesures sur 24h
+//
+// Sans le 2e appel, au PREMIER chargement de l'app : la tendance est calculée
+// sur le vieux cache localStorage (peut-être vide ou partiel), donne un
+// résultat sous le seuil de bruit → "down" arbitraire, et n'est plus jamais
+// recalculée tant que l'utilisateur ne fait pas Actualiser manuellement.
+function computeHistStats(stationId, currentDebit) {
+  const hist = state[stationId]._histCache;
+  if (!hist || hist.length < 2) {
+    return { trend: null, var24h: null, max24h: null, min24h: null };
+  }
+
+  let trend = null, var24h = null, max24h = null, min24h = null;
+
+  // ─── Tendance robuste ───────────────────────────────────────────────────
+  const now = Date.now();
+  const refStart = now - 7 * 3600 * 1000;
+  const refEnd   = now - 5 * 3600 * 1000;
+  const refSamples = hist.filter(e => {
+    const t = new Date(e.ts).getTime();
+    return !isNaN(t) && t >= refStart && t <= refEnd;
+  });
+  const recentSamples = hist.slice(-3);
+
+  let refVal, recentVal;
+  if (refSamples.length >= 1) {
+    refVal = refSamples.reduce((s, e) => s + e.debit, 0) / refSamples.length;
+  } else {
+    refVal = hist[0].debit;
+  }
+  recentVal = recentSamples.reduce((s, e) => s + e.debit, 0) / recentSamples.length;
+
+  const sortedAll = [...hist.map(e => e.debit)].sort((a, b) => a - b);
+  const medianAll = sortedAll[Math.floor(sortedAll.length / 2)] || 1;
+  const signal = recentVal - refVal;
+  const significant = Math.abs(signal) / medianAll >= 0.003;
+  if (significant) {
+    trend = signal >= 0 ? 'up' : 'down';
+  } else {
+    const globalSlope = hist[hist.length - 1].debit - hist[0].debit;
+    trend = globalSlope >= 0 ? 'up' : 'down';
+  }
+
+  // ─── Var 24h, Max 24h, Min 24h ──────────────────────────────────────────
+  const target24h = Date.now() - 24 * 3600 * 1000;
+  let refPoint = null;
+  let bestDiff = Infinity;
+  hist.forEach(e => {
+    const t = new Date(e.ts).getTime();
+    if (isNaN(t)) return;
+    const diff = Math.abs(t - target24h);
+    if (diff < bestDiff && diff < 2 * 3600 * 1000) {
+      bestDiff = diff;
+      refPoint = e;
+    }
+  });
+
+  const last24 = hist.filter(e => {
+    const d = new Date(e.ts);
+    return !isNaN(d) && d.getTime() >= target24h;
+  });
+  const rawPool = last24.length >= 2 ? last24 : hist.slice(-96);
+
+  // Filtre outliers résiduels (voir détails dans v1.13)
+  let pool = rawPool;
+  if (rawPool.length >= 6) {
+    const sortedPool = [...rawPool.map(e => e.debit)].sort((a, b) => a - b);
+    const medianPool = sortedPool[Math.floor(sortedPool.length / 2)];
+    if (medianPool > 0) {
+      pool = rawPool.filter(e =>
+        e.debit <= medianPool * 2 && e.debit >= medianPool / 2
+      );
+      if (pool.length < 2) pool = rawPool;
+    }
+  }
+
+  const vals = pool.map(e => e.debit);
+  max24h = Math.max(...vals);
+  min24h = Math.min(...vals);
+
+  if (refPoint && refPoint.debit > 0 && currentDebit != null) {
+    var24h = ((currentDebit - refPoint.debit) / refPoint.debit) * 100;
+  }
+
+  return { trend, var24h, max24h, min24h };
 }
 
 // ─── Météo — Open-Meteo : deux requêtes parallèles ───────────────────────────
@@ -1599,8 +1576,20 @@ async function loadStation(stationId) {
 
   // Hydrater l'historique CEHQ via une queue sérialisée (un fetch à la fois,
   // avec petit délai entre stations pour éviter le rate-limit du proxy).
+  // Une fois l'hydratation terminée, on RECALCULE trend/var24h/max24h/min24h
+  // depuis le nouvel historique. Sans ça, la tendance restait sur la valeur
+  // calculée au tout début (sur un cache potentiellement vide ou partiel),
+  // et l'utilisateur devait appuyer manuellement sur "Actualiser" pour
+  // déclencher un nouveau fetchDebit qui recalculait correctement.
   queueHydration(stationId).then(() => {
     if (state[stationId]?._histCache?.length > 1) {
+      const stats = computeHistStats(stationId, state[stationId].debit);
+      Object.assign(state[stationId], {
+        trend:  stats.trend  ?? state[stationId].trend,
+        var24h: stats.var24h ?? state[stationId].var24h,
+        max24h: stats.max24h ?? state[stationId].max24h,
+        min24h: stats.min24h ?? state[stationId].min24h,
+      });
       scheduleRender(stationId);
     }
   });
