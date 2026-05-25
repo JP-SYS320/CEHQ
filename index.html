@@ -439,7 +439,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.09</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.10</div>
 </footer>
 
 <script>
@@ -757,7 +757,11 @@ async function hydrateHistoryIfNeeded(stationId) {
       const [h, mi] = timeStr.split(':').map(Number);
       const utcMs = Date.UTC(y, mo - 1, d, h + 5, mi, 0);
       const ageHours = (Date.now() - utcMs) / 3600000;
-      if (ageHours < -2 || ageHours > 24 * 8) continue;
+      // Fenêtre serrée : on stocke max 96 mesures (24h) avec slice(-96) plus
+      // bas, donc inutile de parser au-delà de 30h dans le passé (24h + 6h
+      // de marge pour décalage horaire et latence MSP/CEHQ).
+      // Ignore aussi les valeurs > 2h dans le futur (erreur de timestamp CEHQ).
+      if (ageHours < -2 || ageHours > 30) continue;
       const iso = new Date(utcMs).toISOString();
       parsed.push({ debit, ts: iso });
     }
@@ -906,7 +910,14 @@ async function fetchDebit(stationId) {
       }
     }
     // Une seule écriture localStorage si quelque chose a changé
-    if (modified) localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
+    if (modified) {
+      localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
+      state[stationId]._histCache = hist;
+    } else if (!state[stationId]._histCache?.length && hist.length) {
+      // Edge case : premier appel après reload, cache mémoire vide mais
+      // localStorage contient des données → on populate juste la mémoire.
+      state[stationId]._histCache = hist;
+    }
 
     if (hist.length >= 2) {
       // Tendance basée sur la comparaison avec ~3h en arrière (12 mesures aux 15 min)
@@ -917,7 +928,31 @@ async function fetchDebit(stationId) {
       // Tendance binaire : montante ou descendante (une rivière bouge toujours)
       trend = debit >= refVal ? 'up' : 'down';
 
-      const cutoff = Date.now() - 24 * 3600 * 1000;
+      // ─── Var 24h : on cherche le point le PLUS PROCHE de "il y a 24h" ─────
+      // Avant : pool[0] pouvait être n'importe quelle mesure du pool (la plus
+      // vieille des 24 dernières heures s'il y en avait, sinon la plus
+      // vieille du tableau complet). Si le pool ne couvrait que 6h, on
+      // affichait "Var 24h" en calculant sur 6h.
+      // Maintenant : on prend le point dont le timestamp est le plus proche
+      // de Date.now() - 24h, peu importe sa position dans le tableau.
+      // S'il n'y a aucun point assez vieux, var24h reste null (N/D).
+      const target24h = Date.now() - 24 * 3600 * 1000;
+      let refPoint = null;
+      let bestDiff = Infinity;
+      hist.forEach(e => {
+        const t = new Date(e.ts).getTime();
+        if (isNaN(t)) return;
+        // On veut un point ≤ now-24h (pas dans le futur de la cible)
+        // mais on tolère ±2h pour être robuste aux trous d'hydratation
+        const diff = Math.abs(t - target24h);
+        if (diff < bestDiff && diff < 2 * 3600 * 1000) {
+          bestDiff = diff;
+          refPoint = e;
+        }
+      });
+
+      // Pool pour min/max sur 24h glissantes
+      const cutoff = target24h;
       const last24 = hist.filter(e => {
         const d = new Date(e.ts);
         return !isNaN(d) && d.getTime() >= cutoff;
@@ -926,9 +961,12 @@ async function fetchDebit(stationId) {
       const vals = pool.map(e => e.debit);
       max24h = Math.max(...vals);
       min24h = Math.min(...vals);
-      var24h = ((debit - pool[0].debit) / (pool[0].debit || 1)) * 100;
+
+      // var24h seulement si on a un point de référence valide à ~24h
+      if (refPoint && refPoint.debit > 0) {
+        var24h = ((debit - refPoint.debit) / refPoint.debit) * 100;
+      }
     }
-    state[stationId]._histCache = hist;
   } catch(e) {}
 
   return { debit, trend, timestamp, var24h, max24h, min24h };
@@ -1899,10 +1937,13 @@ try {
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (!k) continue;
-    // weather_ : toujours purgé (force re-fetch pluie glissante)
-    if (k.startsWith('weather_')) { toRemove.push(k); continue; }
-    // montaisons_ et tides_ : purgés si pas du jour courant
-    if ((k.startsWith('montaisons_') || k.startsWith('tides_')) && !k.includes(todayStr)) {
+    // weather_, montaisons_, tides_ : purgés si pas du jour courant.
+    // Pour weather_, le cache de 30 min interne à fetchWeather() gère la
+    // fraîcheur. Pas besoin de purger à chaque démarrage — ça causait
+    // jusqu'à 240 appels Open-Meteo par jour si l'app était ouverte 10x.
+    // Maintenant : cache 30 min respecté, ~24 appels/jour pour 12 stations.
+    if ((k.startsWith('weather_') || k.startsWith('montaisons_') || k.startsWith('tides_'))
+        && !k.endsWith(todayStr)) {
       toRemove.push(k);
     }
     // Les UUIDs IWLS (iwls_uuid_*) et l'historique (hist_*) sont permanents
@@ -1943,8 +1984,15 @@ refreshAll();
 
 // Auto-refresh on focus : quand l'utilisateur revient sur l'app
 // (changement d'onglet, retour depuis l'écran d'accueil, etc.)
+// Un seul listener visibilitychange pour : (1) auto-refresh des données et
+// (2) ping SW pour check d'update. Le ping SW est enregistré plus bas
+// quand le SW est prêt, on l'expose via cette variable globale.
+let pingSwUpdate = null;
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') autoRefreshIfStale();
+  if (document.visibilityState === 'visible') {
+    autoRefreshIfStale();
+    if (pingSwUpdate) pingSwUpdate();
+  }
 });
 
 // Auto-refresh on focus pour les cas où visibilitychange ne déclenche pas
@@ -1966,19 +2014,15 @@ if ('serviceWorker' in navigator) {
           }
         };
 
+        // Exposer pour le listener visibilitychange partagé plus haut.
+        // Évite d'attacher un 2e listener visibilitychange juste pour le SW.
+        pingSwUpdate = pingUpdate;
+
         // Premier ping 3 secondes après chargement (laisse l'app se stabiliser)
         setTimeout(pingUpdate, 3000);
 
-        // Polling toutes les 5 min — mais on skip si onglet inactif.
-        // Évite de gaspiller de la bande passante quand l'app est en arrière-plan
-        // (l'utilisateur recevra la mise à jour au retour via visibilitychange).
+        // Polling toutes les 5 min — mais le pingUpdate skip si onglet inactif.
         setInterval(pingUpdate, 5 * 60 * 1000);
-
-        // Vérifier immédiatement quand l'utilisateur revient sur l'app
-        // (ex. après plusieurs heures dehors avec l'app dans le dock)
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') pingUpdate();
-        });
       })
       .catch(() => {});  // Échec silencieux — l'app fonctionne sans SW
   });
