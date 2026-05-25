@@ -439,7 +439,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.08</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.09</div>
 </footer>
 
 <script>
@@ -687,17 +687,28 @@ async function hydrateHistoryIfNeeded(stationId) {
     // Conditions pour ré-hydrater :
     // 1. Moins de 24 mesures (premier démarrage ou semi-rempli)
     // 2. La dernière mesure date de plus de 2h (app pas ouverte depuis longtemps)
-    // 3. La sparkline existante contient des valeurs aberrantes (max/min ratio > 10x)
-    //    Ex : mélange débit (12.8) + niveau (0.5) → ratio 25x, à corriger
+    // 3. Il y a un trou >30min entre deux mesures consécutives (app fermée
+    //    plusieurs heures puis rouverte → on a la fin de l'historique d'hier
+    //    et le début de celui d'aujourd'hui mais rien entre les deux).
+    //    Sans cette détection, l'app empile juste les nouvelles mesures sans
+    //    jamais combler le trou.
+    // 4. La sparkline existante contient des valeurs aberrantes (max/min ratio > 10x)
     const lastTs = existing.length ? new Date(existing[existing.length - 1].ts).getTime() : 0;
     const ageHours = (Date.now() - lastTs) / 3600000;
     let suspicious = false;
+    let hasGap = false;
     if (existing.length > 3) {
       const vals = existing.map(e => e.debit).filter(v => v > 0);
       const maxV = Math.max(...vals), minV = Math.min(...vals);
       if (maxV / minV > 10) suspicious = true;
+      // Détection de trous : on cherche un écart > 30 min entre deux mesures
+      // consécutives. 15 min nominal × 2 = 30 min comme seuil tolérant.
+      for (let i = 1; i < existing.length; i++) {
+        const gap = (new Date(existing[i].ts).getTime() - new Date(existing[i-1].ts).getTime()) / 60000;
+        if (gap > 30) { hasGap = true; break; }
+      }
     }
-    const needsHydration = existing.length < 24 || ageHours > 2 || suspicious;
+    const needsHydration = existing.length < 24 || ageHours > 2 || hasGap || suspicious;
     if (!needsHydration) return;
 
     HYDRATING.add(stationId);
@@ -760,14 +771,20 @@ async function hydrateHistoryIfNeeded(stationId) {
 
     unique.sort((a, b) => new Date(a.ts) - new Date(b.ts));
 
-    // Vérifier si l'historique existant a des valeurs très différentes des nouvelles.
-    // Si oui (ex. bug précédent stockait le niveau d'eau au lieu du débit, ou mélange
-    // niveau+débit sur stations 2-colonnes), on jette l'ancien et on repart neuf.
+    // Décider si on garde l'historique existant :
+    // - Si l'hydratation a rapporté ≥80 mesures couvrant >20h, on a un dataset
+    //   complet et représentatif. Inutile de mélanger avec d'anciennes valeurs
+    //   qui peuvent contenir des trous ou des valeurs pré-événement.
+    // - Sinon, on merge avec l'existant (utile au premier chargement).
     let useExisting = true;
-    if (existing.length && unique.length) {
+    if (unique.length >= 80) {
+      const newSpan = (new Date(unique[unique.length - 1].ts) - new Date(unique[0].ts)) / 3600000;
+      if (newSpan >= 20) useExisting = false;  // dataset complet → on remplace
+    }
+    if (useExisting && existing.length && unique.length) {
+      // Sinon, vérifier la cohérence des moyennes (anti-pollution)
       const newAvg = unique.reduce((s, e) => s + e.debit, 0) / unique.length;
       const oldAvg = existing.reduce((s, e) => s + e.debit, 0) / existing.length;
-      // Si écart >30% (au lieu de 50%), on considère l'historique pourri
       if (Math.abs(oldAvg - newAvg) / newAvg > 0.3) {
         useExisting = false;
       }
