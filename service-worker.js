@@ -1,10 +1,9 @@
 /**
- * CurrentRun — Service Worker v12
+ * CurrentRun — Service Worker v13
  *
- * v12 (bump CACHE_VERSION → v15) :
- * - Force le redéploiement pour livrer index.html v1.02
- *   (correctif Manisoft: York/Dartmouth passent de pavnewtest à pav)
- * - Retrait de pavnewtest.manisoft.ca de la liste API_DOMAINS (plus utilisé)
+ * v13 (bump CACHE_VERSION → v16) :
+ * - Force le redéploiement pour livrer index.html v1.03-debug
+ *   (debug Manisoft pour diagnostiquer York/Dartmouth qui n'affichent rien)
  *
  * Stratégie:
  * - HTML / racine → Stale-while-revalidate avec fetch forcé réseau
@@ -13,7 +12,7 @@
  * - Google Fonts → Cache-first
  */
 
-const CACHE_VERSION = 'v15';
+const CACHE_VERSION = 'v16';
 const APP_CACHE = `currentrun-app-${CACHE_VERSION}`;
 const DATA_CACHE = `currentrun-data-${CACHE_VERSION}`;
 
