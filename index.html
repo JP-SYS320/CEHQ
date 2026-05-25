@@ -314,6 +314,71 @@
 </head>
 <body>
 
+<!-- ─── Splash Screen (v1.14) ───────────────────────────────────────────────
+     S'affiche dès le premier paint (style 100% inline, indépendant de la
+     feuille de style externe) pour éliminer le flash blanc qu'iOS montre
+     pendant le chargement d'une PWA en mode standalone.
+
+     Disparaît automatiquement quand l'app est prête, ou au max après 3s
+     (sécurité). Le z-index très élevé garantit qu'il couvre tout, y compris
+     l'écran de mot de passe et le header.
+-->
+<div id="splash-screen" style="
+  position: fixed; inset: 0; z-index: 99999;
+  background: #142230;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px;
+  transition: opacity 0.4s ease-out;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+">
+  <svg width="96" height="96" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 0 8px rgba(201,168,76,0.2));">
+    <circle cx="32" cy="32" r="30" fill="none" stroke="#c9a84c" stroke-width="1.5"/>
+    <circle cx="32" cy="32" r="27" fill="none" stroke="#c9a84c" stroke-width="0.5" opacity="0.4"/>
+    <path d="M 8 40 Q 18 33, 28 40 T 48 40 T 60 40"
+          fill="none" stroke="#c9a84c" stroke-width="0.8" opacity="0.4" stroke-linecap="round"/>
+    <text x="20" y="44" font-family="Georgia, serif" font-size="36" font-style="italic" font-weight="400" fill="#f0ede4" text-anchor="middle">C</text>
+    <text x="42" y="44" font-family="Georgia, serif" font-size="36" font-style="italic" font-weight="700" fill="#c9a84c" text-anchor="middle">R</text>
+  </svg>
+  <div style="
+    font-family: Georgia, serif;
+    font-size: 1.8rem;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    color: #f0ede4;
+    font-style: italic;
+  ">
+    Current<span style="color: #c9a84c; font-weight: 700;">Run</span>
+  </div>
+  <div style="
+    font-size: 0.55rem;
+    color: rgba(201,168,76,0.6);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 8px;
+  ">Chargement…</div>
+</div>
+
+<script>
+// Cacher le splash quand l'app est prête à afficher du contenu utile,
+// OU au max après 2.5s (sécurité au cas où une erreur empêcherait le signal).
+(function() {
+  let hidden = false;
+  const hideSplash = () => {
+    if (hidden) return;
+    hidden = true;
+    const s = document.getElementById('splash-screen');
+    if (!s) return;
+    s.style.opacity = '0';
+    // Retrait du DOM après la transition pour ne pas bloquer les events tactiles
+    setTimeout(() => s.remove(), 450);
+  };
+  // Délai max de sécurité : 2.5 secondes
+  setTimeout(hideSplash, 2500);
+  // Exposer pour qu'on puisse l'appeler quand l'app est vraiment prête
+  window.__hideSplash = hideSplash;
+})();
+</script>
+
 <div id="pw-screen">
   <div id="pw-title" class="brand brand-xl">
     <span class="brand-current">Current</span><span class="brand-run">Run</span>
@@ -439,7 +504,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.13</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.14</div>
 </footer>
 
 <script>
@@ -2067,6 +2132,13 @@ getCSSVar('--debit-color');
 buildCards();
 updateMoon();
 filterStations('gaspesie', document.querySelector('.filter-btn'));
+
+// Cacher le splash maintenant que les cartes sont construites et visibles.
+// requestAnimationFrame garantit qu'on attend le premier paint réel avant
+// de masquer le splash, donc transition fluide vers l'app.
+requestAnimationFrame(() => {
+  if (window.__hideSplash) window.__hideSplash();
+});
 
 // Garder la trace du dernier refresh (mémoire seulement — pas de persistance)
 let lastRefreshTime = Date.now();
