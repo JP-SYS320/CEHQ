@@ -439,7 +439,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03-debug</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.04-debug</div>
 </footer>
 
 <script>
@@ -1277,19 +1277,21 @@ async function fetchAnglers(s) {
     return { today: null, yesterday: yesterdayCount };
   }
 
-  // Manisoft standard
+  // Manisoft standard — passe par le proxy Cloudflare car Manisoft ne sert
+  // pas les headers CORS pour github.io. Sans proxy, le browser bloque la
+  // requête (ou le SW retourne {"error":"offline"} à la place).
   if (!s.anglers) return null;
   try {
     const { host, zec, point } = s.anglers;
-    const url = `https://${host}.manisoft.ca/nombrePersonne.php?idZec=${zec}&idPointEau=${point}`;
+    const manisoftUrl = `https://${host}.manisoft.ca/nombrePersonne.php?idZec=${zec}&idPointEau=${point}`;
+    const url = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(manisoftUrl)}`;
     const controller = new AbortController();
-    const tmout = setTimeout(() => controller.abort(), 5000);
+    const tmout = setTimeout(() => controller.abort(), 8000);
     let res;
     try {
       res = await fetch(url, { cache: 'no-store', signal: controller.signal });
     } catch(fetchErr) {
       clearTimeout(tmout);
-      // DEBUG TEMP v1.03 — capture toute erreur réseau (CORS, DNS, timeout)
       window.__manisoftDebug = window.__manisoftDebug || {};
       window.__manisoftDebug[s.id] = {
         url, error: 'FETCH_FAILED: ' + (fetchErr.message || fetchErr.name)
@@ -1302,7 +1304,8 @@ async function fetchAnglers(s) {
     // DEBUG TEMP v1.03 — toujours capturer la réponse pour inspection
     window.__manisoftDebug = window.__manisoftDebug || {};
     window.__manisoftDebug[s.id] = {
-      url,
+      url: manisoftUrl,  // URL Manisoft directe pour lisibilité
+      proxyUrl: url,
       status: res.status,
       length: html.length,
       preview: html.substring(0, 500),
