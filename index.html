@@ -584,7 +584,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.04</div>
 </footer>
 
 <script>
@@ -1723,7 +1723,154 @@ function refreshAll() {
   Promise.race([
     Promise.all(STATIONS.map(s => loadStation(s.id))),
     new Promise(r => setTimeout(r, 12000))
-  ]).then(markDone);
+  ]).then(() => {
+    markDone();
+    // Programmer le validateur de complétude des données (v1.04).
+    // Si une donnée manque (ex. hydratation CEHQ qui a timeout), on retentera
+    // discrètement, max 2 fois à 15s d'intervalle.
+    scheduleDataValidator();
+  });
+}
+
+// ─── Validateur de complétude des données (v1.04) ────────────────────────────
+// Sécurité défensive : 20s après chaque refreshAll, on vérifie que chaque
+// station a toutes ses données attendues. Si une catégorie manque (ex.
+// hydratation CEHQ qui a timeout, fetchWeather qui a rate-limit, etc.),
+// on relance UNIQUEMENT le fetch manquant pour cette station.
+//
+// Avantages vs modifier les fetches individuellement :
+// - Aucune modif du code de fetch déjà testé/validé
+// - Récupération automatique des échecs ponctuels
+// - Ciblé : on ne refait que ce qui manque
+// - Limite stricte (max 2 retries) pour éviter les boucles infinies
+//
+// Timing : 20s après premier load, puis 15s entre tentatives, max 2 retries.
+const RETRY_DELAY_FIRST_MS = 20 * 1000;
+const RETRY_DELAY_NEXT_MS  = 15 * 1000;
+const RETRY_MAX_ATTEMPTS   = 2;
+let validatorTimer = null;
+const retryCount = {};  // { stationId: nbRetries }
+
+function validateStationData(stationId) {
+  const s = STATION_MAP[stationId];
+  const st = state[stationId];
+  if (!st || !s) return [];
+  if (stationId === 'MITIS') return [];  // Station spéciale, pas de débit/hydratation
+
+  const missing = [];
+
+  // Hydratation / tendance / sparkline : il faut avoir ≥12 mesures
+  // (= 3h de données) pour que la sparkline soit utile et la tendance fiable.
+  const histLen = st._histCache?.length || 0;
+  if (histLen < 12 || !st.trend) {
+    missing.push('hydration');
+  }
+
+  // Météo : lever, coucher, probabilité, pluie 24h
+  // Si UN seul de ces 4 manque, on retente fetchWeather (qui les remplit tous)
+  if (!st.sunrise || !st.sunset || st.rain === null || st.rain === undefined
+      || st.rainProb === null || st.rainProb === undefined) {
+    missing.push('weather');
+  }
+
+  // Marées : seulement si la station en a (iwls / iwlsCode).
+  // On retente UNIQUEMENT en cas de vraie erreur réseau (t.error === true).
+  // Si IWLS retourne légitimement des tableaux vides ou { unavailable: true },
+  // on accepte le résultat — pas de retry inutile.
+  if (s.iwls || s.iwlsCode) {
+    const t = st.tides;
+    if (!t || t.error === true) {
+      missing.push('tides');
+    }
+  }
+
+  // Pêcheurs : seulement si la station en a
+  if (s.anglers || s.anglersUrl) {
+    if (!st.anglers || st.anglers.today === undefined || st.anglers.today === null) {
+      missing.push('anglers');
+    }
+  }
+
+  // Prévision 4 jours : 4 points attendus
+  if (!Array.isArray(st.prevision) || st.prevision.length < 4) {
+    missing.push('prevision');
+  }
+
+  return missing;
+}
+
+async function retryMissingData(stationId, categories) {
+  const s = STATION_MAP[stationId];
+  if (!s) return;
+
+  for (const cat of categories) {
+    try {
+      if (cat === 'hydration') {
+        // Relancer l'hydratation CEHQ + recalculer stats
+        await queueHydration(stationId);
+        if (state[stationId]?._histCache?.length > 1) {
+          const stats = computeHistStats(stationId, state[stationId].debit);
+          Object.assign(state[stationId], {
+            trend:  stats.trend  ?? state[stationId].trend,
+            var24h: stats.var24h ?? state[stationId].var24h,
+            max24h: stats.max24h ?? state[stationId].max24h,
+            min24h: stats.min24h ?? state[stationId].min24h,
+          });
+          scheduleRender(stationId);
+        }
+      } else if (cat === 'weather') {
+        const w = await fetchWeather(s);
+        if (w) {
+          state[stationId].sunrise  = w.sunrise;
+          state[stationId].sunset   = w.sunset;
+          state[stationId].rain     = w.rain;
+          state[stationId].rainProb = w.rainProb;
+          scheduleRender(stationId);
+        }
+      } else if (cat === 'tides') {
+        const tides = await fetchTides(s);
+        state[stationId].tides = tides;
+        scheduleRender(stationId);
+      } else if (cat === 'anglers') {
+        const anglers = await fetchAnglers(s);
+        if (anglers) {
+          state[stationId].anglers = anglers;
+          scheduleRender(stationId);
+        }
+      } else if (cat === 'prevision') {
+        const prevision = await fetchPrevision(stationId);
+        if (prevision) {
+          state[stationId].prevision = prevision;
+          scheduleRender(stationId);
+        }
+      }
+    } catch(e) { /* silent retry — pas de log pour éviter de polluer */ }
+  }
+}
+
+function runValidator() {
+  let anyRetried = false;
+  STATIONS.forEach(s => {
+    const missing = validateStationData(s.id);
+    if (missing.length === 0) return;
+    // Cette station a des données manquantes
+    const n = retryCount[s.id] || 0;
+    if (n >= RETRY_MAX_ATTEMPTS) return;  // Limite atteinte, abandon silencieux
+    retryCount[s.id] = n + 1;
+    anyRetried = true;
+    retryMissingData(s.id, missing);
+  });
+  // Si on a retenté au moins une station, on re-programme un check dans 15s
+  if (anyRetried) {
+    validatorTimer = setTimeout(runValidator, RETRY_DELAY_NEXT_MS);
+  }
+}
+
+function scheduleDataValidator() {
+  // Reset des compteurs à chaque nouveau refreshAll
+  Object.keys(retryCount).forEach(k => delete retryCount[k]);
+  if (validatorTimer) { clearTimeout(validatorTimer); validatorTimer = null; }
+  validatorTimer = setTimeout(runValidator, RETRY_DELAY_FIRST_MS);
 }
 
 // Feedback visuel pressé du bouton via touchstart/touchend
