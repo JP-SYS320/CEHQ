@@ -1,15 +1,8 @@
 /**
- * CurrentRun — Service Worker v9
+ * CurrentRun — Service Worker v10
  *
- * v9 (bump CACHE_VERSION → v12) :
- * - Force le redéploiement complet du cache pour livrer index.html v1.16-outlier-fix
- * - Aucun changement de logique, juste le bump de version
- *
- * Corrections v8 :
- * - Bypass du cache HTTP Safari iOS via {cache: 'reload'} sur les fetchs
- *   du HTML (sinon Safari iOS sert sa propre copie cachée pendant des heures)
- * - Comparaison fonctionne même au premier fetch (pas seulement quand cached existe)
- * - Cache-buster sur le HTML pour forcer un téléchargement frais
+ * v10 (bump CACHE_VERSION → v13) :
+ * - Force le redéploiement pour livrer index.html v1.00 (release stable)
  *
  * Stratégie:
  * - HTML / racine → Stale-while-revalidate avec fetch forcé réseau
@@ -18,7 +11,7 @@
  * - Google Fonts → Cache-first
  */
 
-const CACHE_VERSION = 'v12';
+const CACHE_VERSION = 'v13';
 const APP_CACHE = `currentrun-app-${CACHE_VERSION}`;
 const DATA_CACHE = `currentrun-data-${CACHE_VERSION}`;
 
