@@ -1,8 +1,8 @@
 /**
- * CurrentRun — Service Worker v10
+ * CurrentRun — Service Worker v11
  *
- * v10 (bump CACHE_VERSION → v13) :
- * - Force le redéploiement pour livrer index.html v1.00 (release stable)
+ * v11 (bump CACHE_VERSION → v14) :
+ * - Force le redéploiement pour livrer index.html v1.01
  *
  * Stratégie:
  * - HTML / racine → Stale-while-revalidate avec fetch forcé réseau
@@ -11,7 +11,7 @@
  * - Google Fonts → Cache-first
  */
 
-const CACHE_VERSION = 'v13';
+const CACHE_VERSION = 'v14';
 const APP_CACHE = `currentrun-app-${CACHE_VERSION}`;
 const DATA_CACHE = `currentrun-data-${CACHE_VERSION}`;
 
