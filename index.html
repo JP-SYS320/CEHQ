@@ -1535,13 +1535,17 @@ function buildSpark(history, trend) {
   const sorted = [...history].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)] || max;
 
-  // Échelle visuelle : [scaleMin, scaleMax]
+  // Échelle visuelle : [scaleMin, max]
   // - scaleMax = max (la plus haute valeur atteindra 95% de hauteur)
-  // - scaleMin = min(history) MAIS pas plus bas que 60% de la médiane.
-  //   Ça garantit que les barres ne descendent jamais sous 30% visuel,
-  //   ce qui rend la sparkline lisible même pour une grosse transition.
+  // - scaleMin = min(histMin, median × 0.6) — on prend le PLUS PETIT des deux
+  //   pour que l'échelle inclue toujours "60% de la médiane" comme plancher.
+  //   Si la variation locale est faible (ex. 92→95.8 sur 6h), scaleMin=56
+  //   et toutes les barres se retrouvent groupées dans la zone 85-95%,
+  //   reflétant fidèlement que la variation est petite en valeur absolue.
+  //   Sans ça, [min,max] zoom au maximum sur la variation et fait paraître
+  //   une augmentation de 4% comme un saut de 80% visuel.
   const histMin = sorted[0];
-  const scaleMin = Math.max(histMin, median * 0.6);
+  const scaleMin = Math.min(histMin, median * 0.6);
   const scaleRange = max - scaleMin;
 
   // Barres fantômes au début si on a moins de 24 mesures (premier démarrage avant hydratation)
