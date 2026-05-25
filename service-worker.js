@@ -1,8 +1,10 @@
 /**
- * CurrentRun — Service Worker v11
+ * CurrentRun — Service Worker v12
  *
- * v11 (bump CACHE_VERSION → v14) :
- * - Force le redéploiement pour livrer index.html v1.01
+ * v12 (bump CACHE_VERSION → v15) :
+ * - Force le redéploiement pour livrer index.html v1.02
+ *   (correctif Manisoft: York/Dartmouth passent de pavnewtest à pav)
+ * - Retrait de pavnewtest.manisoft.ca de la liste API_DOMAINS (plus utilisé)
  *
  * Stratégie:
  * - HTML / racine → Stale-while-revalidate avec fetch forcé réseau
@@ -11,7 +13,7 @@
  * - Google Fonts → Cache-first
  */
 
-const CACHE_VERSION = 'v14';
+const CACHE_VERSION = 'v15';
 const APP_CACHE = `currentrun-app-${CACHE_VERSION}`;
 const DATA_CACHE = `currentrun-data-${CACHE_VERSION}`;
 
@@ -34,7 +36,6 @@ const API_DOMAINS = [
   'api-iwls.dfo-mpo.gc.ca',
   'pav.manisoft.ca',
   'pavnew.manisoft.ca',
-  'pavnewtest.manisoft.ca',
   'api.allorigins.win'
 ];
 
