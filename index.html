@@ -439,7 +439,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.05</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.06-debug</div>
 </footer>
 
 <script>
@@ -1398,6 +1398,42 @@ function refreshAll() {
 // Feedback visuel pressé du bouton via touchstart/touchend
 // (plus fiable que :active sur iOS Safari en mode PWA standalone)
 document.addEventListener('DOMContentLoaded', () => {
+  // DEBUG v1.06 — bouton pour inspecter l'historique de chaque station
+  setTimeout(() => {
+    const btn = document.createElement('button');
+    btn.textContent = '🔍 Hist';
+    btn.style.cssText = 'position:fixed;bottom:6px;right:6px;background:rgba(15,25,35,0.9);border:1px solid #c9a84c;color:#c9a84c;padding:6px 10px;font-family:inherit;font-size:0.55rem;border-radius:4px;z-index:9998;cursor:pointer;';
+    btn.onclick = () => {
+      let panel = document.getElementById('hist-debug');
+      if (panel) { panel.remove(); return; }
+      panel = document.createElement('div');
+      panel.id = 'hist-debug';
+      panel.style.cssText = 'position:fixed;bottom:6px;left:6px;right:6px;background:rgba(15,25,35,0.97);border:1px solid #c9a84c;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:0.5rem;color:#f0ede4;z-index:9999;line-height:1.5;max-height:85vh;overflow-y:auto;';
+      document.body.appendChild(panel);
+      let html = '<b style="color:#c9a84c">DEBUG HISTORIQUE</b> <span onclick="document.getElementById(\'hist-debug\').remove()" style="float:right;cursor:pointer;color:#f06260;font-size:0.7rem">[X]</span><br><br>';
+      STATIONS.forEach(s => {
+        if (s.id === 'MITIS') return;
+        const hist = JSON.parse(localStorage.getItem(`hist_${s.id}`) || '[]');
+        const vals = hist.map(h => h.debit);
+        html += `<div style="border-top:1px solid rgba(201,168,76,0.3);padding-top:5px;margin-top:5px">`;
+        html += `<b style="color:#c9a84c">${s.name} (${s.id})</b> — ${hist.length} mesures<br>`;
+        if (vals.length) {
+          const min = Math.min(...vals), max = Math.max(...vals);
+          const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+          const span = hist.length > 1 ? (new Date(hist[hist.length-1].ts) - new Date(hist[0].ts)) / 3600000 : 0;
+          html += `min=${min.toFixed(1)} max=${max.toFixed(1)} avg=${avg.toFixed(1)} span=${span.toFixed(1)}h<br>`;
+          // Premier et dernier
+          const fmtT = ts => new Date(ts).toISOString().substring(11, 16);
+          html += `<span style="color:#7a9ab0">Du ${fmtT(hist[0].ts)} (${hist[0].debit.toFixed(1)}) au ${fmtT(hist[hist.length-1].ts)} (${hist[hist.length-1].debit.toFixed(1)})</span>`;
+        }
+        html += `<button onclick="localStorage.removeItem('hist_${s.id}');alert('Reset ${s.name}, actualise');" style="background:#f06260;color:#fff;border:none;padding:3px 6px;font-family:inherit;font-size:0.45rem;border-radius:3px;margin-left:6px">RESET</button>`;
+        html += `</div>`;
+      });
+      panel.innerHTML = html;
+    };
+    document.body.appendChild(btn);
+  }, 500);
+
   const refreshBtn = document.getElementById('refreshAll');
   if (refreshBtn) {
     const press = () => refreshBtn.classList.add('pressed');
@@ -1476,6 +1512,17 @@ function buildPrevisionMini(currentDebit, trend, prevision) {
 // (verte=montante, rouge=descendante, bleue=N/D).
 // Avec l'hydratation CEHQ on a typiquement 24h de mesures aux 15 min (96 points),
 // on affiche les 24 dernières (= 6 dernières heures).
+//
+// ─── Échelle robuste (v1.06) ────────────────────────────────────────────────
+// Problème historique : normaliser sur [min, max] crée des "spikes" visuels
+// quand une seule valeur extrême écrase l'échelle. Ex. crue Cascapédia :
+// [67,67,...,67,95] donnait 23 barres à 15% et une à 90% — trompeur.
+//
+// Solution : on inclut TOUJOURS le 0 dans l'échelle visuelle. Toutes les barres
+// sont alors proportionnelles à leur valeur absolue, et une augmentation de
+// 30% se traduit par une augmentation visuelle de 30%, pas par un effet de
+// spike. Pour éviter d'avoir des barres trop courtes quand la variation est
+// faible, on plafonne le min visuel à 60% de la médiane.
 function buildSpark(history, trend) {
   if (!history?.length) return '';
   const TARGET = 24;
@@ -1485,13 +1532,17 @@ function buildSpark(history, trend) {
                 : trend === 'down' ? '#f06260'
                 :                    getCSSVar('--debit-color');
   const max = Math.max(...history);
-  const min = Math.min(...history);
-  const range = max - min;
-  const avg = history.reduce((a, b) => a + b, 0) / history.length;
+  const sorted = [...history].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)] || max;
 
-  // Seuil de variation significative : 1% du débit moyen.
-  // En bas de ça, c'est du bruit/dérive de capteur — ligne plate plus lisible.
-  const significantVariation = avg > 0 && (range / avg) > 0.01;
+  // Échelle visuelle : [scaleMin, scaleMax]
+  // - scaleMax = max (la plus haute valeur atteindra 95% de hauteur)
+  // - scaleMin = min(history) MAIS pas plus bas que 60% de la médiane.
+  //   Ça garantit que les barres ne descendent jamais sous 30% visuel,
+  //   ce qui rend la sparkline lisible même pour une grosse transition.
+  const histMin = sorted[0];
+  const scaleMin = Math.max(histMin, median * 0.6);
+  const scaleRange = max - scaleMin;
 
   // Barres fantômes au début si on a moins de 24 mesures (premier démarrage avant hydratation)
   const ghostCount = Math.max(0, TARGET - history.length);
@@ -1500,9 +1551,16 @@ function buildSpark(history, trend) {
   ).join('');
 
   const real = history.map((v, i) => {
-    const pct = significantVariation
-      ? Math.max(15, ((v - min) / range) * 75 + 15)  // amplification 15-90% (plus douce)
-      : 50;                                            // ligne plate si peu de variation
+    let pct;
+    if (scaleRange < 0.01 * median) {
+      // Variation négligeable → ligne plate à mi-hauteur
+      pct = 50;
+    } else {
+      // Normaliser dans [scaleMin, max] → [30%, 95%]
+      // Valeurs sous scaleMin (rares) sont clampées à 30%
+      const norm = Math.max(0, (v - scaleMin) / scaleRange);
+      pct = 30 + norm * 65;
+    }
     const c = i === history.length - 1 ? lastCol : pastCol;
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
   }).join('');
