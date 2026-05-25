@@ -584,7 +584,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.04</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03</div>
 </footer>
 
 <script>
@@ -906,36 +906,17 @@ async function hydrateHistoryIfNeeded(stationId) {
     // Worker Cloudflare personnel — proxy CORS fiable pour CEHQ
     const proxyUrl = `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(cehqUrl)}`;
 
-    // Helper : un essai de fetch avec timeout. Retourne le HTML ou null en cas
-    // d'échec (timeout, status non-OK, contenu trop court).
-    const tryFetch = async (timeoutMs) => {
-      try {
-        const ctrl = new AbortController();
-        const tmout = setTimeout(() => ctrl.abort(), timeoutMs);
-        const res = await fetch(proxyUrl, { cache: 'no-store', signal: ctrl.signal });
-        clearTimeout(tmout);
-        if (!res.ok || res.status >= 400) return null;
-        const text = await res.text();
-        if (text.length < 10000) return null;
-        return text;
-      } catch(e) {
-        return null;
-      }
-    };
-
-    // Retry strategy : 1er essai avec timeout 15s, puis 2e essai à 12s après
-    // un délai de 2s (laisse le temps au worker Cloudflare de chauffer en cas
-    // de cold start, et au proxy CEHQ de répondre).
-    //
-    // Pourquoi 15s : observé sur Bonaventure (1re station dans la queue
-    // d'hydratation) que le cold start Cloudflare + lenteur CEHQ pouvait
-    // dépasser le timeout précédent de 10s. Sans retry, l'utilisateur restait
-    // bloqué avec 1 seule mesure et un badge N/D jusqu'au refresh manuel.
-    let html = await tryFetch(15000);
-    if (!html) {
-      await new Promise(r => setTimeout(r, 2000));
-      html = await tryFetch(12000);
-      if (!html) return;
+    let html = null;
+    try {
+      const ctrl = new AbortController();
+      const tmout = setTimeout(() => ctrl.abort(), 10000);
+      const res = await fetch(proxyUrl, { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(tmout);
+      if (!res.ok || res.status >= 400) return;
+      html = await res.text();
+      if (html.length < 10000) return;
+    } catch(e) {
+      return;
     }
 
     // Parser CEHQ — approche en 2 étapes pour gérer les stations à 1 ou 2 colonnes :
