@@ -450,7 +450,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.15-debug</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.16-outlier-fix</div>
 </footer>
 
 <script>
@@ -839,9 +839,31 @@ async function fetchDebit(stationId) {
     // Stocker en ISO UTC pour des calculs fiables
     let modified = migrated;
     if (isoUtc && !hist.some(e => e.ts === isoUtc)) {
-      hist.push({ debit, ts: isoUtc });
-      if (hist.length > 96) hist = hist.slice(-96);
-      modified = true;
+      // ─── v1.16 : DÉTECTION D'OUTLIER À L'INSERTION ────────────────────────
+      // Bug observé sur Dartmouth (020602) : l'API MSP retournait parfois
+      // une valeur de NIVEAU (29.454) dans le champ dern_valeur_deb au lieu
+      // du débit réel (~13). Cette valeur aberrante était stockée à chaque
+      // refresh pendant ~2h, polluant la sparkline avec 3-4 spikes.
+      //
+      // Stratégie : si on a déjà ≥6 mesures stables, rejeter toute valeur
+      // qui s'écarte de plus de 2x de la médiane des 6 dernières mesures.
+      // Le ratio 2x est large pour ne pas bloquer les vraies crues
+      // (montée naturelle rapide), mais bloque les "switches" entre niveau
+      // et débit qui donnent typiquement un ratio ~2-3x.
+      let isOutlier = false;
+      if (hist.length >= 6) {
+        const recent = hist.slice(-6).map(e => e.debit).sort((a, b) => a - b);
+        const median = recent[Math.floor(recent.length / 2)];
+        if (median > 0 && (debit > median * 2 || debit < median / 2)) {
+          isOutlier = true;
+          console.warn(`[CurrentRun] ${stationId} — outlier rejeté: ${debit} m³/s (médiane récente: ${median.toFixed(2)})`);
+        }
+      }
+      if (!isOutlier) {
+        hist.push({ debit, ts: isoUtc });
+        if (hist.length > 96) hist = hist.slice(-96);
+        modified = true;
+      }
     }
     // Une seule écriture localStorage si quelque chose a changé
     if (modified) localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
@@ -1844,6 +1866,30 @@ try {
     // Les UUIDs IWLS (iwls_uuid_*) et l'historique (hist_*) sont permanents
   }
   toRemove.forEach(k => localStorage.removeItem(k));
+} catch(e) {}
+
+// ─── v1.16 : nettoyage automatique de l'historique pollué (one-shot) ──────────
+// Supprime au démarrage les valeurs aberrantes déjà présentes dans hist_*.
+// Critère : valeur > 2x ou < 0.5x la médiane des autres mesures.
+// Marqueur localStorage pour ne le faire qu'une seule fois.
+try {
+  if (localStorage.getItem('cleanup_v116') !== 'done') {
+    STATIONS.forEach(s => {
+      if (s.id === 'MITIS') return;
+      const key = `hist_${s.id}`;
+      const hist = JSON.parse(localStorage.getItem(key) || '[]');
+      if (hist.length < 6) return;
+      const vals = hist.map(e => e.debit).filter(v => v > 0).sort((a, b) => a - b);
+      const median = vals[Math.floor(vals.length / 2)];
+      if (median <= 0) return;
+      const cleaned = hist.filter(e => e.debit <= median * 2 && e.debit >= median / 2);
+      if (cleaned.length < hist.length) {
+        console.warn(`[CurrentRun v1.16] Nettoyage ${s.id}: ${hist.length - cleaned.length} valeurs aberrantes supprimées (médiane ${median.toFixed(2)})`);
+        localStorage.setItem(key, JSON.stringify(cleaned));
+      }
+    });
+    localStorage.setItem('cleanup_v116', 'done');
+  }
 } catch(e) {}
 
 primeColorCache();
