@@ -400,12 +400,31 @@
 </div>
 
 <script>
-// Cacher le splash quand l'app est prête à afficher du contenu utile,
-// OU au max après 2.5s (sécurité au cas où une erreur empêcherait le signal).
-// Garantit un AFFICHAGE MINIMUM de 800ms pour que le logo soit toujours
-// visible un instant, même si l'app charge instantanément (cache navigateur,
-// données locales déjà présentes).
+// ─── Détection iOS standalone PWA ───────────────────────────────────────────
+// Si l'app est lancée depuis l'écran d'accueil iOS (mode standalone), iOS a
+// déjà affiché l'apple-touch-startup-image PNG natif comme splash screen.
+// Dans ce cas, on ne montre PAS le splash HTML par-dessus, sinon l'utilisateur
+// voit deux splashs successifs (le PNG iOS qui disparait, puis le HTML qui
+// apparait pendant 800ms, puis l'app). Effet "non-pro" comme tu disais.
+//
+// En mode navigateur classique (Safari onglet), iOS n'affiche pas son splash
+// natif, donc le splash HTML reste utile pour combler le chargement.
 (function() {
+  const isStandalone =
+    window.navigator.standalone === true ||  // iOS spécifique
+    window.matchMedia('(display-mode: standalone)').matches;  // Standard PWA
+
+  if (isStandalone) {
+    // Mode standalone : iOS a déjà fait le splash via PNG natif → on retire
+    // immédiatement le splash HTML pour éviter le double affichage.
+    const s = document.getElementById('splash-screen');
+    if (s) s.remove();
+    // Stub pour que les appels ultérieurs à __hideSplash() ne crashent pas
+    window.__hideSplash = () => {};
+    return;  // skip toute la logique de minimum 800ms
+  }
+
+  // Mode navigateur classique : splash HTML normal avec minimum 800ms
   let hidden = false;
   let appReady = false;
   const splashShownAt = Date.now();
@@ -565,7 +584,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.16</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.17</div>
 </footer>
 
 <script>
