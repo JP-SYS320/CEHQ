@@ -584,7 +584,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.18</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.03</div>
 </footer>
 
 <script>
@@ -593,13 +593,21 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
 // En soirée HAE, .toISOString() bascule au lendemain en UTC, ce qui faisait
 // que l'app cherchait les données du mauvais jour (lever/coucher N/D,
 // marées de demain au lieu d'aujourd'hui, etc.)
-const todayStr = (() => {
+//
+// `todayStr` est maintenant un GETTER via Object.defineProperty pour qu'il
+// soit recalculé à chaque lecture. Bug évité : si l'utilisateur garde l'app
+// ouverte au-dessus de minuit, les caches journaliers (weather, tides,
+// montaisons, prev) étaient bloqués sur la date d'hier jusqu'à reload.
+// Avec un getter, dès que minuit passe, toutes les lectures pointent
+// automatiquement sur la nouvelle date.
+function _computeTodayStr() {
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
-})();
+}
+Object.defineProperty(globalThis, 'todayStr', { get: _computeTodayStr });
 const MOIS = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
 const MOON = {
   new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
@@ -799,6 +807,43 @@ async function fetchAllStations() {
 const HYDRATING = new Set();
 const hydrateQueueList = [];
 let hydrateWorkerRunning = false;
+
+// ─── Queue similaire pour les fetches Open-Meteo ──────────────────────────
+// Au démarrage, on lance 12 stations en parallèle. Chacune appelle
+// fetchWeather() qui fait 2 requêtes Open-Meteo → 24 requêtes simultanées.
+// Open-Meteo rate-limite à ~10 req/sec en mode gratuit → on en perd
+// régulièrement. Résultat observé : N/D pour lever/coucher/prob jusqu'au
+// prochain refresh ou expiration du cache (30 min).
+//
+// Solution : on sérialise les appels fetchWeather via cette queue, avec
+// petit délai entre stations. 12 stations × ~500ms = ~6 secondes pour tout
+// charger, sans aucun rate-limit.
+const weatherQueueList = [];
+let weatherWorkerRunning = false;
+
+async function weatherWorker() {
+  if (weatherWorkerRunning) return;
+  weatherWorkerRunning = true;
+  try {
+    while (weatherQueueList.length) {
+      const { s, resolve } = weatherQueueList.shift();
+      try {
+        const result = await fetchWeatherDirect(s);
+        resolve(result);
+      } catch(e) { resolve(null); }
+      if (weatherQueueList.length) await new Promise(r => setTimeout(r, 200));
+    }
+  } finally {
+    weatherWorkerRunning = false;
+  }
+}
+
+function fetchWeather(s) {
+  return new Promise(resolve => {
+    weatherQueueList.push({ s, resolve });
+    weatherWorker();
+  });
+}
 
 async function hydrateWorker() {
   if (hydrateWorkerRunning) return;
@@ -1173,17 +1218,29 @@ function computeHistStats(stationId, currentDebit) {
 //
 // IMPORTANT : on ne met PAS en cache les résultats vides (null partout). Ça évitait
 // les "N/D fantômes" qui restaient coincés jusqu'à expiration du cache de 30 min.
-async function fetchWeather(s) {
+async function fetchWeatherDirect(s) {
   const key = `weather_${s.id}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
     if (cached) {
       const parsed = JSON.parse(cached);
-      // Cache valide 30 min ET non-vide (au moins UNE valeur réelle)
-      const hasData = parsed.sunrise || parsed.sunset || parsed.rain !== null || parsed.rainProb !== null;
-      if (parsed._t && hasData && (Date.now() - parsed._t) < 30 * 60 * 1000) return parsed;
-      // Si cache vide, on le supprime pour éviter de le lire encore
-      if (!hasData) localStorage.removeItem(key);
+      // Cache valide 30 min ET COMPLET (toutes les valeurs essentielles présentes).
+      // Avant : on acceptait le cache si AU MOINS une valeur était présente.
+      // Bug : si Open-Meteo rate-limite au démarrage (24 requêtes simultanées
+      // pour 12 stations × 2 endpoints), `resProb` échoue mais `resGem`
+      // réussit → on cachait { rain: 13.7, sunrise: null, sunset: null,
+      // rainProb: null } pendant 30 min. L'utilisateur voyait N/D pour
+      // lever/coucher/prob jusqu'à expiration du cache.
+      //
+      // Maintenant : on n'utilise le cache que si TOUS les champs sont là
+      // (les 3 du daily + le rain). Sinon on refetch.
+      const isComplete = parsed.sunrise && parsed.sunset
+                      && parsed.rain !== null && parsed.rainProb !== null;
+      if (parsed._t && isComplete && (Date.now() - parsed._t) < 30 * 60 * 1000) {
+        return parsed;
+      }
+      // Cache partiel ou expiré → supprimé, on refetch
+      localStorage.removeItem(key);
     }
 
     const base = `https://api.open-meteo.com/v1/forecast?latitude=${s.lat}&longitude=${s.lng}` +
@@ -1206,32 +1263,20 @@ async function fetchWeather(s) {
     clearTimeout(tmProb);
 
     // Parse pluie 24h glissantes depuis GEM
-    // ─────────────────────────────────────────────────────────────────────
-    // Open-Meteo retourne `precipitation` par heure, en format "preceding hour sum" :
-    //   precipitation[i] à time[i]="07:00" = pluie tombée entre 06:00 et 07:00
-    // On veut la somme glissante des 24 dernières heures (now-24h → now).
-    // ─────────────────────────────────────────────────────────────────────
     let rain = null;
     if (resGem?.ok) {
       try {
         const gem = await resGem.json();
         const hourlyTimes = gem.hourly?.time || [];
         const precip      = gem.hourly?.precipitation || [];
-        // Offset UTC retourné par Open-Meteo (en secondes). Toronto HAE = -14400.
-        // On l'utilise pour convertir les timestamps locaux en UTC absolu, fiable
-        // quel que soit le fuseau du device.
         const utcOffsetMs = (gem.utc_offset_seconds || 0) * 1000;
         const now = Date.now();
         const cutoff = now - 24 * 3600 * 1000;
         let rainSum = 0, count = 0;
         for (let i = 0; i < hourlyTimes.length; i++) {
-          // hourlyTimes[i] est "2026-05-22T07:00" en heure locale (Toronto)
-          // On le convertit en UTC absolu : parse comme UTC puis soustrait l'offset
           const localMs = new Date(hourlyTimes[i] + 'Z').getTime();
           if (isNaN(localMs)) continue;
           const tsUtc = localMs - utcOffsetMs;
-          // L'heure tsUtc représente la pluie tombée entre [tsUtc-1h, tsUtc]
-          // On l'inclut si tsUtc est dans la fenêtre (cutoff, now]
           if (tsUtc > cutoff && tsUtc <= now && precip[i] != null) {
             rainSum += precip[i];
             count++;
@@ -1258,10 +1303,11 @@ async function fetchWeather(s) {
     }
 
     const result = { sunrise, sunset, rain, rainProb, _t: Date.now() };
-    // CRUCIAL : ne mettre en cache QUE si on a au moins une vraie donnée.
-    // Sinon, on retentera au prochain refresh au lieu de servir un cache vide.
-    const hasData = sunrise || sunset || rain !== null || rainProb !== null;
-    if (hasData) localStorage.setItem(key, JSON.stringify(result));
+    // On ne cache QUE si TOUTES les valeurs sont là. Sinon, on retournera
+    // ce qu'on a mais le prochain refresh refetchera tout (au lieu de
+    // servir le cache partiel pendant 30 min).
+    const isComplete = sunrise && sunset && rain !== null && rainProb !== null;
+    if (isComplete) localStorage.setItem(key, JSON.stringify(result));
     return result;
   } catch(e) {}
   return null;
@@ -1354,7 +1400,13 @@ async function fetchTides(s) {
     });
 
     const tides = { today, tomorrow };
-    localStorage.setItem(key, JSON.stringify(tides));
+    // Ne cache QUE si on a au moins une marée. Sinon (ex. journée bizarre où
+    // IWLS retourne vide à cause d'une lacune), on retourne le résultat
+    // pour cet affichage mais on refetchera au prochain refresh au lieu de
+    // servir un cache vide pour 24h.
+    if (today.length || tomorrow.length) {
+      localStorage.setItem(key, JSON.stringify(tides));
+    }
     return tides;
   } catch(e) {
     return { error: true };
@@ -1411,13 +1463,28 @@ async function fetchMontaisons(stationId) {
 // Récupère le JSON BDH (Base de Données Hydrométriques) de CEHQ qui contient
 // les prévisions hydrologiques (modèle médian qMCS + intervalle q25/q75).
 // On extrait 4 points : J+1, J+2, J+3, J+4 (à midi local de chaque jour).
-// Cache localStorage 12h car CEHQ met à jour la prévision 1x/jour environ.
+// Cache localStorage 6h ET seulement si on a les 4 points complets.
+// Pourquoi ce double critère :
+// - 6h : CEHQ met à jour 1x/jour mais les heures varient. 6h capture les
+//   bons updates sans servir un cache trop vieux après plusieurs jours.
+// - 4 points complets : si l'API a renvoyé un sous-ensemble ponctuel
+//   (timeout partiel, sortie temporaire), on retentera au prochain refresh
+//   au lieu de cacher un état dégradé jusqu'à minuit.
 async function fetchPrevision(stationId) {
   if (stationId === 'MITIS') return null;
   const key = `prev_${stationId}_${todayStr}`;
   const cached = localStorage.getItem(key);
   if (cached) {
-    try { return JSON.parse(cached); } catch(e) {}
+    try {
+      const parsed = JSON.parse(cached);
+      // Vérification : 4 points + timestamp <6h
+      if (Array.isArray(parsed.points) && parsed.points.length === 4
+          && parsed._t && (Date.now() - parsed._t) < 6 * 3600 * 1000) {
+        return parsed.points;
+      }
+      // Cache invalide → supprimé pour refetch
+      localStorage.removeItem(key);
+    } catch(e) { localStorage.removeItem(key); }
   }
 
   try {
@@ -1474,7 +1541,10 @@ async function fetchPrevision(stationId) {
     }).filter(p => p !== null);
 
     if (!result.length) return null;
-    localStorage.setItem(key, JSON.stringify(result));
+    // Cache UNIQUEMENT si on a les 4 points complets
+    if (result.length === 4) {
+      localStorage.setItem(key, JSON.stringify({ points: result, _t: Date.now() }));
+    }
     return result;
   } catch(e) {
     return null;
@@ -1929,13 +1999,20 @@ function renderCard(stationId) {
   if (rainProbEl) rainProbEl.innerHTML = st.rainProb !== null ? `${st.rainProb}%` : '—';
 
   // Montaisons
+  // Tant que rien n'est rentré (0/0/0 ou pas de réponse), on garde le label
+  // "Saison 2026 — en attente". Dès qu'au moins 1 saumon est compté (total > 0),
+  // on remplace par la date de la mise à jour du site source.
   const montGrands = card.querySelector('.dv-mont-grands');
   if (montGrands) {
     const m = st.montaisons;
+    const total = m ? (parseInt(m.total) || 0) : 0;
+    const hasData = m && total > 0;
     card.querySelector('.dv-mont-grands').textContent  = m ? m.grands  : '0';
     card.querySelector('.dv-mont-grilses').textContent = m ? m.grilses : '0';
     card.querySelector('.dv-mont-total').textContent   = m ? m.total   : '0';
-    card.querySelector('.dv-mont-date').textContent    = m ? `En date du ${m.date}` : 'Saison 2026 — en attente';
+    card.querySelector('.dv-mont-date').textContent    = hasData
+      ? `En date du ${m.date}`
+      : 'Saison 2026 — en attente';
   }
 
   // Pêcheurs
