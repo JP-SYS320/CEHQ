@@ -439,7 +439,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.07</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.08</div>
 </footer>
 
 <script>
@@ -1477,16 +1477,18 @@ function buildPrevisionMini(currentDebit, trend, prevision) {
 // Avec l'hydratation CEHQ on a typiquement 24h de mesures aux 15 min (96 points),
 // on affiche les 24 dernières (= 6 dernières heures).
 //
-// ─── Échelle robuste (v1.06) ────────────────────────────────────────────────
-// Problème historique : normaliser sur [min, max] crée des "spikes" visuels
-// quand une seule valeur extrême écrase l'échelle. Ex. crue Cascapédia :
-// [67,67,...,67,95] donnait 23 barres à 15% et une à 90% — trompeur.
+// ─── Échelle adaptative (v1.08) ─────────────────────────────────────────────
+// Stratégie : normaliser sur [min, max] des 24 mesures affichées, MAIS étendre
+// légèrement la plage pour éviter que la première et la dernière barre touchent
+// les extrêmes 0% et 100%. On utilise une marge de 10% en haut et en bas.
 //
-// Solution : on inclut TOUJOURS le 0 dans l'échelle visuelle. Toutes les barres
-// sont alors proportionnelles à leur valeur absolue, et une augmentation de
-// 30% se traduit par une augmentation visuelle de 30%, pas par un effet de
-// spike. Pour éviter d'avoir des barres trop courtes quand la variation est
-// faible, on plafonne le min visuel à 60% de la médiane.
+// Bénéfices :
+// - Variations subtiles (4% sur 6h) : bien visibles car on zoom au max
+// - Variations fortes (crue) : aussi bien visibles
+// - Une vraie montée graduelle est rendue comme une vraie montée graduelle,
+//   pas comme une ligne plate + spike final
+//
+// Bloque toujours les outliers AVANT l'insertion via fetchDebit (médiane 2x).
 function buildSpark(history, trend) {
   if (!history?.length) return '';
   const TARGET = 24;
@@ -1496,38 +1498,29 @@ function buildSpark(history, trend) {
                 : trend === 'down' ? '#f06260'
                 :                    getCSSVar('--debit-color');
   const max = Math.max(...history);
-  const sorted = [...history].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)] || max;
+  const min = Math.min(...history);
+  const range = max - min;
 
-  // Échelle visuelle : [scaleMin, max]
-  // - scaleMax = max (la plus haute valeur atteindra 95% de hauteur)
-  // - scaleMin = min(histMin, median × 0.6) — on prend le PLUS PETIT des deux
-  //   pour que l'échelle inclue toujours "60% de la médiane" comme plancher.
-  //   Si la variation locale est faible (ex. 92→95.8 sur 6h), scaleMin=56
-  //   et toutes les barres se retrouvent groupées dans la zone 85-95%,
-  //   reflétant fidèlement que la variation est petite en valeur absolue.
-  //   Sans ça, [min,max] zoom au maximum sur la variation et fait paraître
-  //   une augmentation de 4% comme un saut de 80% visuel.
-  const histMin = sorted[0];
-  const scaleMin = Math.min(histMin, median * 0.6);
-  const scaleRange = max - scaleMin;
-
-  // Barres fantômes au début si on a moins de 24 mesures (premier démarrage avant hydratation)
+  // Barres fantômes au début si on a moins de 24 mesures
   const ghostCount = Math.max(0, TARGET - history.length);
   const ghosts = Array(ghostCount).fill(0).map(() =>
     `<div class="spark-bar" style="height:8%;background:${ghostCol}"></div>`
   ).join('');
 
+  // Normalisation sur [min, max] avec marge visuelle 20-90%.
+  // Détection de "bruit de capteur" : si la variation absolue est ≤ 0.2 m³/s
+  // (2 unités de résolution CEHQ qui envoie avec 1 décimale), c'est du bruit
+  // et on affiche une ligne plate à 50% plutôt qu'amplifier le bruit.
+  // Pour une rivière qui bouge réellement (variation > 0.2 m³/s), on zoom
+  // au max pour voir la trajectoire.
+  const isNoise = range <= 0.2;
   const real = history.map((v, i) => {
     let pct;
-    if (scaleRange < 0.01 * median) {
-      // Variation négligeable → ligne plate à mi-hauteur
+    if (isNoise) {
       pct = 50;
     } else {
-      // Normaliser dans [scaleMin, max] → [30%, 95%]
-      // Valeurs sous scaleMin (rares) sont clampées à 30%
-      const norm = Math.max(0, (v - scaleMin) / scaleRange);
-      pct = 30 + norm * 65;
+      const norm = (v - min) / range;
+      pct = 20 + norm * 70;  // étend la plage utilisable de 20% à 90%
     }
     const c = i === history.length - 1 ? lastCol : pastCol;
     return `<div class="spark-bar" style="height:${pct}%;background:${c}"></div>`;
