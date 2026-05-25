@@ -1,9 +1,10 @@
 /**
- * CurrentRun — Service Worker v14
+ * CurrentRun — Service Worker v15
  *
- * v14 (bump CACHE_VERSION → v17) :
- * - Force le redéploiement pour livrer index.html v1.04-debug
- *   (Manisoft passe maintenant par le proxy Cloudflare pour contourner CORS)
+ * v15 (bump CACHE_VERSION → v18) :
+ * - Force le redéploiement pour livrer index.html v1.05 (release stable)
+ *   - Manisoft fonctionne via proxy Cloudflare (whitelist mise à jour)
+ *   - Debug retiré
  *
  * Stratégie:
  * - HTML / racine → Stale-while-revalidate avec fetch forcé réseau
@@ -12,7 +13,7 @@
  * - Google Fonts → Cache-first
  */
 
-const CACHE_VERSION = 'v17';
+const CACHE_VERSION = 'v18';
 const APP_CACHE = `currentrun-app-${CACHE_VERSION}`;
 const DATA_CACHE = `currentrun-data-${CACHE_VERSION}`;
 
