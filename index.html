@@ -361,19 +361,39 @@
 <script>
 // Cacher le splash quand l'app est prête à afficher du contenu utile,
 // OU au max après 2.5s (sécurité au cas où une erreur empêcherait le signal).
+// Garantit un AFFICHAGE MINIMUM de 800ms pour que le logo soit toujours
+// visible un instant, même si l'app charge instantanément (cache navigateur,
+// données locales déjà présentes).
 (function() {
   let hidden = false;
-  const hideSplash = () => {
+  let appReady = false;
+  const splashShownAt = Date.now();
+  const MIN_DISPLAY_MS = 800;
+  const MAX_DISPLAY_MS = 2500;
+
+  const doHide = () => {
     if (hidden) return;
     hidden = true;
     const s = document.getElementById('splash-screen');
     if (!s) return;
     s.style.opacity = '0';
-    // Retrait du DOM après la transition pour ne pas bloquer les events tactiles
     setTimeout(() => s.remove(), 450);
   };
-  // Délai max de sécurité : 2.5 secondes
-  setTimeout(hideSplash, 2500);
+
+  // Cache le splash en respectant le minimum d'affichage
+  const hideSplash = () => {
+    appReady = true;
+    const elapsed = Date.now() - splashShownAt;
+    if (elapsed >= MIN_DISPLAY_MS) {
+      doHide();
+    } else {
+      setTimeout(doHide, MIN_DISPLAY_MS - elapsed);
+    }
+  };
+
+  // Délai max de sécurité : même si l'app n'a jamais signalé être prête
+  setTimeout(() => { if (!appReady) doHide(); }, MAX_DISPLAY_MS);
+
   // Exposer pour qu'on puisse l'appeler quand l'app est vraiment prête
   window.__hideSplash = hideSplash;
 })();
@@ -504,7 +524,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.14</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.15</div>
 </footer>
 
 <script>
