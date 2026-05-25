@@ -1,9 +1,9 @@
 /**
- * CurrentRun — Service Worker v13
+ * CurrentRun — Service Worker v14
  *
- * v13 (bump CACHE_VERSION → v16) :
- * - Force le redéploiement pour livrer index.html v1.03-debug
- *   (debug Manisoft pour diagnostiquer York/Dartmouth qui n'affichent rien)
+ * v14 (bump CACHE_VERSION → v17) :
+ * - Force le redéploiement pour livrer index.html v1.04-debug
+ *   (Manisoft passe maintenant par le proxy Cloudflare pour contourner CORS)
  *
  * Stratégie:
  * - HTML / racine → Stale-while-revalidate avec fetch forcé réseau
@@ -12,7 +12,7 @@
  * - Google Fonts → Cache-first
  */
 
-const CACHE_VERSION = 'v16';
+const CACHE_VERSION = 'v17';
 const APP_CACHE = `currentrun-app-${CACHE_VERSION}`;
 const DATA_CACHE = `currentrun-data-${CACHE_VERSION}`;
 
