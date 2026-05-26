@@ -107,7 +107,7 @@
     --surface: #1b2d3e;
     --border: rgba(201,168,76,0.25);
     --text: #f0ede4;
-    --muted: #7a9ab0;
+    --muted: #9ab5c7;
     --accent: #c9a84c;
     --up: #4ade9a;
     --down: #f06260;
@@ -252,8 +252,8 @@
   .debit-unit { font-size: 0.65rem; color: var(--muted); letter-spacing: 0.04em; }
 
   .trend-badge { display: inline-flex; align-items: center; font-size: 0.65rem; padding: 2px 7px; border-radius: 3px; margin-top: 4px; letter-spacing: 0.05em; font-weight: 700; }
-  .trend-up   { background: #ffffff; color: #27a862; }
-  .trend-down { background: #ffffff; color: #d94f4d; }
+  .trend-up   { background: #ffffff; color: #168a4d; }
+  .trend-down { background: #ffffff; color: #b3322f; }
   .trend-nd   { background: rgba(122,154,176,0.15); color: var(--muted); }
 
   /* Mini-graphique prévision 4 jours - entre le nom et la valeur de débit */
@@ -316,7 +316,7 @@
   .d-icon { font-size: 1.15rem; line-height: 1; }
   .d-value { font-size: 1.05rem; font-weight: 700; color: var(--text); line-height: 1.2; }
   .d-value-accent { font-size: 1.05rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
-  .d-value-rain { font-size: 1.05rem; font-weight: 700; color: #7ec8e3; line-height: 1.2; }
+  .d-value-rain { font-size: 1.05rem; font-weight: 700; color: var(--text); line-height: 1.2; }
   .d-sublabel { font-size: 0.5rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
   .d-subbox { background: #0f1923; border-radius: 6px; padding: 7px 9px; }
   .d-divider-v { width: 1px; background: rgba(201,168,76,0.25); margin: 2px 0; }
@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.09</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.12</div>
 </footer>
 
 <script>
@@ -1957,7 +1957,7 @@ function buildPrevisionMini(currentDebit, trend, prevision) {
   // Couleur du point d'aujourd'hui : selon la tendance actuelle (var 24h)
   const todayCol = trend === 'up'   ? '#4ade9a'
                  : trend === 'down' ? '#f06260'
-                 :                    '#7a9ab0';
+                 :                    '#9ab5c7';
 
   const circles = points.map((p, i) => {
     const isToday = i === 0;
@@ -2072,13 +2072,13 @@ function renderCard(stationId) {
   const debitEl = card.querySelector('.debit-value');
   if (st.status === 'loading') {
     debitEl.textContent = '···';
-    debitEl.style.color = '#7a9ab0';
+    debitEl.style.color = '#9ab5c7';
   } else if (st.debit !== null) {
     debitEl.textContent = st.debit.toFixed(1);
     debitEl.style.color = 'var(--debit-color)';
   } else {
     debitEl.textContent = '—';
-    debitEl.style.color = '#7a9ab0';
+    debitEl.style.color = '#9ab5c7';
   }
 
   // Tendance
@@ -2121,10 +2121,10 @@ function renderCard(stationId) {
   if (st.var24h !== null) {
     const sign = st.var24h >= 0 ? '+' : '';
     varEl.textContent = `${sign}${st.var24h.toFixed(1)} %`;
-    varEl.style.color = st.var24h > 3 ? '#4ade9a' : st.var24h < -3 ? '#f06260' : '#7a9ab0';
+    varEl.style.color = st.var24h > 3 ? '#4ade9a' : st.var24h < -3 ? '#f06260' : '#9ab5c7';
   } else {
     varEl.textContent = 'N/D';
-    varEl.style.color = '#7a9ab0';
+    varEl.style.color = '#9ab5c7';
   }
   card.querySelector('.dv-max24').innerHTML = fmt(st.max24h);
   card.querySelector('.dv-min24').innerHTML = fmt(st.min24h);
@@ -2147,7 +2147,7 @@ function renderCard(stationId) {
         `<div style="display:flex;align-items:baseline;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(201,168,76,0.12)">
           <span style="font-weight:700;font-size:0.72rem;color:${t.type === 'HM' ? '#4ade9a' : '#f06260'};width:24px;flex-shrink:0">${t.type}</span>
           <span style="color:#f0ede4;font-size:0.82rem;flex:1;text-align:center">${t.time}</span>
-          <span style="color:#7a9ab0;font-size:0.72rem;text-align:right">${t.value} m</span>
+          <span style="color:#9ab5c7;font-size:0.72rem;text-align:right">${t.value} m</span>
         </div>`
       ).join('');
       tidesEl.innerHTML = `
@@ -2260,7 +2260,7 @@ function buildCards() {
         <div class="prevision-mini"></div>
         <div class="debit-main">
           <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:4px">
-            <div class="debit-value" style="color:#7a9ab0">—</div>
+            <div class="debit-value" style="color:#9ab5c7">—</div>
             <div class="debit-unit">m³/s</div>
           </div>
           <div class="trend-badge trend-nd">N/D</div>
@@ -2342,7 +2342,7 @@ function buildCards() {
                 <div class="d-divider-v" style="background:rgba(201,168,76,0.2)"></div>
                 <div class="d-col">
                   <div class="d-sublabel">Prob.</div>
-                  <div class="dv-rain-prob d-value" style="margin-top:3px;color:var(--muted)">—</div>
+                  <div class="dv-rain-prob d-value" style="margin-top:3px">—</div>
                 </div>
               </div>
             </div>
@@ -2361,7 +2361,7 @@ function buildCards() {
             <div class="d-divider-v" style="background:rgba(201,168,76,0.2)"></div>
             <div class="d-col">
               <div class="d-sublabel">Prob.</div>
-              <div class="dv-rain-prob d-value" style="margin-top:3px;color:var(--muted)">—</div>
+              <div class="dv-rain-prob d-value" style="margin-top:3px">—</div>
             </div>
           </div>
         </div>`}
@@ -2387,7 +2387,7 @@ function buildCards() {
               <div class="dv-mont-total d-value-accent" style="font-size:1.4rem;margin-top:3px">—</div>
             </div>
           </div>
-          <div class="dv-mont-date" style="font-size:0.5rem;color:#7a9ab0;margin-top:5px;text-align:right"></div>
+          <div class="dv-mont-date" style="font-size:0.5rem;color:#9ab5c7;margin-top:5px;text-align:right"></div>
         </div>` : ''}
       </div>`;
     // Mitis n'a pas de station hydrométrique CEHQ, donc pas de débit ni
