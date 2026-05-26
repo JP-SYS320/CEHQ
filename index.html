@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.00</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.01</div>
 </footer>
 
 <script>
@@ -1941,38 +1941,60 @@ function buildPrevisionMini(currentDebit, trend, prevision) {
 
   const points = values.map((v, i) => ({
     x: padX + (i / (values.length - 1)) * usableW,
-    y: padY + (1 - (v - min) / range) * usableH
+    y: padY + (1 - (v - min) / range) * usableH,
+    v: v
   }));
 
-  const linePath = points.map((p, i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`)).join(' ');
+  // Couleurs par direction (segment ou point)
+  const UP_FILL = '#4ade9a';       // vert vif pour le point
+  const UP_LINE = 'rgba(74,222,154,0.55)';  // vert atténué pour la ligne
+  const DOWN_FILL = '#f06260';     // rouge vif pour le point
+  const DOWN_LINE = 'rgba(240,98,96,0.55)';
+  const FLAT_FILL = '#9ab5c7';
+  const FLAT_LINE = 'rgba(154,181,199,0.4)';
 
-  // Tendance de la prévision : compare le dernier point (J+4) au premier (aujourd'hui)
-  // Si dernier > premier → prévision montante, sinon descendante
-  const previsionLast = values[values.length - 1];
-  const previsionFirst = values[0];
-  const previsionUp = previsionLast >= previsionFirst;
-  const futureCol = previsionUp ? 'rgba(74,222,154,0.85)' : 'rgba(240,98,96,0.85)';
-  const lineColor = previsionUp ? 'rgba(74,222,154,0.45)' : 'rgba(240,98,96,0.45)';
+  // Helper : couleur selon direction relative entre 2 valeurs
+  // Seuil 0.5% pour ignorer les variations négligeables (numérique)
+  const dirColors = (prevVal, currVal) => {
+    const diff = currVal - prevVal;
+    const median = (prevVal + currVal) / 2;
+    if (Math.abs(diff) / (median || 1) < 0.005) {
+      return { fill: FLAT_FILL, line: FLAT_LINE };
+    }
+    return diff > 0
+      ? { fill: UP_FILL, line: UP_LINE }
+      : { fill: DOWN_FILL, line: DOWN_LINE };
+  };
+
+  // Segments de ligne colorés individuellement selon la direction
+  const lineSegments = points.slice(1).map((p, i) => {
+    const prev = points[i];  // point précédent
+    const { line } = dirColors(prev.v, p.v);
+    return `<line x1="${prev.x.toFixed(1)}" y1="${prev.y.toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${p.y.toFixed(1)}" stroke="${line}" stroke-width="1"/>`;
+  }).join('');
 
   // Couleur du point d'aujourd'hui : selon la tendance actuelle (var 24h)
-  const todayCol = trend === 'up'   ? '#4ade9a'
-                 : trend === 'down' ? '#f06260'
-                 :                    '#9ab5c7';
+  // Pas selon la direction vers le prochain point, parce que ça reflète
+  // ce qui se passe MAINTENANT (descente nocturne, hausse de crue, etc.)
+  const todayCol = trend === 'up'   ? UP_FILL
+                 : trend === 'down' ? DOWN_FILL
+                 :                    FLAT_FILL;
 
   const circles = points.map((p, i) => {
-    const isToday = i === 0;
-    if (isToday) {
+    if (i === 0) {
       // Point d'aujourd'hui : plus gros + halo lumineux + contour blanc
       return `
         <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5" fill="${todayCol}" opacity="0.25"/>
         <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.2" fill="${todayCol}" stroke="#ffffff" stroke-width="0.8"/>
       `;
     }
-    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="1.8" fill="${futureCol}"/>`;
+    // Points futurs : couleur selon direction depuis le point précédent
+    const { fill } = dirColors(points[i-1].v, p.v);
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="1.8" fill="${fill}"/>`;
   }).join('');
 
   return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
-    <path d="${linePath}" fill="none" stroke="${lineColor}" stroke-width="1"/>
+    ${lineSegments}
     ${circles}
   </svg>
   <div class="prevision-mini-label">PRÉVISION 4J</div>`;
