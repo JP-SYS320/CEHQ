@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.03</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.04</div>
 </footer>
 
 <script>
@@ -1490,10 +1490,30 @@ async function fetchPrevision(stationId) {
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
-      // Vérification : 4 points + timestamp <6h
-      if (Array.isArray(parsed.points) && parsed.points.length === 4
-          && parsed._t && (Date.now() - parsed._t) < 6 * 3600 * 1000) {
-        return parsed.points;
+      // Vérification : 4 points + cache "intelligent" aligné sur CEHQ
+      //
+      // CEHQ publie ses prévisions ~1 fois par jour, tôt le matin (5-9h HAE).
+      // Stratégie : si le cache a été créé AVANT 8h locale et qu'on est
+      // maintenant APRÈS 8h, on l'invalide pour aller chercher la prévision
+      // fraîche du matin. Sinon, on garde le cache jusqu'à 6h max.
+      //
+      // Avantages :
+      // - Tu ouvres à 5h → cache stocké
+      // - Tu reouvres à 9h → on détecte qu'on a passé 8h → refetch automatique
+      // - Tu vois la prévision fraîche sans attendre 6h
+      //
+      // Edge case : si tu ouvres à 9h directement, le cache aura été créé
+      // après 8h. Pas de souci, on garde jusqu'à 15h (6h max).
+      if (Array.isArray(parsed.points) && parsed.points.length === 4 && parsed._t) {
+        const ageMs = Date.now() - parsed._t;
+        const cachedDate = new Date(parsed._t);
+        const cachedBefore8h = (cachedDate.getHours() < 8);
+        const nowHour = new Date().getHours();
+        const crossed8h = cachedBefore8h && nowHour >= 8;
+        // Cache valide si : <6h ET pas de passage par 8h depuis sa création
+        if (ageMs < 6 * 3600 * 1000 && !crossed8h) {
+          return parsed.points;
+        }
       }
       // Cache invalide → supprimé pour refetch
       localStorage.removeItem(key);
