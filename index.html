@@ -584,7 +584,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.04</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.06</div>
 </footer>
 
 <script>
@@ -1627,9 +1627,26 @@ async function loadStation(stationId) {
   state[stationId].msg = 'Chargement...';
   renderCard(stationId);
 
-  // Débit — attendu (bloque le rendu principal)
-  try {
-    const data = await fetchDebit(stationId);
+  // ─── PARALLÉLISATION (v1.05) ─────────────────────────────────────────────
+  // Avant : on attendait le débit MSP (1-3s) avant de lancer les fetches
+  // secondaires. Conséquence : l'utilisateur ne voyait lever/coucher/marées
+  // qu'après le débit, et la première carte "complète" prenait 4-6s.
+  //
+  // Maintenant : on lance TOUS les fetches en parallèle dès le début.
+  // - Le débit MSP arrive en premier (~1-3s) → affichage du débit + tendance
+  // - Les fetches secondaires arrivent dans leur propre ordre → remplissent
+  //   la carte au fur et à mesure
+  // - L'hydratation CEHQ + recalcul des stats se font indépendamment
+  //
+  // Gain estimé : 1-2s sur le temps perçu avant carte complète.
+  //
+  // Race conditions ? Non — JavaScript est mono-thread, les .then() ne
+  // s'entrelacent pas. Si fetchWeather et fetchDebit terminent ensemble,
+  // leurs callbacks s'exécutent l'un après l'autre, jamais simultanément.
+  // scheduleRender groupe les renders via requestAnimationFrame.
+
+  // 1) Débit (le seul qu'on "attend" parce qu'il définit le status de la carte)
+  const debitPromise = fetchDebit(stationId).then(data => {
     Object.assign(state[stationId], {
       debit: data.debit, trend: data.trend,
       var24h: data.var24h, max24h: data.max24h, min24h: data.min24h,
@@ -1638,19 +1655,18 @@ async function loadStation(stationId) {
         ? 'Aucune station hydrométrique'
         : (data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues')
     });
-  } catch(e) {
+    renderCard(stationId);
+  }).catch(e => {
     state[stationId].status = 'error';
     state[stationId].msg = 'Erreur — ' + (e.message || 'inconnu');
-  }
-  renderCard(stationId);
+    renderCard(stationId);
+  });
 
-  // Hydrater l'historique CEHQ via une queue sérialisée (un fetch à la fois,
-  // avec petit délai entre stations pour éviter le rate-limit du proxy).
-  // Une fois l'hydratation terminée, on RECALCULE trend/var24h/max24h/min24h
-  // depuis le nouvel historique. Sans ça, la tendance restait sur la valeur
-  // calculée au tout début (sur un cache potentiellement vide ou partiel),
-  // et l'utilisateur devait appuyer manuellement sur "Actualiser" pour
-  // déclencher un nouveau fetchDebit qui recalculait correctement.
+  // 2) Hydratation CEHQ + recalcul des stats (passe par queue sérialisée).
+  // S'exécute en parallèle du débit. Une fois terminée, recalcule les stats
+  // depuis le nouvel historique. computeHistStats utilise state[stationId].debit
+  // qui sera défini si le débit a déjà fini, sinon null (var24h restera null
+  // temporairement, mais sera recalculée au prochain refresh ou via validateur).
   queueHydration(stationId).then(() => {
     if (state[stationId]?._histCache?.length > 1) {
       const stats = computeHistStats(stationId, state[stationId].debit);
@@ -1664,8 +1680,7 @@ async function loadStation(stationId) {
     }
   });
 
-  // Fetches secondaires — tous en parallèle, en arrière-plan
-  // scheduleRender groupe les mises à jour pour éviter des re-renders en cascade
+  // 3) Fetches secondaires en parallèle
   fetchWeather(s).then(w => {
     if (w) {
       state[stationId].sunrise = w.sunrise;
@@ -1677,8 +1692,6 @@ async function loadStation(stationId) {
   }).catch(() => {});
 
   fetchTides(s).then(tides => {
-    // fetchTides retourne toujours un objet (jamais null) :
-    // { today, tomorrow } | { unavailable: true } | { error: true }
     state[stationId].tides = tides;
     scheduleRender(stationId);
   }).catch(() => { state[stationId].tides = { error: true }; scheduleRender(stationId); });
@@ -1695,10 +1708,14 @@ async function loadStation(stationId) {
     }).catch(() => {});
   }
 
-  // Prévision CEHQ 4 jours (médiane qMCS)
   fetchPrevision(stationId).then(prevision => {
     if (prevision) { state[stationId].prevision = prevision; scheduleRender(stationId); }
   }).catch(() => {});
+
+  // On retourne la promise du débit (pour que Promise.all dans refreshAll
+  // sache quand le minimum est chargé). Les fetches secondaires continuent
+  // en arrière-plan même après que cette promise se résolve.
+  return debitPromise;
 }
 
 // ─── Actualiser tout ──────────────────────────────────────────────────────────
@@ -2242,7 +2259,7 @@ function buildCards() {
       </div>
       <div class="status-msg"></div>
       <div class="detail">
-        <div class="detail-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="detail-grid debit-stats-row" style="grid-template-columns:1fr 1fr 1fr">
           <div class="detail-item" style="text-align:center">
             <div class="detail-label">Var. 24h</div>
             <div class="detail-val dv-var">—</div>
@@ -2360,6 +2377,14 @@ function buildCards() {
           <div class="dv-mont-date" style="font-size:0.5rem;color:#7a9ab0;margin-top:5px;text-align:right"></div>
         </div>` : ''}
       </div>`;
+    // Mitis n'a pas de station hydrométrique CEHQ, donc pas de débit ni
+    // de statistiques 24h (Var. / Max / Min). On retire la rangée de stats
+    // débit pour cette station uniquement — les autres détails (lever,
+    // coucher, marées, montaisons) restent affichés.
+    if (s.id === 'MITIS') {
+      const statsRow = div.querySelector('.debit-stats-row');
+      if (statsRow) statsRow.style.display = 'none';
+    }
     grid.appendChild(div);
   });
 }
