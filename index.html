@@ -75,19 +75,31 @@
 
 
 <!-- Favicon classique -->
+<meta name="description" content="CurrentRun — Tableau de bord en temps réel pour la pêche au saumon atlantique au Québec : débits CEHQ, marées, météo, dénombrements de pêcheurs et statistiques de montaisons.">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 
-<!-- DNS prefetch + preconnect pour les API externes -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- Preconnect aux origines critiques (max 4 recommandé par Google).
+     Les autres APIs (geoegl, open-meteo, iwls) gagnent <200ms du preconnect
+     mais elles sont appelées AVEC un délai (queue sérialisée), donc l'établissement
+     de connexion se fait naturellement. On garde les 2 plus utilisées :
+     - fonts.gstatic.com : pour Playfair Display (rendu visuel critique)
+     - currentrun-proxy : utilisé par 4+ endpoints différents -->
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://geoegl.msp.gouv.qc.ca">
-<link rel="preconnect" href="https://api.open-meteo.com">
-<link rel="preconnect" href="https://api-iwls.dfo-mpo.gc.ca">
 <link rel="preconnect" href="https://currentrun-proxy.jptremblay18-cc2.workers.dev">
+<link rel="dns-prefetch" href="https://fonts.googleapis.com">
+<link rel="dns-prefetch" href="https://geoegl.msp.gouv.qc.ca">
+<link rel="dns-prefetch" href="https://api.open-meteo.com">
+<link rel="dns-prefetch" href="https://api-iwls.dfo-mpo.gc.ca">
 <link rel="dns-prefetch" href="https://pav.manisoft.ca">
 <link rel="dns-prefetch" href="https://pavnew.manisoft.ca">
-<!-- Google Fonts — 2 variantes seulement (italique 400 et italique 700) -->
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
+
+<!-- Google Fonts — chargement NON-BLOQUANT via la technique preload + onload.
+     L'ancien <link rel="stylesheet"> bloquait le rendu pendant 740ms d'après
+     Lighthouse. Avec preload + onload, le HTML s'affiche immédiatement et
+     la police s'applique dès qu'elle arrive (la balise <noscript> fait le
+     fallback si JS désactivé). -->
+<link rel="preload" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,700&display=swap" rel="stylesheet"></noscript>
 <style>
   :root {
     --bg: #142230;
@@ -578,13 +590,13 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     Statistiques sportives — MFFP, gouvernement du Québec
   </div>
   <br>
-  <span style="font-family:Georgia,serif;font-style:italic;font-size:0.6rem;color:#3d4a52;letter-spacing:0.04em">
+  <span style="font-family:Georgia,serif;font-style:italic;font-size:0.6rem;color:#7a8a98;letter-spacing:0.04em">
     Conçu et développé par Jean-Philippe Tremblay<br>
     Développement assisté par Claude (Anthropic)<br>
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#3d4a52;letter-spacing:0.1em">v1.07</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.08</div>
 </footer>
 
 <script>
