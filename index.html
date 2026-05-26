@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.02</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.03</div>
 </footer>
 
 <script>
@@ -1924,10 +1924,22 @@ document.addEventListener('DOMContentLoaded', () => {
 // (médiane qMCS de la prévision CEHQ). Les points de prévision sont colorés
 // selon la tendance globale de la prévision (montante/descendante).
 function buildPrevisionMini(currentDebit, trend, prevision) {
-  if (currentDebit === null || !prevision?.length) return '';
+  // Placeholder N/D quand la prévision n'est pas disponible :
+  // - Stations sans système de prévision CEHQ (ex. Escoumins)
+  // - Prévision pas encore chargée (premier load)
+  // - Prévision en erreur réseau
+  // Sans ce placeholder, l'espace au-dessus du débit était vide et donnait
+  // l'impression que la station était bogguée ou oubliée.
+  const W = 70, H = 28;
+  const hasData = currentDebit !== null && prevision?.length >= 2;
+  if (!hasData) {
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <text x="${W/2}" y="${H/2 + 4}" text-anchor="middle" font-size="9" fill="#9ab5c7" font-family="IBM Plex Mono, monospace" letter-spacing="0.1em">N/D</text>
+    </svg>
+    <div class="prevision-mini-label">PRÉV. 4J</div>`;
+  }
 
   const values = [currentDebit, ...prevision.map(p => p.value)].slice(0, 5);
-  if (values.length < 2) return '';
 
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -1935,7 +1947,7 @@ function buildPrevisionMini(currentDebit, trend, prevision) {
 
   // SVG 70×28 — marges intérieures pour éviter que les points touchent les bords
   // Marges Y un peu plus grandes pour laisser place au halo du point d'aujourd'hui
-  const W = 70, H = 28, padX = 5, padY = 5;
+  const padX = 5, padY = 5;
   const usableW = W - 2 * padX;
   const usableH = H - 2 * padY;
 
