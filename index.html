@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.16</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.17</div>
 </footer>
 
 <script>
@@ -953,35 +953,47 @@ async function hydrateHistoryIfNeeded(stationId) {
       .replace(/&gt;/g, '>');
 
     const parsed = [];
-    // Regex : date, heure, 1er nombre, optionnellement 2e nombre.
-    // \s+ accepte n'importe quel espacement (1 ou plusieurs).
-    // (\d+(?:[,.]\d+)?) : nombre avec décimale OPTIONNELLE
+    // Parser CEHQ — APPROCHE PAR SEGMENTS (v1.17)
     //
-    // BUG HISTORIQUE v1.14 et avant : le regex exigeait obligatoirement une
-    // décimale (\d+[,.]\d+). Or CEHQ retourne parfois des débits ronds sans
-    // décimale (ex. "16" au lieu de "16,00") quand la valeur est exactement
-    // entière. Dans ce cas, num2 capturait null et on prenait num1 (= niveau
-    // 29,499) comme débit. Conséquence : 4-5 valeurs niveau dans la sparkline
-    // pour Dartmouth, créant des "bumps" visibles à ~29 m³/s.
-    const lineRegex = /(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2}):\d{2}\s+(\d+(?:[,.]\d+)?)(?:\s+(\d+(?:[,.]\d+)?))?/g;
+    // HISTORIQUE DES BUGS :
+    // - v1.05 à v1.13 : régressions multiples sur stations à 2 colonnes
+    // - v1.14 : suppression du sanity check faux (num2 >= num1)
+    // - v1.16 : tentative de support des nombres entiers — mais permettait
+    //   au regex de capturer "2026" de la date SUIVANTE comme num2 d'une
+    //   ligne 1-colonne, faussant tous les débits Bonaventure/Cascapédia/etc.
+    //
+    // NOUVELLE APPROCHE (v1.17) : on capture chaque ligne par "segment"
+    // délimité par la date suivante (lookahead positif `(?=date|$)`).
+    // À l'intérieur du segment, on extrait tous les nombres. Ainsi :
+    // - 1 colonne (Bonaventure) : segment = "64,9" → nums = [64.9] → débit = 64.9
+    // - 2 colonnes (Dartmouth)  : segment = "29,499  16" → nums = [29.499, 16]
+    //                              → niveau = 29.499, débit = 16
+    //
+    // Le flag `s` permet à `.` de matcher les newlines (HTML CEHQ peut
+    // contenir des sauts de ligne entre les balises).
+    const segmentRegex = /(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2}):\d{2}\s+(.*?)(?=\d{4}-\d{2}-\d{2}|$)/gs;
+    const numberRegex = /(\d+(?:[,.]\d+)?)/g;
     let m;
-    while ((m = lineRegex.exec(cleaned)) !== null) {
+    while ((m = segmentRegex.exec(cleaned)) !== null) {
       const dateStr = m[1];
       const h = parseInt(m[2], 10);
       const mi = parseInt(m[3], 10);
-      const num1 = parseFloat(m[4].replace(',', '.'));
-      const num2 = m[5] ? parseFloat(m[5].replace(',', '.')) : null;
+      const segment = m[4];
 
-      // Si 2 nombres présents : le 2e est le débit, le 1er est le niveau
-      // Si 1 seul nombre : c'est le débit (station sans niveau)
-      // L'ordre des colonnes CEHQ est TOUJOURS Niveau puis Débit, on peut
-      // faire confiance à cet ordre. Pas de comparaison niveau vs débit
-      // possible : pour Rimouski le débit (42.7 m³/s) est supérieur au
-      // niveau (39.2 m), alors que pour Dartmouth le niveau (29.5 m) est
-      // supérieur au débit (17 m³/s). Ça dépend de la géométrie de chaque
-      // rivière (largeur, profondeur), donc aucun sanity check générique
-      // n'est valide.
-      const debit = num2 !== null ? num2 : num1;
+      // Extraire tous les nombres du segment. Pour les stations à 1 colonne,
+      // on aura un seul nombre (le débit). Pour les stations à 2 colonnes,
+      // deux nombres (Niveau, Débit). Le numberRegex doit être réinitialisé
+      // à chaque utilisation parce qu'il a le flag `g` (état persistant).
+      numberRegex.lastIndex = 0;
+      const nums = [...segment.matchAll(numberRegex)].map(x => parseFloat(x[1].replace(',', '.')));
+
+      // L'ordre des colonnes CEHQ est TOUJOURS Niveau puis Débit pour les
+      // stations à 2 colonnes. Pour les stations à 1 colonne, c'est juste
+      // le débit. Donc le débit est TOUJOURS le DERNIER nombre du segment.
+      // Pas de sanity check niveau vs débit possible : ça dépend de la
+      // géométrie de chaque rivière (largeur, profondeur).
+      if (nums.length === 0) continue;
+      const debit = nums[nums.length - 1];
 
       if (isNaN(debit) || debit < 0 || debit > 10000) continue;
 
@@ -2639,16 +2651,18 @@ try {
   }
 } catch(e) {}
 
-// Cleanup one-shot v1.16 : le regex exigeait une décimale, donc les débits
-// ronds (ex. "16" sans virgule) faisaient prendre le niveau comme débit.
-// Force re-hydratation Dartmouth/Rimouski pour purger les valeurs niveau
-// (~29.5) qui s'étaient glissées dans le hist.
+// Cleanup one-shot v1.17 : le parser v1.16 capturait "2026" (la date suivante)
+// comme num2 pour les stations à 1 colonne, contaminant TOUTES les sparklines.
+// Cleanup global cette fois — pas juste Dartmouth/Rimouski.
 try {
-  if (localStorage.getItem('cleanup_v116_integer') !== 'done') {
-    ['hist_020602', 'hist_022003'].forEach(key => {
-      localStorage.removeItem(key);
-    });
-    localStorage.setItem('cleanup_v116_integer', 'done');
+  if (localStorage.getItem('cleanup_v117_all') !== 'done') {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('hist_')) keysToRemove.push(k);
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    localStorage.setItem('cleanup_v117_all', 'done');
   }
 } catch(e) {}
 
