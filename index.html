@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.04</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.05</div>
 </footer>
 
 <script>
@@ -935,8 +935,15 @@ async function hydrateHistoryIfNeeded(stationId) {
     // Parser CEHQ — approche en 2 étapes pour gérer les stations à 1 ou 2 colonnes :
     // - Bonaventure, Cascapédia... : Date | Heure | Débit (1 nombre)
     // - Dartmouth, Rimouski... :     Date | Heure | Niveau | Débit (2 nombres)
-    // On trouve chaque "date+heure" et on prend le DERNIER nombre décimal qui suit
-    // jusqu'à la prochaine date (qui marque la ligne suivante).
+    //
+    // BUG HISTORIQUE (v1.04) : la marge "-50" pouvait couper le débit, ne
+    // capturant alors que le niveau d'eau (~29.5 m) qu'on stockait comme
+    // débit. Résultat : sparkline et MAX 24h faux pour Dartmouth/Rimouski.
+    //
+    // FIX : on détecte d'abord le nombre de colonnes en regardant la 1ère
+    // ligne (qui a généralement la marge la plus généreuse). Si on détecte
+    // 2 colonnes, on EXIGE 2 nombres pour toutes les lignes — sinon on
+    // rejette la ligne (mieux vaut une lacune qu'une valeur fausse).
     const parsed = [];
     // Étape 1 : trouver toutes les positions de "date + heure"
     const headerRegex = /(\d{4}-\d{2}-\d{2})[\s\S]{1,300}?(\d{2}:\d{2}):\d{2}/g;
@@ -945,17 +952,53 @@ async function hydrateHistoryIfNeeded(stationId) {
     while ((m = headerRegex.exec(html)) !== null) {
       matches.push({ dateStr: m[1], timeStr: m[2], end: m.index + m[0].length });
     }
-    // Étape 2 : pour chaque entête, extraire les nombres jusqu'à la prochaine entête
+
+    // Étape 2 : extraire les nombres de chaque segment et stocker tous les
+    // candidats. On garde la liste complète des nombres par ligne pour
+    // détecter le pattern dominant (1 ou 2 colonnes) ensuite.
+    const candidates = [];
     for (let i = 0; i < matches.length; i++) {
       const start = matches[i].end;
-      const stop = (i + 1 < matches.length) ? matches[i + 1].end - matches[i + 1].dateStr.length - 50 : Math.min(start + 500, html.length);
+      // Marge augmentée de 50 à 100 pour être sûr de capturer tous les nombres
+      // y compris quand le HTML CEHQ a des espacements variables entre cellules.
+      const stop = (i + 1 < matches.length)
+        ? matches[i + 1].end - matches[i + 1].dateStr.length - 100
+        : Math.min(start + 500, html.length);
       const segment = html.substring(start, stop);
-      // Récupérer tous les nombres décimaux dans le segment
       const nums = [...segment.matchAll(/(\d+[,.]\d+)/g)].map(m => parseFloat(m[1].replace(',', '.')));
-      // Le débit est le dernier nombre (niveau d'eau vient avant débit dans CEHQ)
-      const debit = nums.length ? nums[nums.length - 1] : NaN;
+      candidates.push({ matchIdx: i, nums });
+    }
+
+    // Étape 3 : déterminer le nombre de colonnes dominant
+    // (la majorité des lignes auront le bon compte ; les lignes mal coupées
+    // par la marge auront un compte plus bas).
+    const countDistribution = {};
+    candidates.forEach(c => {
+      const n = c.nums.length;
+      countDistribution[n] = (countDistribution[n] || 0) + 1;
+    });
+    // Le compte de colonnes "vrai" est le MAX observé (pas forcément le plus
+    // fréquent, parce qu'une mauvaise marge réduit le compte mais ne l'augmente
+    // jamais). Si on voit ≥2 lignes avec 2 nombres, alors la station a 2 colonnes.
+    let expectedCols = 1;
+    if ((countDistribution[2] || 0) >= 2 || (countDistribution[3] || 0) >= 2) {
+      expectedCols = 2;
+    }
+
+    // Étape 4 : extraire les débits valides selon le compte de colonnes attendu
+    for (const { matchIdx, nums } of candidates) {
+      if (nums.length < expectedCols) continue;  // Ligne mal coupée — rejet
+      // Le débit est le DERNIER nombre des `expectedCols` premiers.
+      // Pourquoi `expectedCols` premiers : le HTML CEHQ peut avoir des
+      // nombres parasites en fin de ligne (numéros de page, etc.).
+      const debit = nums[expectedCols - 1];
       if (isNaN(debit) || debit < 0 || debit > 10000) continue;
-      const { dateStr, timeStr } = matches[i];
+      // Validation finale : pour les stations à 2 colonnes, le débit doit
+      // être ≤ au niveau (le niveau est toujours plus grand que le débit
+      // en m³/s pour les rivières du Québec : niveau ~30 m vs débit ~17 m³/s).
+      // Si débit > niveau, c'est probablement un parsing inversé → rejet.
+      if (expectedCols === 2 && debit > nums[0]) continue;
+      const { dateStr, timeStr } = matches[matchIdx];
       const [y, mo, d] = dateStr.split('-').map(Number);
       const [h, mi] = timeStr.split(':').map(Number);
       const utcMs = Date.UTC(y, mo - 1, d, h + 5, mi, 0);
@@ -2508,6 +2551,21 @@ try {
       console.warn(`[CurrentRun v1.13] Cleanup: ${totalRemoved} outliers résiduels supprimés`);
     }
     localStorage.setItem('cleanup_v113', 'done');
+  }
+} catch(e) {}
+
+// Cleanup one-shot v1.05 : purge complète des historiques Dartmouth (020602)
+// et Rimouski (022003) qui pouvaient contenir des entrées contaminées où
+// le NIVEAU d'eau (~29.5 m) était stocké comme débit. Le nouveau parser
+// rejette ces lignes, mais les anciennes restent en localStorage tant
+// qu'elles n'ont pas glissé hors de la fenêtre 24h.
+// On force une ré-hydratation propre pour ces 2 stations.
+try {
+  if (localStorage.getItem('cleanup_v105_levels') !== 'done') {
+    ['hist_020602', 'hist_022003'].forEach(key => {
+      localStorage.removeItem(key);
+    });
+    localStorage.setItem('cleanup_v105_levels', 'done');
   }
 } catch(e) {}
 
