@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.11</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.12</div>
 </footer>
 
 <script>
@@ -1769,6 +1769,31 @@ async function loadStation(stationId) {
   // temporairement, mais sera recalculée au prochain refresh ou via validateur).
   queueHydration(stationId).then(() => {
     if (state[stationId]?._histCache?.length > 1) {
+      const hist = state[stationId]._histCache;
+
+      // Pour Dartmouth/Rimouski (blacklist MSP) : on doit aussi mettre à jour
+      // le débit affiché ET le timestamp à partir de la dernière entrée CEHQ
+      // qu'on vient de récupérer. Sans ça, l'app reste figée sur la valeur
+      // initiale (qui pouvait être vieille de plusieurs heures si le hist
+      // mémoire venait d'un cache localStorage non rafraîchi).
+      if (stationId === '020602' || stationId === '022003') {
+        const last = hist[hist.length - 1];
+        state[stationId].debit = last.debit;
+        const utcDate = new Date(last.ts);
+        if (!isNaN(utcDate)) {
+          const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Toronto',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false,
+            timeZoneName: 'short'
+          }).formatToParts(utcDate);
+          const get = type => parts.find(p => p.type === type)?.value || '';
+          const tzShort = get('timeZoneName');
+          const tz = tzShort === 'EDT' ? 'HAE' : 'HNE';
+          state[stationId].msg = `Mesure : ${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${tz}`;
+        }
+      }
+
       const stats = computeHistStats(stationId, state[stationId].debit);
       Object.assign(state[stationId], {
         trend:  stats.trend  ?? state[stationId].trend,
