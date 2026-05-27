@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.06</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.07</div>
 </footer>
 
 <script>
@@ -952,10 +952,19 @@ async function hydrateHistoryIfNeeded(stationId) {
     //
     // Le 2e nombre, s'il existe, est TOUJOURS le débit. Sinon le 1er est le débit.
     //
-    // Le regex tolère "n'importe quoi non-chiffre" (max 30 caractères) entre
-    // les éléments : tabs, espaces, balises HTML (<td>, </td>), etc.
+    // Le regex tolère "n'importe quoi non-chiffre" entre les éléments :
+    // tabs, espaces, balises HTML complètes (<td class="..." align="...">),
+    // attributs avec longues classes CSS, etc. La limite de 200 caractères
+    // absorbe les balises CEHQ réelles (typiquement ~50-80 chars entre
+    // chaque cellule). Le `?` (non-greedy) garantit qu'on prend le minimum
+    // possible, donc on n'absorbe jamais 2 lignes voisines.
+    //
+    // BUG HISTORIQUE v1.06 : `{1,30}` était trop court, le regex échouait
+    // sur le vrai HTML CEHQ qui a ~48 caractères de balises entre les
+    // cellules. Résultat : 0 lignes parsées → hist_020602/hist_022003
+    // restaient vides après le cleanup.
     const parsed = [];
-    const lineRegex = /(\d{4}-\d{2}-\d{2})[^\d]{1,30}(\d{2}):(\d{2}):\d{2}[^\d]{1,30}(\d+[,.]\d+)(?:[^\d]{1,30}(\d+[,.]\d+))?/g;
+    const lineRegex = /(\d{4}-\d{2}-\d{2})[^\d]{1,200}?(\d{2}):(\d{2}):\d{2}[^\d]{1,200}?(\d+[,.]\d+)(?:[^\d]{1,200}?(\d+[,.]\d+))?/g;
     let m;
     while ((m = lineRegex.exec(html)) !== null) {
       const dateStr = m[1];
@@ -2529,17 +2538,16 @@ try {
   }
 } catch(e) {}
 
-// Cleanup one-shot v1.06 : purge complète des historiques Dartmouth (020602)
-// et Rimouski (022003) qui contiennent potentiellement des données fausses
-// (niveaux stockés comme débits). Le bug existait depuis v1.05 et avant,
-// donc on force un nouveau cleanup même si le marqueur v105 est déjà "done".
-// Le nouveau parser v1.06 (regex ligne-par-ligne) va re-hydrater proprement.
+// Cleanup one-shot v1.07 : le parser v1.06 avait un regex trop restrictif
+// ({1,30}) qui ne matchait pas le vrai HTML CEHQ (~48 chars de balises
+// entre cellules). Résultat : Dartmouth/Rimouski restaient vides après
+// cleanup v1.06. Avec le nouveau regex {1,200}?, on re-purge et re-hydrate.
 try {
-  if (localStorage.getItem('cleanup_v106_parser') !== 'done') {
+  if (localStorage.getItem('cleanup_v107_regex') !== 'done') {
     ['hist_020602', 'hist_022003'].forEach(key => {
       localStorage.removeItem(key);
     });
-    localStorage.setItem('cleanup_v106_parser', 'done');
+    localStorage.setItem('cleanup_v107_regex', 'done');
   }
 } catch(e) {}
 
