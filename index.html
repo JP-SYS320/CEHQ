@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.08</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.09</div>
 </footer>
 
 <script>
@@ -932,26 +932,25 @@ async function hydrateHistoryIfNeeded(stationId) {
       return;
     }
 
-    // Parser CEHQ — NOUVELLE STRATÉGIE BULLETPROOF (v1.08)
+    // Parser CEHQ — NOUVELLE STRATÉGIE BULLETPROOF (v1.09)
     //
     // HISTORIQUE DES BUGS :
     // - v1.05 : marge -100 captait les niveaux comme débits
-    // - v1.06 : regex `{1,30}` trop restrictif → 0 lignes parsées sur le
-    //   vrai HTML CEHQ (qui a ~48 chars de balises entre cellules)
-    // - v1.07 : regex `{1,200}?` toujours pas fiable selon les variations
-    //   exactes des balises HTML
+    // - v1.06 : regex `{1,30}` trop restrictif → 0 lignes parsées
+    // - v1.07 : regex `{1,200}?` toujours pas fiable
+    // - v1.08 : strip HTML puis regex texte propre — MAIS le HTML CEHQ
+    //   contient des `&nbsp;` (espaces insécables) entre les cellules.
+    //   Après strip, on a `29,508&nbsp; 16,66` que `\s+` ne traverse pas
+    //   parce que `&nbsp;` contient des caractères alphabétiques.
     //
-    // NOUVELLE APPROCHE : on NETTOIE le HTML d'abord (`<...>` remplacé par
-    // espaces), puis on parse le texte propre avec un regex trivial.
-    // Plus aucune ambiguïté liée aux balises, attributs, classes, etc.
-    //
-    // Format après nettoyage : `2026-05-26   18:00:00   29,51   16,81`
-    // (avec n'importe quel nombre d'espaces/tabs/newlines entre)
-    //
-    // Format CEHQ :
-    // - 1 colonne (Bonaventure, Cascapédia...) : Date | Heure | Débit
-    // - 2 colonnes (Dartmouth, Rimouski) :        Date | Heure | Niveau | Débit
-    const cleaned = html.replace(/<[^>]*>/g, ' ');
+    // NOUVELLE STRATÉGIE : 1) strip HTML, 2) décoder TOUTES les entités
+    // HTML communes (`&nbsp;`, `&amp;`, etc.) en espaces normaux, 3) parser.
+    const cleaned = html
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
 
     const parsed = [];
     // Regex simple : date, heure, 1er nombre, optionnellement 2e nombre.
@@ -2530,15 +2529,15 @@ try {
   }
 } catch(e) {}
 
-// Cleanup one-shot v1.08 : nouveau parser "strip HTML then parse" qui marche
-// peu importe la structure des balises CEHQ. On re-purge Dartmouth/Rimouski
-// pour qu'ils soient re-hydratés avec le bon parser.
+// Cleanup one-shot v1.09 : le parser v1.08 ne décodait pas les `&nbsp;`
+// du HTML CEHQ qui séparent les colonnes. Maintenant on décode AVANT
+// de parser. Force re-hydratation pour Dartmouth/Rimouski.
 try {
-  if (localStorage.getItem('cleanup_v108_strip') !== 'done') {
+  if (localStorage.getItem('cleanup_v109_nbsp') !== 'done') {
     ['hist_020602', 'hist_022003'].forEach(key => {
       localStorage.removeItem(key);
     });
-    localStorage.setItem('cleanup_v108_strip', 'done');
+    localStorage.setItem('cleanup_v109_nbsp', 'done');
   }
 } catch(e) {}
 
