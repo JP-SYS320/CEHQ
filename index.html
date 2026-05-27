@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.13</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.14</div>
 </footer>
 
 <script>
@@ -966,15 +966,16 @@ async function hydrateHistoryIfNeeded(stationId) {
 
       // Si 2 nombres présents : le 2e est le débit, le 1er est le niveau
       // Si 1 seul nombre : c'est le débit (station sans niveau)
+      // L'ordre des colonnes CEHQ est TOUJOURS Niveau puis Débit, on peut
+      // faire confiance à cet ordre. Pas de comparaison niveau vs débit
+      // possible : pour Rimouski le débit (42.7 m³/s) est supérieur au
+      // niveau (39.2 m), alors que pour Dartmouth le niveau (29.5 m) est
+      // supérieur au débit (17 m³/s). Ça dépend de la géométrie de chaque
+      // rivière (largeur, profondeur), donc aucun sanity check générique
+      // n'est valide.
       const debit = num2 !== null ? num2 : num1;
 
       if (isNaN(debit) || debit < 0 || debit > 10000) continue;
-
-      // Sanity check : pour les stations à 2 colonnes, le débit doit être
-      // strictement plus petit que le niveau (les niveaux en m sont toujours
-      // plus grands que les débits en m³/s pour les rivières du Québec).
-      // Si num2 >= num1, le parsing s'est mal fait → on rejette.
-      if (num2 !== null && num2 >= num1) continue;
 
       const [y, mo, d] = dateStr.split('-').map(Number);
       const utcMs = Date.UTC(y, mo - 1, d, h + 5, mi, 0);
@@ -2616,15 +2617,16 @@ try {
   }
 } catch(e) {}
 
-// Cleanup one-shot v1.11 : pour Dartmouth/Rimouski, l'API MSP est maintenant
-// blacklistée et seul CEHQ tableau alimente l'historique. On purge une
-// dernière fois pour repartir propre avec UNIQUEMENT les valeurs CEHQ.
+// Cleanup one-shot v1.14 : un sanity check faux (num2 >= num1 → rejet)
+// faisait que TOUTES les lignes Rimouski étaient rejetées (parce que pour
+// Rimouski le débit ~42 m³/s > niveau ~39 m, contrairement à Dartmouth
+// où c'est l'inverse). Le check est retiré. Force re-hydratation.
 try {
-  if (localStorage.getItem('cleanup_v111_blacklist') !== 'done') {
+  if (localStorage.getItem('cleanup_v114_sanity') !== 'done') {
     ['hist_020602', 'hist_022003'].forEach(key => {
       localStorage.removeItem(key);
     });
-    localStorage.setItem('cleanup_v111_blacklist', 'done');
+    localStorage.setItem('cleanup_v114_sanity', 'done');
   }
 } catch(e) {}
 
