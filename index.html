@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.14</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.15</div>
 </footer>
 
 <script>
@@ -1768,13 +1768,27 @@ async function loadStation(stationId) {
 
   // 1) Débit (le seul qu'on "attend" parce qu'il définit le status de la carte)
   const debitPromise = fetchDebit(stationId).then(data => {
+    // Pour les stations blacklistées (Dartmouth/Rimouski) : si queueHydration
+    // a déjà tourné en parallèle et mis state.debit à la valeur CEHQ propre,
+    // on NE veut PAS l'écraser avec data.debit qui pourrait être la valeur
+    // MSP (potentiellement le niveau d'eau au lieu du débit).
+    // Si state.debit est encore null/undefined, on prend data.debit en
+    // attendant que l'hydratation finisse.
+    const useExistingDebit = MSP_BLACKLIST.has(stationId)
+      && state[stationId].debit !== null
+      && state[stationId].debit !== undefined
+      && state[stationId]._histCache?.length > 0;
+
     Object.assign(state[stationId], {
-      debit: data.debit, trend: data.trend,
+      debit: useExistingDebit ? state[stationId].debit : data.debit,
+      trend: data.trend,
       var24h: data.var24h, max24h: data.max24h, min24h: data.min24h,
       status: 'ok',
-      msg: data.debit === null
-        ? 'Aucune station hydrométrique'
-        : (data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues')
+      msg: useExistingDebit
+        ? state[stationId].msg  // Garde le msg déjà formaté par refreshBlacklistedDebit
+        : (data.debit === null
+            ? 'Aucune station hydrométrique'
+            : (data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues'))
     });
     renderCard(stationId);
   }).catch(e => {
