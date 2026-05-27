@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.15</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.16</div>
 </footer>
 
 <script>
@@ -953,9 +953,17 @@ async function hydrateHistoryIfNeeded(stationId) {
       .replace(/&gt;/g, '>');
 
     const parsed = [];
-    // Regex simple : date, heure, 1er nombre, optionnellement 2e nombre.
+    // Regex : date, heure, 1er nombre, optionnellement 2e nombre.
     // \s+ accepte n'importe quel espacement (1 ou plusieurs).
-    const lineRegex = /(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2}):\d{2}\s+(\d+[,.]\d+)(?:\s+(\d+[,.]\d+))?/g;
+    // (\d+(?:[,.]\d+)?) : nombre avec décimale OPTIONNELLE
+    //
+    // BUG HISTORIQUE v1.14 et avant : le regex exigeait obligatoirement une
+    // décimale (\d+[,.]\d+). Or CEHQ retourne parfois des débits ronds sans
+    // décimale (ex. "16" au lieu de "16,00") quand la valeur est exactement
+    // entière. Dans ce cas, num2 capturait null et on prenait num1 (= niveau
+    // 29,499) comme débit. Conséquence : 4-5 valeurs niveau dans la sparkline
+    // pour Dartmouth, créant des "bumps" visibles à ~29 m³/s.
+    const lineRegex = /(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2}):\d{2}\s+(\d+(?:[,.]\d+)?)(?:\s+(\d+(?:[,.]\d+)?))?/g;
     let m;
     while ((m = lineRegex.exec(cleaned)) !== null) {
       const dateStr = m[1];
@@ -2631,16 +2639,16 @@ try {
   }
 } catch(e) {}
 
-// Cleanup one-shot v1.14 : un sanity check faux (num2 >= num1 → rejet)
-// faisait que TOUTES les lignes Rimouski étaient rejetées (parce que pour
-// Rimouski le débit ~42 m³/s > niveau ~39 m, contrairement à Dartmouth
-// où c'est l'inverse). Le check est retiré. Force re-hydratation.
+// Cleanup one-shot v1.16 : le regex exigeait une décimale, donc les débits
+// ronds (ex. "16" sans virgule) faisaient prendre le niveau comme débit.
+// Force re-hydratation Dartmouth/Rimouski pour purger les valeurs niveau
+// (~29.5) qui s'étaient glissées dans le hist.
 try {
-  if (localStorage.getItem('cleanup_v114_sanity') !== 'done') {
+  if (localStorage.getItem('cleanup_v116_integer') !== 'done') {
     ['hist_020602', 'hist_022003'].forEach(key => {
       localStorage.removeItem(key);
     });
-    localStorage.setItem('cleanup_v114_sanity', 'done');
+    localStorage.setItem('cleanup_v116_integer', 'done');
   }
 } catch(e) {}
 
