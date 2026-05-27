@@ -597,7 +597,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.12</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.13</div>
 </footer>
 
 <script>
@@ -1033,6 +1033,47 @@ async function hydrateHistoryIfNeeded(stationId) {
   }
 }
 
+// ─── Stations avec MSP blacklisté ─────────────────────────────────────────────
+// Pour Dartmouth (020602) et Rimouski (022003), l'API MSP renvoie parfois la
+// valeur du NIVEAU d'eau (~29.5 m) au lieu du vrai débit dans dern_valeur_deb.
+// Le filtre outlier ne peut pas distinguer une vraie crue (débit 30) d'un
+// niveau confondu (30), parce que les deux peuvent être numériquement proches.
+//
+// Solution : pour ces 2 stations, l'historique ET le débit affiché viennent
+// EXCLUSIVEMENT du tableau CEHQ (qui sépare explicitement Niveau et Débit).
+// MSP est ignoré complètement pour le débit principal et l'historique.
+const MSP_BLACKLIST = new Set(['020602', '022003']);
+
+// Met à jour state[stationId].debit et state[stationId].msg à partir de la
+// DERNIÈRE entrée de l'historique CEHQ. À appeler chaque fois qu'on vient
+// de mettre à jour l'historique pour une station blacklistée.
+// No-op si station non blacklistée ou hist vide.
+function refreshBlacklistedDebit(stationId) {
+  if (!MSP_BLACKLIST.has(stationId)) return;
+  const hist = state[stationId]?._histCache;
+  if (!hist || hist.length === 0) return;
+
+  const last = hist[hist.length - 1];
+  state[stationId].debit = last.debit;
+  state[stationId].status = 'ok';
+
+  const utcDate = new Date(last.ts);
+  if (!isNaN(utcDate)) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Toronto',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+      timeZoneName: 'short'
+    }).formatToParts(utcDate);
+    const get = type => parts.find(p => p.type === type)?.value || '';
+    const tzShort = get('timeZoneName');
+    const tz = tzShort === 'EDT' ? 'HAE' : 'HNE';
+    state[stationId].msg = `Mesure : ${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${tz}`;
+  } else {
+    state[stationId].msg = 'Données reçues';
+  }
+}
+
 // ─── Débit + historique localStorage ─────────────────────────────────────────
 async function fetchDebit(stationId) {
   if (stationId === 'MITIS')
@@ -1105,36 +1146,15 @@ async function fetchDebit(stationId) {
     let modified = migrated;
 
     // ─── EXCEPTION DARTMOUTH (020602) ET RIMOUSKI (022003) ───────────────────
-    // Pour ces 2 stations, l'API MSP renvoie parfois la valeur du NIVEAU
-    // d'eau (~29.5 m) dans le champ `dern_valeur_deb` au lieu du vrai débit.
-    // Le filtre outlier ne peut pas distinguer une vraie crue (débit 30)
-    // d'un niveau confondu avec débit (30), parce que les deux sont
-    // numériquement proches en cas de crue.
-    //
-    // Solution propre : ne JAMAIS insérer la valeur MSP dans l'historique
-    // pour ces 2 stations. L'historique est alimenté UNIQUEMENT par CEHQ
-    // tableau (via queueHydration) qui retourne explicitement Niveau ET
-    // Débit séparément — aucune confusion possible.
-    //
-    // La valeur MSP reste affichée comme "débit instantané" (pour la
-    // fraîcheur temps réel), mais ne pollue plus l'historique ni le
-    // calcul de MAX/MIN/Var 24h.
-    const msp_blacklist = (stationId === '020602' || stationId === '022003');
-
-    if (isoUtc && !hist.some(e => e.ts === isoUtc) && !msp_blacklist) {
-      // ─── DÉTECTION D'OUTLIER À L'INSERTION ──────────────────────────────
-      // Bug observé sur Dartmouth (020602) : l'API MSP retournait parfois
-      // une valeur de NIVEAU (29.454) dans le champ dern_valeur_deb au lieu
-      // du débit réel (~13). Cette valeur aberrante était stockée à chaque
-      // refresh pendant ~2h, polluant la sparkline avec 3-4 spikes.
-      //
-      // Stratégie en 2 couches :
-      // 1) Ratio resserré (×1.5 au lieu de ×2). Avec médiane ~16, on
-      //    accepte 10.7 à 24 — donc 29.5 (niveau d'eau) est bloqué net.
-      //    Le ×1.5 reste large pour les vraies crues (montée naturelle).
-      // 2) Sanity check niveau vs débit : si la nouvelle valeur >> à
-      //    toutes les valeurs récentes (>3x le min), c'est suspect d'être
-      //    un niveau confondu avec un débit. Filet de sécurité.
+    // MSP est blacklisté : on n'insère JAMAIS la valeur MSP dans l'historique
+    // pour ces 2 stations (voir détails dans le commentaire de MSP_BLACKLIST
+    // et refreshBlacklistedDebit plus haut). L'historique est alimenté
+    // uniquement par CEHQ tableau via queueHydration.
+    if (isoUtc && !hist.some(e => e.ts === isoUtc) && !MSP_BLACKLIST.has(stationId)) {
+      // ─── DÉTECTION D'OUTLIER À L'INSERTION (stations non-blacklistées) ──
+      // Bug observé sur certaines stations : l'API MSP peut renvoyer des
+      // valeurs aberrantes occasionnelles. Le ratio ×1.5 bloque les écarts
+      // brutaux tout en laissant passer les vraies crues (montée naturelle).
       let isOutlier = false;
       if (hist.length >= 6) {
         const recent = hist.slice(-6).map(e => e.debit).sort((a, b) => a - b);
@@ -1169,18 +1189,18 @@ async function fetchDebit(stationId) {
     }
   } catch(e) {}
 
-  // Pour les stations blacklistées (Dartmouth/Rimouski), utiliser la dernière
-  // valeur du tableau CEHQ comme débit affiché plutôt que la valeur MSP qui
-  // peut être un niveau d'eau confondu. Le timestamp affiché reste celui du
-  // tableau CEHQ (déduit du dernier point de hist).
+  // Pour les stations blacklistées (Dartmouth/Rimouski) : on remplace le
+  // débit et timestamp MSP par la dernière entrée du tableau CEHQ.
+  // Si hist est vide (premier load, hydratation pas encore tournée), on
+  // garde temporairement les valeurs MSP — l'hydratation va corriger ça
+  // quelques secondes plus tard via le .then() dans loadStation.
   let displayDebit = debit;
   let displayTimestamp = timestamp;
-  if ((stationId === '020602' || stationId === '022003')) {
-    const hist = state[stationId]?._histCache;
-    if (hist && hist.length > 0) {
-      const lastEntry = hist[hist.length - 1];
+  if (MSP_BLACKLIST.has(stationId)) {
+    const histMem = state[stationId]?._histCache;
+    if (histMem && histMem.length > 0) {
+      const lastEntry = histMem[histMem.length - 1];
       displayDebit = lastEntry.debit;
-      // Reformater le timestamp depuis l'ISO UTC stocké
       const utcDate = new Date(lastEntry.ts);
       if (!isNaN(utcDate)) {
         const parts = new Intl.DateTimeFormat('en-CA', {
@@ -1764,35 +1784,13 @@ async function loadStation(stationId) {
 
   // 2) Hydratation CEHQ + recalcul des stats (passe par queue sérialisée).
   // S'exécute en parallèle du débit. Une fois terminée, recalcule les stats
-  // depuis le nouvel historique. computeHistStats utilise state[stationId].debit
-  // qui sera défini si le débit a déjà fini, sinon null (var24h restera null
-  // temporairement, mais sera recalculée au prochain refresh ou via validateur).
+  // depuis le nouvel historique. Pour Dartmouth/Rimouski (MSP blacklisté),
+  // on met aussi à jour le débit affiché et le timestamp via refreshBlacklistedDebit.
   queueHydration(stationId).then(() => {
     if (state[stationId]?._histCache?.length > 1) {
-      const hist = state[stationId]._histCache;
-
-      // Pour Dartmouth/Rimouski (blacklist MSP) : on doit aussi mettre à jour
-      // le débit affiché ET le timestamp à partir de la dernière entrée CEHQ
-      // qu'on vient de récupérer. Sans ça, l'app reste figée sur la valeur
-      // initiale (qui pouvait être vieille de plusieurs heures si le hist
-      // mémoire venait d'un cache localStorage non rafraîchi).
-      if (stationId === '020602' || stationId === '022003') {
-        const last = hist[hist.length - 1];
-        state[stationId].debit = last.debit;
-        const utcDate = new Date(last.ts);
-        if (!isNaN(utcDate)) {
-          const parts = new Intl.DateTimeFormat('en-CA', {
-            timeZone: 'America/Toronto',
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', hour12: false,
-            timeZoneName: 'short'
-          }).formatToParts(utcDate);
-          const get = type => parts.find(p => p.type === type)?.value || '';
-          const tzShort = get('timeZoneName');
-          const tz = tzShort === 'EDT' ? 'HAE' : 'HNE';
-          state[stationId].msg = `Mesure : ${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${tz}`;
-        }
-      }
+      // Pour les stations blacklistées : mettre à jour le débit/timestamp
+      // depuis la dernière entrée CEHQ. No-op pour les autres stations.
+      refreshBlacklistedDebit(stationId);
 
       const stats = computeHistStats(stationId, state[stationId].debit);
       Object.assign(state[stationId], {
@@ -1951,6 +1949,9 @@ async function retryMissingData(stationId, categories) {
         // Relancer l'hydratation CEHQ + recalculer stats
         await queueHydration(stationId);
         if (state[stationId]?._histCache?.length > 1) {
+          // Pour Dartmouth/Rimouski : aussi rafraîchir le débit/timestamp
+          refreshBlacklistedDebit(stationId);
+
           const stats = computeHistStats(stationId, state[stationId].debit);
           Object.assign(state[stationId], {
             trend:  stats.trend  ?? state[stationId].trend,
