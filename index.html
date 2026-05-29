@@ -598,7 +598,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.22</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.23</div>
 </footer>
 
 <script>
@@ -2225,9 +2225,21 @@ function renderCard(stationId) {
 
   const varEl = card.querySelector('.dv-var');
   if (st.var24h !== null) {
-    const sign = st.var24h >= 0 ? '+' : '';
-    varEl.textContent = `${sign}${st.var24h.toFixed(1)} %`;
-    varEl.style.color = st.var24h >= 0 ? '#4ade9a' : '#f06260';
+    // On se base sur la valeur ARRONDIE (1 décimale) pour décider du signe et
+    // de la couleur, afin d'éviter l'incohérence « +0.0 % » en vert (ou
+    // « -0.0 % » en rouge) : une micro-variation brute non nulle mais qui
+    // s'affiche 0.0 ne doit pas paraître directionnelle. Si l'affichage est
+    // 0.0, on montre un « 0.0 % » neutre (gris). Sinon, vert si positif,
+    // rouge si négatif (aligné sur la logique Montante/Descendante).
+    const rounded = Math.round(st.var24h * 10) / 10;
+    if (rounded === 0) {
+      varEl.textContent = '0.0 %';
+      varEl.style.color = '#9ab5c7';
+    } else {
+      const sign = rounded > 0 ? '+' : '';
+      varEl.textContent = `${sign}${rounded.toFixed(1)} %`;
+      varEl.style.color = rounded > 0 ? '#4ade9a' : '#f06260';
+    }
   } else {
     varEl.textContent = 'N/D';
     varEl.style.color = '#9ab5c7';
