@@ -359,6 +359,7 @@
   }
   #pw-btn:active { background: rgba(201,168,76,0.1); }
   #pw-error { font-size: 0.6rem; color: #f06260; letter-spacing: 0.08em; min-height: 16px; }
+</style>
 <style>
   /* Note iOS PWA : on ne peut pas éliminer le flash blanc initial sans
      Apple Touch Startup Images (8-10 PNG à générer pour chaque taille d'iPhone).
@@ -489,7 +490,7 @@ function checkPassword() {
   const error = document.getElementById('pw-error');
   if (input.value === 'Undertaker') {
     // localStorage = persistant entre les sessions (l'utilisateur ne re-saisit jamais)
-    localStorage.setItem('auth', '1');
+    safeSetItem('auth', '1');
     document.getElementById('pw-screen').style.display = 'none';
     // Force reflow header sticky — bug Safari iOS
     const h = document.querySelector('header');
@@ -510,7 +511,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
   document.getElementById('pw-screen').style.display = 'none';
   // Migration : si l'utilisateur avait sessionStorage, on migre vers localStorage
   if (sessionStorage.getItem('auth') === '1') {
-    localStorage.setItem('auth', '1');
+    safeSetItem('auth', '1');
   }
 } else {
   setTimeout(() => document.getElementById('pw-input').focus(), 100);
@@ -597,7 +598,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.20</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.21</div>
 </footer>
 
 <script>
@@ -621,6 +622,21 @@ function _computeTodayStr() {
   return `${y}-${m}-${day}`;
 }
 Object.defineProperty(globalThis, 'todayStr', { get: _computeTodayStr });
+
+// ─── v1.21 : écriture localStorage sécurisée ────────────────────────────────
+// iOS (mode privé Safari, ou stockage plein) peut faire lever QuotaExceededError
+// à localStorage.setItem. Sans garde, l'exception interrompt la fonction en cours
+// (ex. sauvegarde d'historique au milieu de fetchDebit → carte bloquée).
+// Ce wrapper absorbe l'échec : l'app continue avec ses caches mémoire
+// (_histCache, iwlsUuidCache). Retourne true si l'écriture a réussi, false sinon.
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 const MOIS = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
 const MOON = {
   new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
@@ -787,7 +803,19 @@ async function fetchAllStations() {
     try {
       const res = await fetch(WFS_URL, { cache: 'no-store' });
       if (!res.ok) throw new Error('API MSP indisponible');
-      wfsCache = await res.json();
+      // v1.21 : MSP renvoie parfois un HTTP 200 avec un corps non-JSON (page
+      // d'erreur HTML, XML de service WFS indisponible, réponse tronquée).
+      // Sans garde, res.json() lève « The string did not match the expected
+      // pattern » qui, via la promesse partagée wfsPending, se propage à TOUTES
+      // les stations en même temps. On l'attrape pour un message lisible ; le
+      // finally libère wfsPending et wfsCache reste null → retry au prochain refresh.
+      let wfsData;
+      try {
+        wfsData = await res.json();
+      } catch (jsonErr) {
+        throw new Error('Réponse MSP invalide (service temporairement indisponible)');
+      }
+      wfsCache = wfsData;
       wfsCacheTime = Date.now();
       wfsIndex = Object.fromEntries(
         wfsCache.features
@@ -889,7 +917,7 @@ async function hydrateHistoryIfNeeded(stationId) {
     const existing = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
     // Conditions pour ré-hydrater :
     // 1. Moins de 24 mesures (premier démarrage ou semi-rempli)
-    // 2. La dernière mesure date de plus de 2h (app pas ouverte depuis longtemps)
+    // 2. La dernière mesure date de plus de 30 minutes (CEHQ publie aux ~15min)
     // 3. Il y a un trou >30min entre deux mesures consécutives (app fermée
     //    plusieurs heures puis rouverte → on a la fin de l'historique d'hier
     //    et le début de celui d'aujourd'hui mais rien entre les deux).
@@ -1037,7 +1065,7 @@ async function hydrateHistoryIfNeeded(stationId) {
     merged.sort((a, b) => new Date(a.ts) - new Date(b.ts));
     const final = merged.slice(-96);
 
-    localStorage.setItem(`hist_${stationId}`, JSON.stringify(final));
+    safeSetItem(`hist_${stationId}`, JSON.stringify(final));
     if (state[stationId]) state[stationId]._histCache = final;
   } catch(e) {
     // Échec silencieux — on garde l'historique progressif normal
@@ -1139,7 +1167,7 @@ async function fetchDebit(stationId) {
     }
     // Une seule écriture localStorage si quelque chose a changé
     if (modified) {
-      localStorage.setItem(`hist_${stationId}`, JSON.stringify(hist));
+      safeSetItem(`hist_${stationId}`, JSON.stringify(hist));
       state[stationId]._histCache = hist;
     } else if (!state[stationId]._histCache?.length && hist.length) {
       // Edge case : premier appel après reload, cache mémoire vide mais
@@ -1346,7 +1374,7 @@ async function fetchWeatherDirect(s) {
     // ce qu'on a mais le prochain refresh refetchera tout (au lieu de
     // servir le cache partiel pendant 30 min).
     const isComplete = sunrise && sunset && rain !== null && rainProb !== null;
-    if (isComplete) localStorage.setItem(key, JSON.stringify(result));
+    if (isComplete) safeSetItem(key, JSON.stringify(result));
     return result;
   } catch(e) {}
   return null;
@@ -1365,7 +1393,7 @@ async function resolveIwlsUuid(code) {
     const data = await res.json();
     if (data?.[0]?.id) {
       iwlsUuidCache[code] = data[0].id;
-      localStorage.setItem(`iwls_uuid_${code}`, data[0].id);
+      safeSetItem(`iwls_uuid_${code}`, data[0].id);
       return data[0].id;
     }
   } catch(e) {}
@@ -1444,7 +1472,7 @@ async function fetchTides(s) {
     // pour cet affichage mais on refetchera au prochain refresh au lieu de
     // servir un cache vide pour 24h.
     if (today.length || tomorrow.length) {
-      localStorage.setItem(key, JSON.stringify(tides));
+      safeSetItem(key, JSON.stringify(tides));
     }
     return tides;
   } catch(e) {
@@ -1492,7 +1520,7 @@ async function fetchMontaisons(stationId) {
       }
     }
 
-    if (data) localStorage.setItem(key, JSON.stringify(data));
+    if (data) safeSetItem(key, JSON.stringify(data));
     return data;
   } catch(e) {}
   return null;
@@ -1602,7 +1630,7 @@ async function fetchPrevision(stationId) {
     if (!result.length) return null;
     // Cache UNIQUEMENT si on a les 4 points complets
     if (result.length === 4) {
-      localStorage.setItem(key, JSON.stringify({ points: result, _t: Date.now() }));
+      safeSetItem(key, JSON.stringify({ points: result, _t: Date.now() }));
     }
     return result;
   } catch(e) {
@@ -1648,7 +1676,7 @@ async function fetchAnglers(s) {
           const [y, mo, d] = k.split('-').map(Number);
           if (new Date(y, mo - 1, d).getTime() < cutoff) delete historyData[k];
         });
-        localStorage.setItem(histKey, JSON.stringify(historyData));
+        safeSetItem(histKey, JSON.stringify(historyData));
         return { today: todayCount, yesterday: yesterdayCount };
       }
     } catch(e) {}
@@ -2524,14 +2552,14 @@ try {
         const cleaned = hist.filter(e => e.debit <= median * 2 && e.debit >= median / 2);
         if (cleaned.length < hist.length) {
           totalRemoved += hist.length - cleaned.length;
-          localStorage.setItem(k, JSON.stringify(cleaned));
+          safeSetItem(k, JSON.stringify(cleaned));
         }
       } catch(e) {}
     }
     if (totalRemoved > 0) {
-      console.warn(`[CurrentRun v1.13] Cleanup: ${totalRemoved} outliers résiduels supprimés`);
+      console.warn(`[CurrentRun] Cleanup outliers résiduels: ${totalRemoved} valeurs supprimées`);
     }
-    localStorage.setItem('cleanup_v113', 'done');
+    safeSetItem('cleanup_v113', 'done');
   }
 } catch(e) {}
 
@@ -2543,7 +2571,7 @@ try {
     ['hist_020602', 'hist_022003'].forEach(key => {
       localStorage.removeItem(key);
     });
-    localStorage.setItem('cleanup_v109_nbsp', 'done');
+    safeSetItem('cleanup_v109_nbsp', 'done');
   }
 } catch(e) {}
 
@@ -2560,7 +2588,7 @@ try {
       if (k && k.startsWith('hist_')) keysToRemove.push(k);
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
-    localStorage.setItem('cleanup_v120_simplified', 'done');
+    safeSetItem('cleanup_v120_simplified', 'done');
   }
 } catch(e) {}
 
