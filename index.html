@@ -217,6 +217,14 @@
 
   .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; flex-shrink: 0; }
   .last-update { font-size: 0.52rem; color: var(--muted); letter-spacing: 0.06em; text-align: right; white-space: nowrap; }
+  /* Flash bref de la ligne MAJ à chaque refresh réussi — confirme visiblement
+     que l'actualisation a fonctionné, même si l'heure affichée n'a pas changé
+     (cas où les données étaient en cache et le refresh est quasi instantané). */
+  .last-update.flash { animation: majFlash 0.9s ease-out; }
+  @keyframes majFlash {
+    0%   { color: var(--accent); transform: scale(1.06); }
+    100% { color: var(--muted);  transform: scale(1); }
+  }
 
   .status-bar { display: flex; padding: 10px 12px; border-bottom: 1px solid var(--border); align-items: center; overflow-x: auto; white-space: nowrap; background: #142230; }
   .stat-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.54rem; letter-spacing: 0.05em; color: var(--muted); flex-shrink: 0; line-height: 1; }
@@ -598,7 +606,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.23</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.25</div>
 </footer>
 
 <script>
@@ -1009,8 +1017,15 @@ async function hydrateHistoryIfNeeded(stationId) {
       const start = matches[i].end;
       const stop = (i + 1 < matches.length) ? matches[i + 1].end - matches[i + 1].dateStr.length - 50 : Math.min(start + 500, html.length);
       const segment = html.substring(start, stop);
-      // Récupérer tous les nombres décimaux dans le segment
-      const nums = [...segment.matchAll(/(\d+[,.]\d+)/g)].map(m => parseFloat(m[1].replace(',', '.')));
+      // Récupérer les nombres CONTENU DE CELLULE (entre > et <), entiers ou
+      // décimaux. v1.25 : l'ancienne regex /(\d+[,.]\d+)/g exigeait une
+      // décimale, donc ratait les débits ENTIERS de CEHQ (ex. « 13 » au lieu
+      // de « 13,06 »). Quand le débit était entier, elle attrapait le NIVEAU
+      // (~29,5) à la place → pics artificiels dans la sparkline (bug Dartmouth/
+      // Rimouski, stations à 2 colonnes niveau+débit). La décimale est désormais
+      // optionnelle, et on cible le contenu de cellule (> ... <) pour ne pas
+      // capter de fragments parasites (dates de la ligne suivante, attributs HTML).
+      const nums = [...segment.matchAll(/>\s*(\d+(?:[,.]\d+)?)\s*</g)].map(m => parseFloat(m[1].replace(',', '.')));
       // Le débit est le dernier nombre (niveau d'eau vient avant débit dans CEHQ)
       const debit = nums.length ? nums[nums.length - 1] : NaN;
       if (isNaN(debit) || debit < 0 || debit > 10000) continue;
@@ -1812,13 +1827,37 @@ function refreshAll() {
   btn.classList.remove('pressed');
   btn.textContent = '↻ Chargement...';
 
+  // v1.24 : durée minimale d'affichage du « Chargement... ». Quand les données
+  // sont déjà en cache (wfsCache valide, _histCache en mémoire), le refresh se
+  // résout en quelques dizaines de ms — trop rapide pour que l'utilisateur voie
+  // que ça a fonctionné. On garantit ~600ms de feedback visible, comme le splash.
+  const REFRESH_MIN_MS = 600;
+  const refreshStartedAt = Date.now();
+
   const markDone = () => {
     btn.classList.remove('loading');
     btn.classList.remove('pressed');
     btn.textContent = '↻ Actualiser';
     const now = new Date();
-    document.getElementById('lastUpdate').textContent =
+    const lu = document.getElementById('lastUpdate');
+    lu.textContent =
       `MAJ ${now.toLocaleDateString('fr-CA')} · ${now.toLocaleTimeString('fr-CA', {hour:'2-digit', minute:'2-digit'})}`;
+    // Flash de confirmation : on retire puis réajoute la classe pour
+    // redéclencher l'animation même si elle était déjà présente.
+    lu.classList.remove('flash');
+    // reflow forcé pour que le retrait soit pris en compte avant le réajout
+    void lu.offsetWidth;
+    lu.classList.add('flash');
+  };
+
+  // Enrobe markDone pour respecter la durée minimale de feedback
+  const finishWithMinDelay = () => {
+    const elapsed = Date.now() - refreshStartedAt;
+    if (elapsed >= REFRESH_MIN_MS) {
+      markDone();
+    } else {
+      setTimeout(markDone, REFRESH_MIN_MS - elapsed);
+    }
   };
 
   // Timeout de 12s sur le fetch principal (débit) seulement — les secondaires continuent librement
@@ -1826,7 +1865,7 @@ function refreshAll() {
     Promise.all(STATIONS.map(s => loadStation(s.id))),
     new Promise(r => setTimeout(r, 12000))
   ]).then(() => {
-    markDone();
+    finishWithMinDelay();
     // Programmer le validateur de complétude des données (v1.04).
     // Si une donnée manque (ex. hydratation CEHQ qui a timeout), on retentera
     // discrètement, max 2 fois à 15s d'intervalle.
@@ -2601,6 +2640,24 @@ try {
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
     safeSetItem('cleanup_v120_simplified', 'done');
+  }
+} catch(e) {}
+
+// Cleanup one-shot v1.25 : le parser exigeait une décimale (/(\d+[,.]\d+)/g),
+// donc les débits ENTIERS de CEHQ (« 13 ») étaient ratés et le NIVEAU (~29,5)
+// était capté à la place → pics artificiels dans les sparklines (visible sur
+// Dartmouth/Rimouski). Le parser est corrigé (décimale optionnelle + contenu
+// de cellule). On purge tous les hist_* pour éliminer les pics déjà stockés ;
+// ils se ré-hydratent proprement depuis CEHQ au prochain refresh.
+try {
+  if (localStorage.getItem('cleanup_v125_entiers') !== 'done') {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('hist_')) keysToRemove.push(k);
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    safeSetItem('cleanup_v125_entiers', 'done');
   }
 } catch(e) {}
 
