@@ -606,7 +606,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.26</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.27</div>
 </footer>
 
 <script>
@@ -694,7 +694,7 @@ const STATIONS = [
       {label:'🌐 Société Casca.', url:'https://www.cascapedia.ca'}
     ]
   },
-  { id:'020602', name:'Dartmouth', region:'gaspesie', lat:48.7000, lng:-64.8000,
+  { id:'020602', name:'Dartmouth', region:'gaspesie', lat:48.7000, lng:-64.8000, hasNiveau:true,
     iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',
     anglers:{host:'pav', zec:'zec-gaspe', point:'7021EE39-5CFE-E411-843E-90FBA62D9769'},
     links:[
@@ -756,7 +756,7 @@ const STATIONS = [
       {label:'🌐 ZEC Mitis', url:'https://rivieremitis.com'}
     ]
   },
-  { id:'022003', name:'Rimouski', region:'bas-st-laurent', lat:48.4500, lng:-68.5333,
+  { id:'022003', name:'Rimouski', region:'bas-st-laurent', lat:48.4500, lng:-68.5333, hasNiveau:true,
     iwlsCode:'02985', iwlsName:'Rimouski',
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-rimouski'},
@@ -1012,20 +1012,31 @@ async function hydrateHistoryIfNeeded(stationId) {
     while ((m = headerRegex.exec(html)) !== null) {
       matches.push({ dateStr: m[1], timeStr: m[2], end: m.index + m[0].length });
     }
-    // Étape 2 : pour chaque entête, extraire les nombres jusqu'à la prochaine entête
+    // Étape 2 : pour chaque entête, extraire les nombres jusqu'à la prochaine entête.
+    // v1.27 : on distingue les 2 topologies CEHQ par station (flag hasNiveau).
+    //   - Stations SANS niveau (3 colonnes Date|Heure|Débit) : Bonaventure, etc.
+    //     → ancien parser éprouvé /(\d+[,.]\d+)/g (le débit est le seul/dernier décimal).
+    //   - Stations AVEC niveau (4 colonnes Date|Heure|Niveau|Débit) : Dartmouth, Rimouski
+    //     → parser contenu-de-cellule />\s*(\d+(?:[,.]\d+)?)\s*</g qui capte aussi les
+    //       débits ENTIERS (« 13 ») sans confondre avec le niveau (évite les pics).
+    // Les 9 stations sans niveau gardent ainsi EXACTEMENT le comportement d'origine.
+    const stationObj = STATIONS.find(s => s.id === stationId);
+    const hasNiveau = stationObj && stationObj.hasNiveau === true;
     for (let i = 0; i < matches.length; i++) {
       const start = matches[i].end;
       const stop = (i + 1 < matches.length) ? matches[i + 1].end - matches[i + 1].dateStr.length - 50 : Math.min(start + 500, html.length);
       const segment = html.substring(start, stop);
-      // Récupérer les nombres CONTENU DE CELLULE (entre > et <), entiers ou
-      // décimaux. v1.25 : l'ancienne regex /(\d+[,.]\d+)/g exigeait une
-      // décimale, donc ratait les débits ENTIERS de CEHQ (ex. « 13 » au lieu
-      // de « 13,06 »). Quand le débit était entier, elle attrapait le NIVEAU
-      // (~29,5) à la place → pics artificiels dans la sparkline (bug Dartmouth/
-      // Rimouski, stations à 2 colonnes niveau+débit). La décimale est désormais
-      // optionnelle, et on cible le contenu de cellule (> ... <) pour ne pas
-      // capter de fragments parasites (dates de la ligne suivante, attributs HTML).
-      const nums = [...segment.matchAll(/>\s*(\d+(?:[,.]\d+)?)\s*</g)].map(m => parseFloat(m[1].replace(',', '.')));
+      // Choix du parser selon la topologie de la station (voir note avant la boucle).
+      let nums;
+      if (hasNiveau) {
+        // 4 colonnes : capte entiers ET décimaux dans le contenu de cellule,
+        // pour gérer les débits entiers sans confondre avec le niveau.
+        nums = [...segment.matchAll(/>\s*(\d+(?:[,.]\d+)?)\s*</g)].map(m => parseFloat(m[1].replace(',', '.')));
+      } else {
+        // 3 colonnes : parser d'origine, inchangé depuis v1.20 (le débit est
+        // le seul nombre décimal de la ligne). Comportement éprouvé.
+        nums = [...segment.matchAll(/(\d+[,.]\d+)/g)].map(m => parseFloat(m[1].replace(',', '.')));
+      }
       // Le débit est le dernier nombre (niveau d'eau vient avant débit dans CEHQ)
       const debit = nums.length ? nums[nums.length - 1] : NaN;
       if (isNaN(debit) || debit < 0 || debit > 10000) continue;
@@ -2643,21 +2654,21 @@ try {
   }
 } catch(e) {}
 
-// Cleanup one-shot v1.25 : le parser exigeait une décimale (/(\d+[,.]\d+)/g),
-// donc les débits ENTIERS de CEHQ (« 13 ») étaient ratés et le NIVEAU (~29,5)
-// était capté à la place → pics artificiels dans les sparklines (visible sur
-// Dartmouth/Rimouski). Le parser est corrigé (décimale optionnelle + contenu
-// de cellule). On purge tous les hist_* pour éliminer les pics déjà stockés ;
-// ils se ré-hydratent proprement depuis CEHQ au prochain refresh.
+// Cleanup one-shot v1.27 : la v1.25 avait vidé les hist_* puis appliqué un
+// nouveau parser GLOBAL qui cassait l'hydratation des 9 stations à 3 colonnes
+// (sparklines vides). v1.27 corrige : parser par topologie (ancien parser
+// d'origine pour les 3 colonnes, parser contenu-de-cellule seulement pour
+// Dartmouth/Rimouski qui ont un niveau). On re-purge une fois pour que TOUTES
+// les stations se ré-hydratent proprement avec le bon parser pour chacune.
 try {
-  if (localStorage.getItem('cleanup_v125_entiers') !== 'done') {
+  if (localStorage.getItem('cleanup_v127_rollback') !== 'done') {
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.startsWith('hist_')) keysToRemove.push(k);
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
-    safeSetItem('cleanup_v125_entiers', 'done');
+    safeSetItem('cleanup_v127_rollback', 'done');
   }
 } catch(e) {}
 
