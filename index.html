@@ -606,7 +606,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.28</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.29</div>
 </footer>
 
 <script>
@@ -1588,6 +1588,11 @@ async function fetchPrevision(stationId) {
       //
       // Edge case : si tu ouvres à 9h directement, le cache aura été créé
       // après 8h. Pas de souci, on garde jusqu'à 15h (6h max).
+      // v1.29 : cache de prévision "option 1". On ne se fie au cache QUE s'il
+      // contient les 4 jours complets. Une prévision incomplète (1-3 points)
+      // n'est jamais servie depuis le cache : on refetch pour récupérer une
+      // éventuelle version complétée (CEHQ publie le 4e jour en cours de journée).
+      // On affiche quand même les points partiels obtenus du fetch — voir plus bas.
       if (Array.isArray(parsed.points) && parsed.points.length === 4 && parsed._t) {
         const ageMs = Date.now() - parsed._t;
         const cachedDate = new Date(parsed._t);
@@ -1658,10 +1663,13 @@ async function fetchPrevision(stationId) {
     }).filter(p => p !== null);
 
     if (!result.length) return null;
-    // Cache UNIQUEMENT si on a les 4 points complets
-    if (result.length === 4) {
-      safeSetItem(key, JSON.stringify({ points: result, _t: Date.now() }));
-    }
+    // v1.29 : on cache TOUS les résultats (1 à 4 points) pour les réutiliser
+    // dans la session. Mais la lecture du cache (plus haut) ne se fie qu'aux
+    // caches COMPLETS (4 points). Donc un cache partiel est écrit sans bloquer :
+    // au prochain fetch on refait l'appel et on récupère la version complétée
+    // dès que CEHQ a publié le jour manquant. On ne reste jamais coincé sur une
+    // prévision partielle ni sur une vieille prévision.
+    safeSetItem(key, JSON.stringify({ points: result, _t: Date.now() }));
     return result;
   } catch(e) {
     return null;
@@ -1947,8 +1955,11 @@ function validateStationData(stationId) {
     }
   }
 
-  // Prévision 4 jours : 4 points attendus
-  if (!Array.isArray(st.prevision) || st.prevision.length < 4) {
+  // Prévision : on tolère 2-4 points (CEHQ ne publie pas toujours 4 jours
+  // pleins selon l'heure de la journée). On ne la considère "manquante" que
+  // si elle est vide ou réduite à 1 point (pas assez pour une mini-courbe).
+  // Le refetch des prévisions partielles est géré par le cache (option 1).
+  if (!Array.isArray(st.prevision) || st.prevision.length < 2) {
     missing.push('prevision');
   }
 
