@@ -606,7 +606,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.29</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.30</div>
 </footer>
 
 <script>
@@ -2275,8 +2275,14 @@ function renderCard(stationId) {
   }
 
   // Mini-graphique prévision 4 jours (à gauche du débit dans l'en-tête)
+  // v1.30 : le premier point de la courbe est le débit "actuel". On préfère le
+  // débit MSP (st.debit), mais s'il est indisponible (panne MSP), on se rabat
+  // sur le dernier débit de l'historique CEHQ — qui ne dépend pas de MSP. Ainsi
+  // la prévision reste affichée tant que MSP OU CEHQ fournit une valeur actuelle.
   const prevEl = card.querySelector('.prevision-mini');
-  if (prevEl) prevEl.innerHTML = buildPrevisionMini(st.debit, st.trend, st.prevision);
+  const debitForPrev = st.debit !== null ? st.debit
+                      : (vals.length ? vals[vals.length - 1] : null);
+  if (prevEl) prevEl.innerHTML = buildPrevisionMini(debitForPrev, st.trend, st.prevision);
 
   // Message statut
   const msg = card.querySelector('.status-msg');
