@@ -117,7 +117,11 @@
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { background: var(--bg); }
+  /* Garde anti-débordement horizontal : empêche toute la page de défiler
+     latéralement sur les écrans étroits (ex. iPhone X/375px). Si un élément
+     dépasse la largeur de l'écran, il est contenu au lieu de décaler la page
+     entière. La barre des phases de lune garde son propre overflow-x interne. */
+  html, body { background: var(--bg); overflow-x: hidden; max-width: 100%; }
 
   body {
     color: var(--text);
@@ -606,7 +610,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.31</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.32</div>
 </footer>
 
 <script>
