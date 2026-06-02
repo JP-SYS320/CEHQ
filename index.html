@@ -606,7 +606,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.30</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.31</div>
 </footer>
 
 <script>
@@ -1217,6 +1217,48 @@ async function fetchDebit(stationId) {
   return { debit, trend, timestamp, var24h, max24h, min24h };
 }
 
+// ─── Secours CEHQ pour le débit courant (v1.31) ──────────────────────────────
+// Quand MSP est indisponible (panne serveur, non-JSON, station absente de
+// l'index), on se rabat sur le dernier point de l'historique CEHQ pour ne pas
+// afficher N/D. CEHQ est légèrement moins frais que MSP (~15-30 min), donc on
+// le signale dans le tag « Mesure » avec la marque « (CEHQ) ». Retourne un objet
+// de même forme que fetchDebit, ou null si aucun historique exploitable.
+function debitFallbackCEHQ(stationId) {
+  try {
+    let hist = state[stationId]?._histCache;
+    if (!hist || !hist.length) {
+      hist = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
+    }
+    if (!Array.isArray(hist) || !hist.length) return null;
+    const last = hist[hist.length - 1];
+    if (!last || last.debit == null || isNaN(last.debit) || !last.ts) return null;
+
+    // Formater le ts UTC du dernier point CEHQ en heure locale HAE/HNE
+    let timestamp = '—';
+    const utcDate = new Date(last.ts);
+    if (!isNaN(utcDate)) {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Toronto',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short'
+      }).formatToParts(utcDate);
+      const get = type => parts.find(p => p.type === type)?.value || '';
+      const tz = get('timeZoneName') === 'EDT' ? 'HAE' : 'HNE';
+      timestamp = `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} ${tz} (CEHQ)`;
+    }
+
+    // Stats calculées depuis l'historique CEHQ (même fonction que pour MSP)
+    let trend = null, var24h = null, max24h = null, min24h = null;
+    if (hist.length >= 2) {
+      const stats = computeHistStats(stationId, last.debit);
+      trend = stats.trend; var24h = stats.var24h; max24h = stats.max24h; min24h = stats.min24h;
+    }
+    return { debit: last.debit, trend, timestamp, var24h, max24h, min24h };
+  } catch (e) {
+    return null;
+  }
+}
+
 // ─── Recalcul des stats (trend, var24h, max24h, min24h) ──────────────────────
 // Extrait dans une fonction réutilisable parce qu'il faut le faire à 2 moments :
 // 1. Dans fetchDebit après insertion de la nouvelle mesure MSP
@@ -1782,6 +1824,19 @@ async function loadStation(stationId) {
     });
     renderCard(stationId);
   }).catch(e => {
+    // MSP a échoué — tenter le secours CEHQ (dernier point de l'historique).
+    const fb = debitFallbackCEHQ(stationId);
+    if (fb) {
+      Object.assign(state[stationId], {
+        debit: fb.debit, trend: fb.trend,
+        var24h: fb.var24h, max24h: fb.max24h, min24h: fb.min24h,
+        status: 'ok',
+        msg: fb.timestamp ? `Mesure : ${fb.timestamp}` : 'Données reçues'
+      });
+      renderCard(stationId);
+      return;
+    }
+    // Ni MSP ni CEHQ disponibles → vraie erreur
     state[stationId].status = 'error';
     state[stationId].msg = 'Erreur — ' + (e.message || 'inconnu');
     renderCard(stationId);
@@ -1791,6 +1846,23 @@ async function loadStation(stationId) {
   // S'exécute en parallèle du débit. Une fois terminée, recalcule les stats
   // depuis le nouvel historique.
   queueHydration(stationId).then(() => {
+    // v1.31 : si MSP avait échoué (carte en erreur) mais que l'hydratation CEHQ
+    // vient d'arriver, on pose le débit de secours maintenant. Couvre le cas du
+    // premier chargement où l'historique n'était pas encore prêt au moment du
+    // catch de fetchDebit.
+    if (state[stationId]?.status === 'error') {
+      const fb = debitFallbackCEHQ(stationId);
+      if (fb) {
+        Object.assign(state[stationId], {
+          debit: fb.debit, trend: fb.trend,
+          var24h: fb.var24h, max24h: fb.max24h, min24h: fb.min24h,
+          status: 'ok',
+          msg: fb.timestamp ? `Mesure : ${fb.timestamp}` : 'Données reçues'
+        });
+        scheduleRender(stationId);
+        return;
+      }
+    }
     if (state[stationId]?._histCache?.length > 1) {
       const stats = computeHistStats(stationId, state[stationId].debit);
       Object.assign(state[stationId], {
