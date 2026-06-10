@@ -1587,14 +1587,40 @@ async function fetchMontaisons(stationId) {
     } else if (stationId === 'MITIS') {
       // Page Drupal : tableau « Montaisons ». 1re ligne de données = jour courant.
       // Colonnes : Date | grands saumons | saumons Madeleineau | Total journée.
-      // On exige une vraie date (j mois aaaa) dans la 1re cellule pour ignorer
-      // l'en-tête ET la ligne fantôme (1re cellule vide) qui suit. \p{L} + flag u
-      // pour gérer les mois accentués (février, août, décembre).
-      const m = html.match(
-        /<td[^>]*>\s*(\d{1,2}\s+[\p{L}]+\s+\d{4})\s*<\/td>\s*<td[^>]*>\s*(\d+)\s*<\/td>\s*<td[^>]*>\s*(\d+)\s*<\/td>\s*<td[^>]*>\s*(\d+)\s*<\/td>/iu
-      );
-      if (m) {
-        data = { date: m[1].trim(), grands: m[2], grilses: m[3], total: m[4] };
+      //
+      // Parser robuste (v1.33) : on NE suppose PAS la structure exacte des
+      // cellules. Drupal Views enveloppe le contenu dans <span class="field-content">,
+      // met des <a> de tri dans les en-têtes, ajoute des class/attributs et des
+      // retours de ligne. L'ancien regex rigide (4 <td> collés au texte) ne
+      // matchait jamais → Mitis bloqué à 0.
+      //
+      // Méthode : isoler le 1er <table> (celui des montaisons ; on s'arrête au
+      // </table> pour ne pas confondre avec la section « Captures » qui suit),
+      // découper en <tr>, extraire le TEXTE de chaque cellule (td/th) en
+      // strippant toute balise interne. On retient la 1re ligne dont la 1re
+      // cellule est une vraie date « j mois aaaa » (\p{L} + flag u pour les
+      // mois accentués) — ce qui saute l'en-tête ET la ligne fantôme (1re
+      // cellule vide) qui suit.
+      const startTbl = html.toLowerCase().indexOf('<table');
+      if (startTbl !== -1) {
+        const endTbl = html.toLowerCase().indexOf('</table>', startTbl);
+        const tableHtml = endTbl === -1 ? html.substring(startTbl) : html.substring(startTbl, endTbl);
+        const rows = [...tableHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map(r => r[1]);
+        const dateRe = /^\d{1,2}\s+[\p{L}]+\s+\d{4}$/u;
+        for (const row of rows) {
+          const cells = [...row.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(c =>
+            c[1].replace(/<[^>]*>/g, '')
+                .replace(/&nbsp;/gi, ' ')
+                .replace(/&#160;/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+          );
+          if (cells.length < 4) continue;
+          if (!dateRe.test(cells[0])) continue;
+          if (!/^\d+$/.test(cells[1]) || !/^\d+$/.test(cells[2]) || !/^\d+$/.test(cells[3])) continue;
+          data = { date: cells[0], grands: cells[1], grilses: cells[2], total: cells[3] };
+          break;
+        }
       }
     }
 
