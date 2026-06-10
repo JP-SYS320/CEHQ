@@ -610,7 +610,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.32</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.33</div>
 </footer>
 
 <script>
@@ -1585,14 +1585,16 @@ async function fetchMontaisons(stationId) {
       const m = html.match(/<tr>\s*<td[^>]*>\s*([^<]*\d[^<]*)<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>/);
       if (m) data = { date: m[1].trim(), grands: m[2]||'0', grilses: m[3]||'0', total: m[4]||'0' };
     } else if (stationId === 'MITIS') {
-      const grands = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison grands saumons/);
-      const mad    = html.match(/(\d+)\s*(?:<[^>]+>\s*)*Montaison madeleineaux/);
-      const dateM  = html.match(/(\d{1,2}\s+\w+\s+\d{4})/);
-      if (grands || mad) {
-        const g = grands ? grands[1] : '0';
-        const ma = mad ? mad[1] : '0';
-        data = { date: dateM ? dateM[1] : '', grands: g, grilses: ma,
-                 total: String((parseInt(g) || 0) + (parseInt(ma) || 0)) };
+      // Page Drupal : tableau « Montaisons ». 1re ligne de données = jour courant.
+      // Colonnes : Date | grands saumons | saumons Madeleineau | Total journée.
+      // On exige une vraie date (j mois aaaa) dans la 1re cellule pour ignorer
+      // l'en-tête ET la ligne fantôme (1re cellule vide) qui suit. \p{L} + flag u
+      // pour gérer les mois accentués (février, août, décembre).
+      const m = html.match(
+        /<td[^>]*>\s*(\d{1,2}\s+[\p{L}]+\s+\d{4})\s*<\/td>\s*<td[^>]*>\s*(\d+)\s*<\/td>\s*<td[^>]*>\s*(\d+)\s*<\/td>\s*<td[^>]*>\s*(\d+)\s*<\/td>/iu
+      );
+      if (m) {
+        data = { date: m[1].trim(), grands: m[2], grilses: m[3], total: m[4] };
       }
     }
 
@@ -2689,68 +2691,6 @@ try {
   toRemove.forEach(k => localStorage.removeItem(k));
 } catch(e) {}
 
-// ─── v1.13 : nettoyage one-shot des outliers résiduels dans hist_* ────────
-// Bug observé : Dartmouth affichait max24h=29.5 alors que la rivière est à
-// 11.7. Ces valeurs sont d'anciens 29.454 (niveau au lieu de débit) qui
-// avaient été insérés avant le fix v1.00 et qui dormaient encore dans
-// localStorage en attendant d'être éjectés par slice(-96).
-// Ce cleanup s'exécute une seule fois (marqueur localStorage) pour purger
-// ces résidus partout. Critère : valeur > 2× médiane ou < médiane/2.
-try {
-  if (localStorage.getItem('cleanup_v113') !== 'done') {
-    let totalRemoved = 0;
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k || !k.startsWith('hist_')) continue;
-      try {
-        const hist = JSON.parse(localStorage.getItem(k) || '[]');
-        if (hist.length < 6) continue;
-        const vals = hist.map(e => e.debit).filter(v => v > 0).sort((a, b) => a - b);
-        const median = vals[Math.floor(vals.length / 2)];
-        if (median <= 0) continue;
-        const cleaned = hist.filter(e => e.debit <= median * 2 && e.debit >= median / 2);
-        if (cleaned.length < hist.length) {
-          totalRemoved += hist.length - cleaned.length;
-          safeSetItem(k, JSON.stringify(cleaned));
-        }
-      } catch(e) {}
-    }
-    if (totalRemoved > 0) {
-      console.warn(`[CurrentRun] Cleanup outliers résiduels: ${totalRemoved} valeurs supprimées`);
-    }
-    safeSetItem('cleanup_v113', 'done');
-  }
-} catch(e) {}
-
-// Cleanup one-shot v1.09 : le parser v1.08 ne décodait pas les `&nbsp;`
-// du HTML CEHQ qui séparent les colonnes. Maintenant on décode AVANT
-// de parser. Force re-hydratation pour Dartmouth/Rimouski.
-try {
-  if (localStorage.getItem('cleanup_v109_nbsp') !== 'done') {
-    ['hist_020602', 'hist_022003'].forEach(key => {
-      localStorage.removeItem(key);
-    });
-    safeSetItem('cleanup_v109_nbsp', 'done');
-  }
-} catch(e) {}
-
-// Cleanup one-shot v1.20 : suppression complète de la blacklist MSP qui
-// était basée sur une fausse hypothèse (MSP retourne en fait correctement
-// le débit dans dern_valeur_deb et le niveau dans dern_valeur_niv). Le
-// vrai bug était dans le parser qui a été cassé entre v1.05-v1.17.
-// On purge tous les hist pour repartir propre.
-try {
-  if (localStorage.getItem('cleanup_v120_simplified') !== 'done') {
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith('hist_')) keysToRemove.push(k);
-    }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-    safeSetItem('cleanup_v120_simplified', 'done');
-  }
-} catch(e) {}
-
 // Cleanup one-shot v1.28 : nouveau parser CEHQ unifié et blindé (gère les 2
 // topologies sans flag, capte les débits entiers ET décimaux, ignore le bruit
 // de la page). On re-purge une fois tous les hist_* pour que TOUTES les stations
@@ -2765,6 +2705,23 @@ try {
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
     safeSetItem('cleanup_v128_parser', 'done');
+  }
+} catch(e) {}
+
+// Cleanup one-shot v1.33 : nouveau parser Mitis (tableau Drupal au lieu de
+// l'ancien regex qui cherchait un nombre avant le titre de colonne et ne
+// matchait jamais → Mitis bloqué à 0). On purge une fois tous les caches
+// montaisons_* pour forcer la ré-hydratation immédiate avec le nouveau parser,
+// sans attendre l'expiration naturelle du cache journalier à minuit.
+try {
+  if (localStorage.getItem('cleanup_v133_montaisons') !== 'done') {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('montaisons_')) keysToRemove.push(k);
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    safeSetItem('cleanup_v133_montaisons', 'done');
   }
 } catch(e) {}
 
