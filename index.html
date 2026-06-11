@@ -610,7 +610,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.34</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.35</div>
 </footer>
 
 <script>
@@ -1582,8 +1582,71 @@ async function fetchMontaisons(stationId) {
 
     let data = null;
     if (stationId === '021601') {
-      const m = html.match(/<tr>\s*<td[^>]*>\s*([^<]*\d[^<]*)<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>/);
-      if (m) data = { date: m[1].trim(), grands: m[2]||'0', grilses: m[3]||'0', total: m[4]||'0' };
+      // v1.35 : cumulatif saison de rivierematane.com (tableau « Cumulatif de
+      // la saison 2026 » → Total grands saumons | Total grilses | Grand total
+      // saison). L'ancien regex matchait les lignes VIDES du tableau
+      // journalier (« 1 | | | » → jour 1 de juin) grâce à \d* et cachait
+      // {total:'0'} en boucle — jamais le cumulatif.
+      //
+      // Méthode (calée sur capture réelle du tableau rempli, 11 juin 2026) :
+      // ancrer sur « Grand total saison » (unique au cumulatif parmi les ~6
+      // tableaux de la page), isoler CE <table>, repérer la ligne d'en-tête
+      // et lire la ligne de données AUX MÊMES INDEX de colonnes. Pièges réels
+      // gérés : zéro = cellule VIDE (pas « 0 »), colonne date présente mais
+      // vide, colonnes parasites en fin de ligne, total recalculé si absent.
+      const lowerH = html.toLowerCase();
+      const anchor = lowerH.indexOf('grand total saison');
+      if (anchor !== -1) {
+        const tblStart = lowerH.lastIndexOf('<table', anchor);
+        const tblEnd = lowerH.indexOf('</table>', anchor);
+        if (tblStart !== -1) {
+          const tableHtml = tblEnd === -1 ? html.substring(tblStart) : html.substring(tblStart, tblEnd);
+          const rows = [...tableHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map(r =>
+            [...r[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(c =>
+              c[1].replace(/<[^>]*>/g, '')
+                  .replace(/&nbsp;/gi, ' ')
+                  .replace(/&#160;/g, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim()
+            )
+          );
+          // Ligne d'en-tête = celle qui contient « Total grands saumons »
+          let idxDate = -1, idxG = -1, idxGr = -1, idxT = -1, headerRow = -1;
+          for (let i = 0; i < rows.length; i++) {
+            const gi = rows[i].findIndex(c => /total grands saumons/i.test(c));
+            if (gi !== -1) {
+              headerRow = i;
+              idxG  = gi;
+              idxGr = rows[i].findIndex(c => /total grilses/i.test(c));
+              idxT  = rows[i].findIndex(c => /grand total saison/i.test(c));
+              idxDate = rows[i].findIndex(c => /en date du/i.test(c));
+              break;
+            }
+          }
+          if (headerRow !== -1 && idxG !== -1 && idxT !== -1) {
+            // 1re ligne suivante avec au moins un nombre (saute lignes vides)
+            for (let i = headerRow + 1; i < rows.length; i++) {
+              const cells = rows[i];
+              const g  = (cells[idxG]  ?? '').trim();
+              const gr = idxGr !== -1 ? (cells[idxGr] ?? '').trim() : '';
+              const t  = (cells[idxT]  ?? '').trim();
+              const isNum = v => /^\d+$/.test(v);
+              if (!isNum(g) && !isNum(t)) continue;
+              const grands  = isNum(g)  ? g  : '0';
+              const grilses = isNum(gr) ? gr : '0';
+              const total   = isNum(t)  ? t
+                            : String((parseInt(grands) || 0) + (parseInt(grilses) || 0));
+              let date = '';
+              if (idxDate !== -1) {
+                const d = (cells[idxDate] ?? '').trim();
+                if (/\d{1,2}\s+[\p{L}]+\s+\d{4}/u.test(d) || /\d{4}-\d{2}-\d{2}/.test(d)) date = d;
+              }
+              data = { date, grands, grilses, total };
+              break;
+            }
+          }
+        }
+      }
     } else if (stationId === 'MITIS') {
       // v1.34 : on lit le widget « Montaisons totales » de la PAGE D'ACCUEIL
       // (cumulatif saison, mis à jour le jour même) plutôt que le tableau de
@@ -2481,7 +2544,7 @@ function renderCard(stationId) {
     card.querySelector('.dv-mont-grilses').textContent = m ? m.grilses : '0';
     card.querySelector('.dv-mont-total').textContent   = m ? m.total   : '0';
     card.querySelector('.dv-mont-date').textContent    = hasData
-      ? `En date du ${m.date}`
+      ? (m.date ? `En date du ${m.date}` : 'Cumulatif saison')
       : 'Saison 2026 — en attente';
   }
 
@@ -2734,20 +2797,19 @@ try {
   }
 } catch(e) {}
 
-// Cleanup one-shot v1.34 : le parser Mitis lit maintenant le cumulatif saison
-// de la page d'accueil (mis à jour le jour même) au lieu du tableau journalier
-// (mis à jour le lendemain). On purge une fois les caches montaisons_* pour
-// remplacer immédiatement la donnée journalière déjà en cache aujourd'hui,
-// sans attendre l'expiration naturelle à minuit.
+// Cleanup one-shot v1.35 : nouveau parser Matane (cumulatif saison). L'ancien
+// parser matchait les lignes vides du tableau journalier et cachait un faux
+// {total:'0'} chaque jour. On purge une fois les caches montaisons_* pour que
+// Matane affiche le cumulatif réel dès le prochain refresh, sans attendre minuit.
 try {
-  if (localStorage.getItem('cleanup_v134_montaisons') !== 'done') {
+  if (localStorage.getItem('cleanup_v135_montaisons') !== 'done') {
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.startsWith('montaisons_')) keysToRemove.push(k);
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
-    safeSetItem('cleanup_v134_montaisons', 'done');
+    safeSetItem('cleanup_v135_montaisons', 'done');
   }
 } catch(e) {}
 
