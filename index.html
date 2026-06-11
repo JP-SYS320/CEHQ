@@ -610,7 +610,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.33</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.34</div>
 </footer>
 
 <script>
@@ -1565,7 +1565,7 @@ async function fetchMontaisons(stationId) {
 
     const urls = {
       '021601': 'https://www.rivierematane.com/statistique-de-la-saison.html',
-      'MITIS':  'https://rivieremitis.com/informations/historique-des-montaisons',
+      'MITIS':  'https://rivieremitis.com/',
     };
     const url = urls[stationId];
     if (!url) return null;
@@ -1585,41 +1585,41 @@ async function fetchMontaisons(stationId) {
       const m = html.match(/<tr>\s*<td[^>]*>\s*([^<]*\d[^<]*)<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>\s*<td[^>]*>\s*(\d*)\s*<\/td>/);
       if (m) data = { date: m[1].trim(), grands: m[2]||'0', grilses: m[3]||'0', total: m[4]||'0' };
     } else if (stationId === 'MITIS') {
-      // Page Drupal : tableau « Montaisons ». 1re ligne de données = jour courant.
-      // Colonnes : Date | grands saumons | saumons Madeleineau | Total journée.
+      // v1.34 : on lit le widget « Montaisons totales » de la PAGE D'ACCUEIL
+      // (cumulatif saison, mis à jour le jour même) plutôt que le tableau de
+      // la page Statistiques (journalier, mis à jour le lendemain avant-midi
+      // seulement — d'où le décalage observé : accueil à 4, tableau encore au
+      // jour précédent). Le cumulatif correspond au titre de la carte
+      // « Montaisons saison 2026 » et au choix fait pour Matane.
       //
-      // Parser robuste (v1.33) : on NE suppose PAS la structure exacte des
-      // cellules. Drupal Views enveloppe le contenu dans <span class="field-content">,
-      // met des <a> de tri dans les en-têtes, ajoute des class/attributs et des
-      // retours de ligne. L'ancien regex rigide (4 <td> collés au texte) ne
-      // matchait jamais → Mitis bloqué à 0.
-      //
-      // Méthode : isoler le 1er <table> (celui des montaisons ; on s'arrête au
-      // </table> pour ne pas confondre avec la section « Captures » qui suit),
-      // découper en <tr>, extraire le TEXTE de chaque cellule (td/th) en
-      // strippant toute balise interne. On retient la 1re ligne dont la 1re
-      // cellule est une vraie date « j mois aaaa » (\p{L} + flag u pour les
-      // mois accentués) — ce qui saute l'en-tête ET la ligne fantôme (1re
-      // cellule vide) qui suit.
-      const startTbl = html.toLowerCase().indexOf('<table');
-      if (startTbl !== -1) {
-        const endTbl = html.toLowerCase().indexOf('</table>', startTbl);
-        const tableHtml = endTbl === -1 ? html.substring(startTbl) : html.substring(startTbl, endTbl);
-        const rows = [...tableHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map(r => r[1]);
-        const dateRe = /^\d{1,2}\s+[\p{L}]+\s+\d{4}$/u;
-        for (const row of rows) {
-          const cells = [...row.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(c =>
-            c[1].replace(/<[^>]*>/g, '')
-                .replace(/&nbsp;/gi, ' ')
-                .replace(/&#160;/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim()
-          );
-          if (cells.length < 4) continue;
-          if (!dateRe.test(cells[0])) continue;
-          if (!/^\d+$/.test(cells[1]) || !/^\d+$/.test(cells[2]) || !/^\d+$/.test(cells[3])) continue;
-          data = { date: cells[0], grands: cells[1], grilses: cells[2], total: cells[3] };
-          break;
+      // Structure texte du widget (après strip des balises) :
+      //   Montaisons totales  11 juin 2026  4  Montaison grands saumons
+      //   0  Montaison madeleineaux  Voir l'historique
+      // Robuste aux wrappers Drupal : on isole la section entre l'ancre
+      // « Montaisons totales » et « Voir l'historique » (sinon +1500 chars),
+      // on strip les balises, puis on lit la date et le nombre devant chaque
+      // libellé. Le total est calculé (grands + madeleineaux) — le widget ne
+      // l'affiche pas. Tolère les deux libellés (« madeleineaux » /
+      // « saumons Madeleineau »).
+      const lowerH = html.toLowerCase();
+      const a = lowerH.indexOf('montaisons totales');
+      if (a !== -1) {
+        let end = lowerH.indexOf("voir l'historique", a);
+        if (end === -1) end = Math.min(a + 1500, html.length);
+        const txt = html.substring(a, end)
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/&#160;/g, ' ')
+          .replace(/\s+/g, ' ');
+        const dateM   = txt.match(/(\d{1,2}\s+[\p{L}]+\s+\d{4})/u);
+        const grandsM = txt.match(/(\d+)\s+Montaison grands saumons/i);
+        const madM    = txt.match(/(\d+)\s+Montaison (?:saumons )?madeleineau/i);
+        if (grandsM || madM) {
+          const g  = grandsM ? grandsM[1] : '0';
+          const ma = madM ? madM[1] : '0';
+          data = { date: dateM ? dateM[1] : '',
+                   grands: g, grilses: ma,
+                   total: String((parseInt(g) || 0) + (parseInt(ma) || 0)) };
         }
       }
     }
@@ -2734,20 +2734,20 @@ try {
   }
 } catch(e) {}
 
-// Cleanup one-shot v1.33 : nouveau parser Mitis (tableau Drupal au lieu de
-// l'ancien regex qui cherchait un nombre avant le titre de colonne et ne
-// matchait jamais → Mitis bloqué à 0). On purge une fois tous les caches
-// montaisons_* pour forcer la ré-hydratation immédiate avec le nouveau parser,
-// sans attendre l'expiration naturelle du cache journalier à minuit.
+// Cleanup one-shot v1.34 : le parser Mitis lit maintenant le cumulatif saison
+// de la page d'accueil (mis à jour le jour même) au lieu du tableau journalier
+// (mis à jour le lendemain). On purge une fois les caches montaisons_* pour
+// remplacer immédiatement la donnée journalière déjà en cache aujourd'hui,
+// sans attendre l'expiration naturelle à minuit.
 try {
-  if (localStorage.getItem('cleanup_v133_montaisons') !== 'done') {
+  if (localStorage.getItem('cleanup_v134_montaisons') !== 'done') {
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.startsWith('montaisons_')) keysToRemove.push(k);
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
-    safeSetItem('cleanup_v133_montaisons', 'done');
+    safeSetItem('cleanup_v134_montaisons', 'done');
   }
 } catch(e) {}
 
