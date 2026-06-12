@@ -610,7 +610,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.35</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.36</div>
 </footer>
 
 <script>
@@ -1561,7 +1561,23 @@ async function fetchMontaisons(stationId) {
   const key = `montaisons_${stationId}_${todayStr}`;
   try {
     const cached = localStorage.getItem(key);
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      // v1.36 : cache 1h au lieu de toute la journée. Les ZEC mettent à jour
+      // leurs compteurs EN COURS de journée (Matane publie les chiffres de la
+      // veille « dans le courant de l'avant-midi », Mitis peut bouger plusieurs
+      // fois). Avec le cache journalier, un fetch fait avant la publication
+      // verrouillait l'ancienne valeur jusqu'à minuit. Nouveau format
+      // { data, _t } ; l'ancien format (objet direct, sans _t) est invalidé
+      // et refetché — aucune purge nécessaire.
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed._t && parsed.data
+            && (Date.now() - parsed._t) < 3600 * 1000) {
+          return parsed.data;
+        }
+      } catch(e) {}
+      localStorage.removeItem(key);
+    }
 
     const urls = {
       '021601': 'https://www.rivierematane.com/statistique-de-la-saison.html',
@@ -1687,7 +1703,7 @@ async function fetchMontaisons(stationId) {
       }
     }
 
-    if (data) safeSetItem(key, JSON.stringify(data));
+    if (data) safeSetItem(key, JSON.stringify({ data, _t: Date.now() }));
     return data;
   } catch(e) {}
   return null;
