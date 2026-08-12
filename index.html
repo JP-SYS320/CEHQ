@@ -610,7 +610,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.36</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.37</div>
 </footer>
 
 <script>
@@ -1217,6 +1217,25 @@ async function fetchDebit(stationId) {
       min24h = stats.min24h;
     }
   } catch(e) {}
+
+  // v1.37 : détection de donnée MSP PÉRIMÉE (pas juste une panne réseau).
+  // Le fetch peut réussir (200, JSON valide) mais dern_date_prise_valeur_utc
+  // reste figé côté serveur MSP (observé le 12 août 2026 : tout le Québec
+  // bloqué sur une mesure du 10 août, alors que le service répondait
+  // normalement). Sans cette vérif, l'app affiche une donnée vieille de
+  // plusieurs jours sans jamais basculer sur CEHQ, parce que le fallback
+  // existant (catch de fetchDebit dans loadStation) ne réagit qu'à un échec
+  // de fetch, jamais à un succès contenant une valeur périmée.
+  if (isoUtc) {
+    const ageHoursMSP = (Date.now() - new Date(isoUtc).getTime()) / 3600000;
+    if (ageHoursMSP > 6) {
+      const fb = debitFallbackCEHQ(stationId);
+      if (fb) return fb;
+      // Pas de secours CEHQ disponible : on retourne quand même la valeur
+      // MSP périmée plutôt que de planter — mieux qu'un N/D total, et
+      // l'utilisateur voit l'heure de mesure ancienne dans "Mesure : ...".
+    }
+  }
 
   return { debit, trend, timestamp, var24h, max24h, min24h };
 }
