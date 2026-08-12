@@ -610,7 +610,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.37</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.38</div>
 </footer>
 
 <script>
@@ -1237,7 +1237,10 @@ async function fetchDebit(stationId) {
     }
   }
 
-  return { debit, trend, timestamp, var24h, max24h, min24h };
+  // v1.38 : on expose l'ISO de la valeur retournée pour que le bloc
+  // post-hydratation (loadStation) puisse juger si elle est périmée et la
+  // remplacer par un point CEHQ plus frais. Voir le commentaire là-bas.
+  return { debit, trend, timestamp, var24h, max24h, min24h, _iso: isoUtc };
 }
 
 // ─── Secours CEHQ pour le débit courant (v1.31) ──────────────────────────────
@@ -1276,7 +1279,7 @@ function debitFallbackCEHQ(stationId) {
       const stats = computeHistStats(stationId, last.debit);
       trend = stats.trend; var24h = stats.var24h; max24h = stats.max24h; min24h = stats.min24h;
     }
-    return { debit: last.debit, trend, timestamp, var24h, max24h, min24h };
+    return { debit: last.debit, trend, timestamp, var24h, max24h, min24h, _iso: last.ts };
   } catch (e) {
     return null;
   }
@@ -1948,6 +1951,7 @@ async function loadStation(stationId) {
       debit: data.debit, trend: data.trend,
       var24h: data.var24h, max24h: data.max24h, min24h: data.min24h,
       status: 'ok',
+      _shownIso: data._iso || null,
       msg: data.debit === null
         ? 'Aucune station hydrométrique'
         : (data.timestamp ? `Mesure : ${data.timestamp}` : 'Données reçues')
@@ -1961,6 +1965,7 @@ async function loadStation(stationId) {
         debit: fb.debit, trend: fb.trend,
         var24h: fb.var24h, max24h: fb.max24h, min24h: fb.min24h,
         status: 'ok',
+        _shownIso: fb._iso || null,
         msg: fb.timestamp ? `Mesure : ${fb.timestamp}` : 'Données reçues'
       });
       renderCard(stationId);
@@ -1993,6 +1998,38 @@ async function loadStation(stationId) {
         return;
       }
     }
+
+    // v1.38 : corrige une course introduite en v1.37. fetchDebit s'exécute EN
+    // PARALLÈLE de l'hydratation ; quand MSP sert du périmé, le fallback de
+    // v1.37 lisait _histCache AVANT que l'hydratation CEHQ l'ait rafraîchi, et
+    // retournait donc l'ancien point (observé le 12 août : Bonaventure figée au
+    // 10 août alors que CEHQ publiait bien du 12). Comme le status passait à
+    // 'ok', le bloc v1.31 ci-dessus ne rattrapait rien.
+    // Ici, l'hydratation est terminée : si la valeur AFFICHÉE est périmée
+    // (>6h) et que l'historique contient maintenant un point plus récent, on
+    // remplace. Aucun effet quand MSP est frais (_shownIso récent).
+    const shownIso = state[stationId]?._shownIso;
+    if (shownIso) {
+      const ageShown = (Date.now() - new Date(shownIso).getTime()) / 3600000;
+      if (ageShown > 6) {
+        const fb2 = debitFallbackCEHQ(stationId);
+        if (fb2 && fb2._iso) {
+          const ageFb = (Date.now() - new Date(fb2._iso).getTime()) / 3600000;
+          if (ageFb < ageShown) {
+            Object.assign(state[stationId], {
+              debit: fb2.debit, trend: fb2.trend,
+              var24h: fb2.var24h, max24h: fb2.max24h, min24h: fb2.min24h,
+              status: 'ok',
+              _shownIso: fb2._iso,
+              msg: fb2.timestamp ? `Mesure : ${fb2.timestamp}` : 'Données reçues'
+            });
+            scheduleRender(stationId);
+            return;
+          }
+        }
+      }
+    }
+
     if (state[stationId]?._histCache?.length > 1) {
       const stats = computeHistStats(stationId, state[stationId].debit);
       Object.assign(state[stationId], {
