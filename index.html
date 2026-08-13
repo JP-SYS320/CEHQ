@@ -109,10 +109,11 @@
     --text: #f0ede4;
     --muted: #9ab5c7;
     --accent: #c9a84c;
-    --up: #4ade9a;
-    --down: #f06260;
-    /* --debit-color est lu par buildSpark() pour colorer la dernière barre
-       de la sparkline quand la tendance est N/D. */
+    /* Note : les couleurs de tendance (vert #4ade9a / rouge #f06260) sont
+       écrites en dur dans le JS (buildSpark, buildPrevisionMini, renderCard)
+       et dans les règles .trend-up/.trend-down ci-dessous. Les variables
+       --up/--down existaient mais n'étaient lues nulle part : retirées en v1.49.
+       --debit-color reste, elle, car buildSpark() la lit via getCSSVar(). */
     --debit-color: #88b8d4;
   }
 
@@ -384,12 +385,6 @@
   #pw-btn:active { background: rgba(201,168,76,0.1); }
   #pw-error { font-size: 0.6rem; color: #f06260; letter-spacing: 0.08em; min-height: 16px; }
 </style>
-<style>
-  /* Note iOS PWA : on ne peut pas éliminer le flash blanc initial sans
-     Apple Touch Startup Images (8-10 PNG à générer pour chaque taille d'iPhone).
-     Le style inline tout en haut du <head> minimise le flash en forçant
-     background marine dès le tout début du parsing HTML. */
-</style>
 </head>
 <body>
 
@@ -509,6 +504,29 @@
 </div>
 
 <script>
+// ─── v1.21 : écriture localStorage sécurisée ────────────────────────────────
+// iOS (mode privé Safari, ou stockage plein) peut faire lever QuotaExceededError
+// à localStorage.setItem. Sans garde, l'exception interrompt la fonction en cours
+// (ex. sauvegarde d'historique au milieu de fetchDebit → carte bloquée).
+// Ce wrapper absorbe l'échec : l'app continue avec ses caches mémoire
+// (_histCache, iwlsUuidCache). Retourne true si l'écriture a réussi, false sinon.
+//
+// v1.49 : la définition vit ICI, dans le bloc de l'écran de mot de passe, parce
+// que c'est le PREMIER bloc qui l'utilise. Elle était auparavant plus bas, dans
+// le bloc principal : la migration sessionStorage→localStorage ci-dessous
+// s'exécute au parsing de ce bloc-ci, donc avant que le bloc suivant soit lu,
+// et levait un ReferenceError. Chemin mort en pratique (il fallait une session
+// Safari d'avant mai 2026 encore vivante), mais l'ordre est maintenant correct.
+// `var` et non `const` : la fonction reste accessible depuis le bloc principal.
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function checkPassword() {
   const input = document.getElementById('pw-input');
   const error = document.getElementById('pw-error');
@@ -622,7 +640,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.48</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.49</div>
 </footer>
 
 <script>
@@ -647,20 +665,11 @@ function _computeTodayStr() {
 }
 Object.defineProperty(globalThis, 'todayStr', { get: _computeTodayStr });
 
-// ─── v1.21 : écriture localStorage sécurisée ────────────────────────────────
-// iOS (mode privé Safari, ou stockage plein) peut faire lever QuotaExceededError
-// à localStorage.setItem. Sans garde, l'exception interrompt la fonction en cours
-// (ex. sauvegarde d'historique au milieu de fetchDebit → carte bloquée).
-// Ce wrapper absorbe l'échec : l'app continue avec ses caches mémoire
-// (_histCache, iwlsUuidCache). Retourne true si l'écriture a réussi, false sinon.
-function safeSetItem(key, value) {
-  try {
-    localStorage.setItem(key, value);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
+// ─── écriture localStorage sécurisée ────────────────────────────────────────
+// `safeSetItem` est défini dans le bloc de l'écran de mot de passe (plus haut
+// dans la page), qui est le premier à l'utiliser. Il est accessible ici par
+// portée globale. Voir le commentaire v1.49 à sa définition.
+
 const MOIS = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
 const MOON = {
   new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
