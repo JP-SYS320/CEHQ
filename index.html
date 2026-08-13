@@ -622,7 +622,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.44</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.45</div>
 </footer>
 
 <script>
@@ -1194,6 +1194,11 @@ async function fetchDebit(stationId) {
   }
 
   let trend = null, var24h = null, max24h = null, min24h = null;
+  // v1.45 : âge de la mesure MSP, calculé une seule fois. Sert à deux endroits :
+  // (1) refuser l'insertion d'un point périmé dans l'historique, (2) déclencher
+  // la bascule vers CEHQ en fin de fonction. Déclaré hors du try pour rester
+  // visible après celui-ci.
+  const mspAgeH = isoUtc ? (Date.now() - new Date(isoUtc).getTime()) / 3600000 : Infinity;
   try {
     // Utiliser le cache mémoire si disponible (déjà chargé au démarrage)
     // — évite JSON.parse + localStorage.getItem à chaque fetch
@@ -1214,7 +1219,13 @@ async function fetchDebit(stationId) {
 
     // Stocker en ISO UTC pour des calculs fiables
     let modified = migrated;
-    if (isoUtc && !hist.some(e => e.ts === isoUtc)) {
+    // v1.45 : ne pas insérer une mesure MSP PÉRIMÉE dans l'historique. Quand
+    // MSP sert du figé (observé le 12 août 2026 : tout le Québec bloqué sur le
+    // 10 août), le point vieux de 2 jours polluait l'historique 24h — faussant
+    // la sparkline, var/max/min 24h, et se retrouvant en dernière position du
+    // tableau où le fallback le confondait avec la mesure la plus récente.
+    // Le seuil de 6h est le même que celui de la détection de péremption plus bas.
+    if (isoUtc && mspAgeH <= 6 && !hist.some(e => e.ts === isoUtc)) {
       // ─── DÉTECTION D'OUTLIER À L'INSERTION ──────────────────────────────
       // Bug rare observé sur certaines stations : l'API MSP peut renvoyer
       // ponctuellement une valeur aberrante. Le ratio ×1.5 bloque les
@@ -1231,6 +1242,10 @@ async function fetchDebit(stationId) {
       }
       if (!isOutlier) {
         hist.push({ debit, ts: isoUtc });
+        // Re-trier : la mesure MSP n'est pas forcément postérieure au dernier
+        // point CEHQ hydraté. Sans tri, l'ordre chronologique du tableau n'est
+        // plus garanti (sparkline dans le désordre, dernier élément trompeur).
+        hist.sort((a, b) => new Date(a.ts) - new Date(b.ts));
         if (hist.length > 96) hist = hist.slice(-96);
         modified = true;
       }
@@ -1263,8 +1278,7 @@ async function fetchDebit(stationId) {
   // existant (catch de fetchDebit dans loadStation) ne réagit qu'à un échec
   // de fetch, jamais à un succès contenant une valeur périmée.
   if (isoUtc) {
-    const ageHoursMSP = (Date.now() - new Date(isoUtc).getTime()) / 3600000;
-    if (ageHoursMSP > 6) {
+    if (mspAgeH > 6) {
       const fb = debitFallbackCEHQ(stationId);
       if (fb) return fb;
       // Pas de secours CEHQ disponible : on retourne quand même la valeur
@@ -1292,8 +1306,21 @@ function debitFallbackCEHQ(stationId) {
       hist = JSON.parse(localStorage.getItem(`hist_${stationId}`) || '[]');
     }
     if (!Array.isArray(hist) || !hist.length) return null;
-    const last = hist[hist.length - 1];
-    if (!last || last.debit == null || isNaN(last.debit) || !last.ts) return null;
+    // v1.45 : on choisit le point le plus RÉCENT par horodatage, au lieu de
+    // prendre aveuglément le dernier élément du tableau. Bug observé au
+    // démarrage (12 août 2026) : fetchDebit empile la mesure MSP à la fin de
+    // l'historique sans re-trier ; quand MSP sert du périmé, ce point vieux de
+    // 2 jours se retrouvait en dernière position et le fallback le renvoyait
+    // en l'étiquetant « (CEHQ) » — d'où une carte affichant le tag CEHQ avec
+    // la date et la valeur MSP, jusqu'à ce que l'hydratation remplace tout.
+    let last = null, lastTs = -Infinity;
+    for (const e of hist) {
+      if (!e || e.debit == null || isNaN(e.debit) || !e.ts) continue;
+      const t = new Date(e.ts).getTime();
+      if (isNaN(t) || t <= lastTs) continue;
+      lastTs = t; last = e;
+    }
+    if (!last) return null;
 
     // Formater le ts UTC du dernier point CEHQ en heure locale HAE/HNE
     let timestamp = '—';
@@ -2925,6 +2952,37 @@ try {
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
     safeSetItem('cleanup_v135_montaisons', 'done');
+  }
+} catch(e) {}
+
+// Cleanup one-shot v1.45 : purge des points MSP périmés déjà insérés dans les
+// historiques. Jusqu'en v1.44, fetchDebit empilait la mesure MSP même quand
+// elle était vieille de plusieurs jours (MSP figé au 10 août 2026), sans
+// re-trier — ces points faussaient la sparkline et les stats 24h, et se
+// retrouvaient en dernière position où le fallback les prenait pour la mesure
+// la plus récente. On retire tout point de plus de 30h et on re-trie.
+try {
+  if (localStorage.getItem('cleanup_v145_hist') !== 'done') {
+    const now = Date.now();
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith('hist_')) continue;
+      try {
+        const hist = JSON.parse(localStorage.getItem(k) || '[]');
+        if (!Array.isArray(hist) || !hist.length) continue;
+        const cleaned = hist
+          .filter(e => {
+            if (!e || !e.ts) return false;
+            const t = new Date(e.ts).getTime();
+            return !isNaN(t) && (now - t) / 3600000 <= 30;
+          })
+          .sort((a, b) => new Date(a.ts) - new Date(b.ts));
+        if (cleaned.length !== hist.length) {
+          safeSetItem(k, JSON.stringify(cleaned));
+        }
+      } catch(e) {}
+    }
+    safeSetItem('cleanup_v145_hist', 'done');
   }
 } catch(e) {}
 
