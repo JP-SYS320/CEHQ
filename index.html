@@ -138,12 +138,24 @@
   }
 
   .header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .logo-area { display: flex; align-items: center; gap: 10px; }
+  /* v1.39 : sans min-width:0, un conteneur flex refuse de descendre sous la
+     largeur intrinsèque de son contenu (min-width:auto par défaut). Résultat
+     sur écrans étroits (Android 360px observé) : l'en-tête déborde et pousse
+     le bouton « Actualiser » hors de l'écran au lieu de s'adapter.
+     Ici la zone logo devient la variable d'ajustement — elle rogne le saumon
+     décoratif si nécessaire — pendant que le bloc de droite (bouton + MAJ)
+     reste intact et toujours visible. Aucun effet sur écrans assez larges. */
+  .logo-area { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
 
   .cr-logo {
     width: 42px; height: 42px; flex-shrink: 0;
     filter: drop-shadow(0 0 4px rgba(201,168,76,0.15));
   }
+  /* v1.39 : ordre de sacrifice quand l'espace manque. Le logo et le titre
+     gardent leur taille (flex-shrink:0) ; c'est le saumon décoratif, en
+     dernière position, qui est rogné par l'overflow:hidden du parent.
+     L'identité visuelle reste lisible même sur un écran très étroit. */
+  .site-title.brand { flex-shrink: 0; }
 
   .site-title { font-family: Georgia, serif; font-size: 1.15rem; font-style: italic; color: var(--text); letter-spacing: 0.02em; line-height: 1.1; }
   .site-subtitle { font-size: 0.5rem; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; margin-top: 2px; }
@@ -610,7 +622,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.38</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.39</div>
 </footer>
 
 <script>
@@ -2102,8 +2114,15 @@ function refreshAll() {
     btn.textContent = '↻ Actualiser';
     const now = new Date();
     const lu = document.getElementById('lastUpdate');
-    lu.textContent =
-      `MAJ ${now.toLocaleDateString('fr-CA')} · ${now.toLocaleTimeString('fr-CA', {hour:'2-digit', minute:'2-digit'})}`;
+    // v1.39 : formatage manuel plutôt que toLocaleTimeString('fr-CA').
+    // Android rend fr-CA avec « 21 h 52 » (espaces) là où iOS donne « 21:52 » :
+    // 3 caractères de plus dans un texte en white-space:nowrap, ce qui
+    // contribuait à faire déborder l'en-tête et à pousser le bouton
+    // « Actualiser » hors de l'écran. Format fixe = largeur prévisible partout.
+    const p2 = n => String(n).padStart(2, '0');
+    const dateStr = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
+    const heureStr = `${p2(now.getHours())}:${p2(now.getMinutes())}`;
+    lu.textContent = `MAJ ${dateStr} · ${heureStr}`;
     // Flash de confirmation : on retire puis réajoute la classe pour
     // redéclencher l'animation même si elle était déjà présente.
     lu.classList.remove('flash');
