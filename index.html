@@ -622,7 +622,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.46</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.47</div>
 </footer>
 
 <script>
@@ -695,7 +695,7 @@ function updateMoon() {
 // ─── Stations ────────────────────────────────────────────────────────────────
 const STATIONS = [
   // Gaspésie — ordre alphabétique
-  { id:'010802', name:'Bonaventure', region:'gaspesie', lat:48.5000, lng:-65.5300,
+  { id:'010802', name:'Bonaventure', region:'gaspesie', lat:48.6280, lng:-65.5240,
     iwls:'5cebf1e13d0f4a073c4bbf21', iwlsName:'Bonaventure',
     anglers:{host:'pavnew', zec:'zec-bonaventure', point:'F746BF64-1A2D-E811-9402-534E57000000'},
     links:[
@@ -703,14 +703,14 @@ const STATIONS = [
       {label:'🌐 Zec Bonaventure', url:'https://www.zecbonaventure.com'}
     ]
   },
-  { id:'011003', name:'Cascapédia', region:'gaspesie', lat:48.5500, lng:-66.1300,
+  { id:'011003', name:'Cascapédia', region:'gaspesie', lat:48.6900, lng:-66.2190,
     iwlsCode:'02200', iwlsName:'Carleton',
     links:[
       {label:'🎫 N/D', url:null},
       {label:'🌐 Société Casca.', url:'https://www.cascapedia.ca'}
     ]
   },
-  { id:'020602', name:'Dartmouth', region:'gaspesie', lat:48.9200, lng:-64.8300,
+  { id:'020602', name:'Dartmouth', region:'gaspesie', lat:48.9000, lng:-64.9000,
     iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',
     anglers:{host:'pav', zec:'zec-gaspe', point:'7021EE39-5CFE-E411-843E-90FBA62D9769'},
     links:[
@@ -718,7 +718,7 @@ const STATIONS = [
       {label:'🌐 Saumon Gaspé', url:'https://saumongaspe.com'}
     ]
   },
-  { id:'011509', name:'Matapédia', region:'gaspesie', lat:48.2800, lng:-67.2500,
+  { id:'011509', name:'Matapédia', region:'gaspesie', lat:48.3800, lng:-67.3700,
     iwlsCode:'02175', iwlsName:'Campbellton',
     anglersUrl:'https://rivierematapedia.com/peche-information/statistiques.html',
     links:[
@@ -726,28 +726,28 @@ const STATIONS = [
       {label:'🌐 CGRMP', url:'https://rivierematapedia.com'}
     ]
   },
-  { id:'011204', name:'Nouvelle', region:'gaspesie', lat:48.2500, lng:-66.4000,
+  { id:'011204', name:'Nouvelle', region:'gaspesie', lat:48.2800, lng:-66.4100,
     iwlsCode:'02175', iwlsName:'Campbellton',
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-nouvelle'},
       {label:'🌐 ZEC Nouvelle', url:'https://rivierenouvelle.com'}
     ]
   },
-  { id:'010902', name:'Petite Cascapédia', region:'gaspesie', lat:48.4500, lng:-65.9000,
+  { id:'010902', name:'Petite Cascapédia', region:'gaspesie', lat:48.5700, lng:-65.9200,
     iwlsCode:'02200', iwlsName:'Carleton',
     links:[
       {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=zec-petite-cascapedia'},
       {label:'🌐 Zec Petite Cas.', url:'https://zecpetitecascapedia.com'}
     ]
   },
-  { id:'021407', name:'Sainte-Anne', region:'gaspesie', lat:49.0000, lng:-66.4000,
+  { id:'021407', name:'Sainte-Anne', region:'gaspesie', lat:48.9700, lng:-66.3600,
     iwlsCode:'02935', iwlsName:'Ste-Anne-des-Monts',
     links:[
       {label:'🎫 N/D', url:null},
       {label:'🌐 Destination', url:'https://destinationchicchocs.com'}
     ]
   },
-  { id:'020404', name:'York', region:'gaspesie', lat:48.8800, lng:-65.0000,
+  { id:'020404', name:'York', region:'gaspesie', lat:48.9000, lng:-65.1900,
     iwlsCode:'02285', iwlsName:'Ste-Thérèse-de-Gaspé',
     anglers:{host:'pav', zec:'zec-gaspe', point:'D75D6E53-5CFE-E411-843E-90FBA62D9769'},
     links:[
@@ -756,7 +756,7 @@ const STATIONS = [
     ]
   },
   // Bas-St-Laurent — ordre alphabétique
-  { id:'021601', name:'Matane', region:'bas-st-laurent', lat:48.7200, lng:-67.2000,
+  { id:'021601', name:'Matane', region:'bas-st-laurent', lat:48.7600, lng:-67.0900,
     iwlsCode:'02955', iwlsName:'Matane',
     anglers:{host:'pav', zec:'zec-matane', point:'A3965629-8308-E511-A31C-90FBA62D9769'},
     links:[
@@ -764,7 +764,7 @@ const STATIONS = [
       {label:'🌐 ZEC Matane', url:'https://www.rivierematane.com'}
     ]
   },
-  { id:'MITIS', name:'Mitis', region:'bas-st-laurent', lat:48.4800, lng:-68.1300,
+  { id:'MITIS', name:'Mitis', region:'bas-st-laurent', lat:48.4300, lng:-68.0900,
     iwlsCode:'02955', iwlsName:'Matane',
     anglers:{host:'pav', zec:'mitis', point:'AFE100E2-B427-E811-9402-534E57000000'},
     links:[
@@ -772,7 +772,7 @@ const STATIONS = [
       {label:'🌐 ZEC Mitis', url:'https://rivieremitis.com'}
     ]
   },
-  { id:'022003', name:'Rimouski', region:'bas-st-laurent', lat:48.1500, lng:-68.5300,
+  { id:'022003', name:'Rimouski', region:'bas-st-laurent', lat:48.0800, lng:-68.5300,
     iwlsCode:'02985', iwlsName:'Rimouski',
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-rimouski'},
@@ -780,21 +780,21 @@ const STATIONS = [
     ]
   },
   // Autres — ordre alphabétique
-  { id:'060704', name:'À Mars', region:'autres', lat:48.1400, lng:-71.0500,
+  { id:'060704', name:'À Mars', region:'autres', lat:48.1200, lng:-71.0700,
     iwlsCode:'03460', iwlsName:'Port-Alfred',
     links:[
       {label:'🎫 Réservation', url:'https://www.contact-nature.ca/riviere-a-mars/'},
       {label:'🌐 Contact Nature', url:'https://www.contact-nature.ca'}
     ]
   },
-  { id:'070204', name:'Escoumins', region:'autres', lat:48.2700, lng:-69.5700,
+  { id:'070204', name:'Escoumins', region:'autres', lat:48.2500, lng:-69.6100,
     iwlsCode:'02900', iwlsName:'Les Escoumins',
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-escoumins'},
       {label:'🌐 ZEC Escoumins', url:'https://www.riviereescoumins.com'}
     ]
   },
-  { id:'060102', name:'Petit Saguenay', region:'autres', lat:48.1300, lng:-70.1500,
+  { id:'060102', name:'Petit Saguenay', region:'autres', lat:48.1000, lng:-70.1700,
     iwlsCode:'03425', iwlsName:'Tadoussac',
     links:[
       {label:'🎫 Acheter droits', url:'https://pav.manisoft.ca/login.php?idZec=zec-petit-saguenay'},
@@ -804,7 +804,7 @@ const STATIONS = [
   // Station 062803 = bras NORD-EST de la Sainte-Marguerite (pas la branche
   // principale). C'est la seule station en temps réel du bassin ; le débit
   // reste un bon indicateur des conditions, mais ce n'est pas la Principale.
-  { id:'062803', name:'Sainte-Marguerite', region:'autres', lat:48.5300, lng:-70.2200,
+  { id:'062803', name:'Sainte-Marguerite', region:'autres', lat:48.5700, lng:-70.2400,
     iwlsCode:'03425', iwlsName:'Tadoussac',
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=zec-sainte-marguerite'},
