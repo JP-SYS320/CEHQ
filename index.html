@@ -622,7 +622,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.47</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.48</div>
 </footer>
 
 <script>
@@ -1078,7 +1078,18 @@ async function hydrateHistoryIfNeeded(stationId) {
       const segment = cleanText.substring(start, nextStop);
       // Ne garder que la séquence de chiffres/virgules/points/espaces qui suit
       // immédiatement l'heure ; s'arrête au 1er caractère autre (texte parasite).
-      const seqMatch = segment.match(/^[\s\d.,]*/);
+      //
+      // v1.48 : l'astérisque est TOLÉRÉE dans la séquence. En hiver, CEHQ marque
+      // les valeurs d'un « * » (mesure faussée par la glace et l'effet de
+      // refoulement) — parfois sur toutes les valeurs du tableau. Sans cette
+      // tolérance, la lecture s'arrêtait au premier astérisque : sur les stations
+      // à 4 colonnes (Date|Heure|Niveau|Débit — Dartmouth, Rimouski), le parser
+      // ne voyait alors que le NIVEAU et le prenait pour le débit (ex. 1,2 au
+      // lieu de 3,7), silencieusement. Les stations à 3 colonnes n'étaient pas
+      // touchées, l'astérisque y suivant le seul nombre de la ligne.
+      // L'extraction des nombres ignore les astérisques, et la séquence s'arrête
+      // toujours à la première lettre (pied de page « *Débit estimé... »).
+      const seqMatch = segment.match(/^[\s\d.,*]*/);
       const seq = seqMatch ? seqMatch[0] : '';
       const nums = [...seq.matchAll(/(\d+(?:[,.]\d+)?)/g)].map(x => parseFloat(x[1].replace(',', '.')));
       // Le débit est le dernier nombre (niveau d'eau vient avant débit dans CEHQ)
