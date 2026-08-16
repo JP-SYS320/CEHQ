@@ -361,6 +361,66 @@
 
   footer { padding: 16px; text-align: center; font-size: 0.52rem; color: var(--muted); letter-spacing: 0.08em; border-top: 1px solid var(--border); margin-top: 8px; }
 
+  /* ─── Écran Montaison (v1.50) — plein écran par-dessus l'app ─── */
+  #mont-ecran{
+    position:fixed; inset:0; background:var(--bg); z-index:9998;
+    overflow-y:auto; -webkit-overflow-scrolling:touch; display:none;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #mont-ecran.on{display:block}
+  .mont-tete{
+    position:sticky; top:0; background:var(--surface); z-index:2;
+    border-bottom:1px solid var(--border); padding:14px 16px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .mont-tete h2{
+    font-family:'Playfair Display',Georgia,serif; font-style:italic;
+    font-size:1.15rem; font-weight:400; line-height:1.1; min-width:0;
+  }
+  .mont-tete h2 b{color:var(--accent); font-weight:700}
+  .mont-tete h2 span{
+    display:block; font-size:0.48rem; color:var(--accent); font-family:inherit;
+    font-style:normal; letter-spacing:0.16em; text-transform:uppercase; margin-top:4px;
+  }
+  .mont-fermer{
+    background:none; border:1px solid var(--accent); color:var(--accent);
+    font-family:inherit; font-size:0.6rem; padding:7px 12px; border-radius:4px;
+    letter-spacing:0.1em; cursor:pointer; flex-shrink:0;
+    -webkit-appearance:none; appearance:none;
+  }
+  .mont-bloc{margin:12px 16px; background:var(--surface); border:1px solid var(--border);
+             border-radius:8px; padding:13px}
+  .mont-marees{display:flex; gap:7px; flex-wrap:wrap; margin-top:8px}
+  .mont-marees button{
+    background:var(--sub-bg,#0f1923); border:1px solid rgba(122,154,176,0.35);
+    color:var(--muted); font-family:inherit; font-size:0.72rem; font-weight:700;
+    padding:8px 13px; border-radius:5px; cursor:pointer; letter-spacing:0.02em;
+    -webkit-appearance:none; appearance:none;
+  }
+  .mont-marees button.sel{border-color:var(--accent); color:var(--accent);
+                          background:rgba(201,168,76,0.09)}
+  .mont-marees button small{display:block; font-size:0.45rem; font-weight:400;
+                            letter-spacing:0.08em; opacity:0.75; margin-top:2px}
+  .mont-fenetre{margin-top:11px; padding:8px 10px; background:#0f1923; border-radius:6px;
+                font-size:0.55rem; color:var(--muted); line-height:1.6; letter-spacing:0.03em}
+  .mont-fenetre b{color:#4ade9a; font-weight:400}
+  .mont-fosse{display:flex; align-items:baseline; gap:9px; padding:10px 0;
+              border-bottom:1px solid rgba(201,168,76,0.12)}
+  .mont-fosse:last-child{border-bottom:none}
+  .mont-num{font-size:0.6rem; color:var(--accent); width:22px; flex-shrink:0; font-weight:700}
+  .mont-nom{flex:1; min-width:0}
+  .mont-nom b{font-family:Georgia,serif; font-size:0.92rem; font-weight:700; display:block; line-height:1.25}
+  .mont-nom span{font-size:0.46rem; color:var(--muted); letter-spacing:0.09em}
+  .mont-h{text-align:right; flex-shrink:0}
+  .mont-h b{font-size:0.95rem; font-weight:700; color:var(--debit-color); white-space:nowrap}
+  .mont-h span{display:block; font-size:0.46rem; color:var(--muted); letter-spacing:0.05em; margin-top:2px}
+  .mont-fosse.ancre .mont-h b{color:#4ade9a}
+  .mont-fosse.hors{opacity:0.45}
+  .mont-fosse.hors .mont-h b::before{content:'☾ '; opacity:0.7}
+  .mont-fosse.partiel .mont-h b::before{content:'◐ '; color:var(--accent)}
+  .mont-note{font-size:0.55rem; color:var(--muted); line-height:1.7; letter-spacing:0.02em}
+  .mont-note b{color:var(--text); font-weight:400}
+
   /* ─── Écran mot de passe ─── */
   #pw-screen {
     position: fixed; inset: 0; background: #0f1923; z-index: 9999;
@@ -624,6 +684,19 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
 </div>
 
 <div class="grid" id="stationGrid"></div>
+
+<!-- ─── Écran Montaison (v1.50) ─────────────────────────────────────────────
+     Outil de passage de la run pour le secteur aval de la Sainte-Anne.
+     Rempli à partir des marées et du soleil déjà chargés par l'app — aucun
+     appel réseau supplémentaire. Ouvert depuis la carte de la Sainte-Anne. -->
+<div id="mont-ecran">
+  <div class="mont-tete">
+    <h2>Passage de la <b>run</b><span>Sainte-Anne · secteur aval</span></h2>
+    <button class="mont-fermer" onclick="fermerMontaison()">✕ Fermer</button>
+  </div>
+  <div id="mont-corps"></div>
+</div>
+
 <footer>
   <div style="margin-bottom:10px">SOURCES DE DONNÉES</div>
   <div style="font-size:0.5rem;line-height:1.7;color:var(--muted);letter-spacing:0.04em;text-transform:none">
@@ -640,7 +713,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.49</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.50</div>
 </footer>
 
 <script>
@@ -2742,6 +2815,178 @@ function filterStations(filter, btn) {
   });
 }
 
+// ─── MODULE MONTAISON (v1.50) ────────────────────────────────────────────────
+// Estime l'heure de passage de la run aux fosses du secteur aval de la
+// Sainte-Anne, à partir de l'heure de pleine mer.
+//
+// Modèle, calibré sur deux observations :
+//   1. La run atteint la fosse aux Fers (10,9 km) à PM+1h — observé par JP sur
+//      les grandes marées.
+//   2. Elle met ~24 h à rejoindre la Grande-Fosse (27 km) — rapporté par les
+//      guides. Cette seconde borne, croisée avec la capacité de nage soutenue
+//      du saumon atlantique (0,9 à 1,7 longueur de corps/s), contraint la
+//      vitesse au-dessus de la fosse 24 à 0,98–1,13 km/h.
+//
+// Les distances sont cumulées DE FOSSE EN FOSSE, pas à vol d'oiseau depuis
+// l'embouchure : la rivière décrit une boucle entre Cran Rapide (40) et Rets
+// (41), ce qui inversait leur ordre en ligne droite. La chaîne vaut 1,27× la
+// ligne droite et la vitesse est exprimée sur cette même base.
+const MONT_EMBOUCHURE = [49.12583, -66.50528];   // Sainte-Anne-des-Monts
+const MONT_ANCRAGE_KM = 10.9;                     // fosse aux Fers
+const MONT_ANCRAGE_H  = 1;                        // atteinte à PM+1h
+const MONT_V_RAPIDE   = 1.13;                     // km/h au-dessus de l'ancrage
+const MONT_V_LENTE    = 0.98;
+const MONT_FOSSES = [
+  {num:'24', nom:'Fosse aux Fers', lat:49.029769, lng:-66.476689, el:31, ancre:true},
+  {num:'25', nom:'Bouleau',        lat:49.022138, lng:-66.473829, el:32},
+  {num:'28', nom:'Pierre blanche', lat:49.015433, lng:-66.471760, el:34},
+  {num:'29', nom:'Patate',         lat:49.014763, lng:-66.468213, el:35},
+  {num:'31', nom:'Castor',         lat:49.011682, lng:-66.459676, el:38},
+  {num:'33', nom:'Low',            lat:49.006420, lng:-66.456998, el:42},
+  {num:'35', nom:'Beaumont',       lat:48.997853, lng:-66.449102, el:52},
+  {num:'37', nom:'La Roche',       lat:48.990699, lng:-66.446718, el:57},
+  {num:'38', nom:'Petit Islet',    lat:48.989644, lng:-66.438669, el:61},
+  {num:'39', nom:'Jean',           lat:48.985163, lng:-66.435659, el:62},
+  {num:'40', nom:'Cran Rapide',    lat:48.983428, lng:-66.432768, el:65},
+  {num:'41', nom:'Rets',           lat:48.984751, lng:-66.429393, el:68},
+  {num:'44', nom:'Pins',           lat:48.983517, lng:-66.414712, el:76},
+  {num:'45', nom:'Wilson',         lat:48.982076, lng:-66.411654, el:77},
+];
+
+// Distance entre deux points (km)
+function montEntre(la1, ln1, la2, ln2) {
+  const R = 6371, rad = x => x * Math.PI / 180;
+  const dLa = rad(la2 - la1), dLn = rad(ln2 - ln1);
+  const a = Math.sin(dLa/2)**2 + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.sin(dLn/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+// Distances cumulées le long de la chaîne, calculées une seule fois
+MONT_FOSSES.forEach((f, i) => {
+  f.km = i === 0 ? MONT_ANCRAGE_KM
+       : MONT_FOSSES[i-1].km + montEntre(MONT_FOSSES[i-1].lat, MONT_FOSSES[i-1].lng, f.lat, f.lng);
+});
+
+let montMareeSel = null;   // heure décimale de la pleine mer choisie
+
+// Pleines mers disponibles : celles d'aujourd'hui encore à venir, puis demain
+function montMarees() {
+  const t = state['021407']?.tides;
+  if (!t || !t.today) return [];
+  const maintenant = new Date().getHours() + new Date().getMinutes() / 60;
+  const liste = [];
+  (t.today || []).forEach(m => {
+    if (m.type !== 'HM') return;
+    const [h, mi] = m.time.split(':').map(Number);
+    const dec = h + mi / 60;
+    if (dec >= maintenant - 1) liste.push({ dec, txt: m.time, jour: "auj.", m: m.value });
+  });
+  (t.tomorrow || []).forEach(m => {
+    if (m.type !== 'HM') return;
+    const [h, mi] = m.time.split(':').map(Number);
+    liste.push({ dec: h + mi / 60, txt: m.time, jour: 'demain', m: m.value });
+  });
+  return liste.slice(0, 4);
+}
+
+const montHhmm = h => {
+  h = ((h % 24) + 24) % 24;
+  const H = Math.floor(h), M = Math.round((h - H) * 60);
+  return M === 60 ? String((H+1)%24).padStart(2,'0') + 'h00'
+                  : String(H).padStart(2,'0') + 'h' + String(M).padStart(2,'0');
+};
+const montDuree = h => Math.floor(h) + 'h' + String(Math.round((h - Math.floor(h)) * 60)).padStart(2,'0');
+
+// Écarts par rapport à la pleine mer, pour une fosse
+function montEcarts(f) {
+  if (f.km <= MONT_ANCRAGE_KM + 0.01) return [MONT_ANCRAGE_H, MONT_ANCRAGE_H];
+  const reste = f.km - MONT_ANCRAGE_KM;
+  return [MONT_ANCRAGE_H + reste / MONT_V_RAPIDE, MONT_ANCRAGE_H + reste / MONT_V_LENTE];
+}
+
+// Fenêtre de pêche : d'une heure avant le lever à une heure après le coucher.
+// Lever et coucher viennent de l'état de la carte, déjà chargés par fetchWeather.
+function montFenetre() {
+  const st = state['021407'];
+  if (!st?.sunrise || !st?.sunset) return null;
+  const enH = s => { const [h, m] = s.split(':').map(Number); return h + m/60; };
+  const lever = enH(st.sunrise), coucher = enH(st.sunset);
+  return { lever, coucher, debut: lever - 1, fin: coucher + 1 };
+}
+
+function ouvrirMontaison() {
+  const dispo = montMarees();
+  montMareeSel = dispo.length ? dispo[0].dec : null;
+  document.getElementById('mont-ecran').classList.add('on');
+  document.body.style.overflow = 'hidden';
+  rendreMontaison();
+}
+function fermerMontaison() {
+  document.getElementById('mont-ecran').classList.remove('on');
+  document.body.style.overflow = '';
+}
+function choisirMaree(dec) { montMareeSel = dec; rendreMontaison(); }
+
+function rendreMontaison() {
+  const dispo = montMarees();
+  const fen = montFenetre();
+  let html = '';
+
+  // Choix de la pleine mer
+  html += '<div class="mont-bloc"><div class="detail-label" style="margin-top:0">Pleine mer — Ste-Anne-des-Monts</div>';
+  if (!dispo.length) {
+    html += '<div class="mont-fenetre">Marées non disponibles. Reviens à la carte et actualise.</div>';
+  } else {
+    html += '<div class="mont-marees">' + dispo.map(m =>
+      `<button class="${Math.abs(m.dec - montMareeSel) < 0.01 ? 'sel' : ''}"
+               onclick="choisirMaree(${m.dec})">${m.txt}<small>${m.jour} · ${m.m} m</small></button>`
+    ).join('') + '</div>';
+    if (fen) {
+      html += `<div class="mont-fenetre">Lever ${montHhmm(fen.lever)} · coucher ${montHhmm(fen.coucher)}<br>`
+            + `Pêche permise de <b>${montHhmm(fen.debut)} à ${montHhmm(fen.fin)}</b> — ☾ hors fenêtre, ◐ à cheval</div>`;
+    }
+  }
+  html += '</div>';
+
+  // Fosses
+  if (dispo.length && montMareeSel !== null) {
+    const pm = montMareeSel;
+    const dedans = h => { if (!fen) return true;
+      const t = ((h % 24) + 24) % 24; return t >= fen.debut && t <= fen.fin; };
+    html += '<div class="mont-bloc"><div class="detail-label" style="margin-top:0">Passage estimé de la run</div>';
+    html += MONT_FOSSES.map(f => {
+      const [a, b] = montEcarts(f);
+      const meme = Math.abs(a - b) < 0.02;
+      const heure = meme ? montHhmm(pm + a) : montHhmm(pm + a) + ' – ' + montHhmm(pm + b);
+      const rel   = meme ? 'PM+' + montDuree(a) : 'PM+' + montDuree(a) + ' à ' + montDuree(b);
+      const dA = dedans(pm + a), dB = dedans(pm + b);
+      const cls = (!fen) ? '' : (dA && dB) ? '' : (dA || dB) ? ' partiel' : ' hors';
+      return `<div class="mont-fosse${f.ancre ? ' ancre' : ''}${cls}">
+        <div class="mont-num">${f.num}</div>
+        <div class="mont-nom"><b>${f.nom}</b><span>${f.km.toFixed(1)} km · ${f.el} m</span></div>
+        <div class="mont-h"><b>${heure}</b><span>${rel}</span></div>
+      </div>`;
+    }).join('');
+    html += '</div>';
+  }
+
+  // Note
+  html += `<div class="mont-bloc"><div class="detail-label" style="margin-top:0">Comment c'est calculé</div>
+    <div class="mont-note" style="margin-top:6px">
+      Ancrage : la run atteint la <b>fosse aux Fers à PM+1h</b>, observé sur les
+      grandes marées. Au-dessus, elle progresse à <b>0,98 à 1,13 km/h</b> — plage
+      déduite des 24 h que mettent les saumons à rejoindre la Grande-Fosse (27 km),
+      et bornée par la capacité de nage soutenue du saumon atlantique.<br><br>
+      Distances cumulées de fosse en fosse. Élévations au modèle de terrain (±3 m).<br><br>
+      <b>Ce que le modèle ne sait pas :</b> vitesse supposée constante au-dessus de
+      la fosse 24, alors que le profil alterne plats et raidillons. Calibré sur les
+      marées de vive-eau. Repose sur deux observations seulement.<br><br>
+      <b>À vérifier sur l'eau :</b> note l'heure de passage à une fosse autre que la
+      24 — ce sera le premier test indépendant.
+    </div></div>`;
+
+  document.getElementById('mont-corps').innerHTML = html;
+}
+
 // ─── Construction cartes ──────────────────────────────────────────────────────
 function buildCards() {
   const grid = document.getElementById('stationGrid');
@@ -2883,6 +3128,15 @@ function buildCards() {
             </div>
           </div>
         </div>`}
+        ${s.id === '021407' ? `
+        <div class="detail-item" style="margin-top:6px;text-align:center;cursor:pointer"
+             onclick="event.stopPropagation(); ouvrirMontaison()">
+          <div style="display:flex;align-items:center;justify-content:center;gap:7px">
+            <div class="d-icon">🐟</div>
+            <div style="font-size:0.8rem;color:var(--accent);letter-spacing:0.04em">Passage de la run</div>
+          </div>
+          <div class="d-sublabel" style="margin-top:4px">Secteur aval · 14 fosses</div>
+        </div>` : ''}
         ${s.id === '021601' || s.id === 'MITIS' ? `
         <div class="detail-item dv-montaisons" style="margin-top:6px">
           <div class="d-section-head">
