@@ -713,7 +713,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.50</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.51</div>
 </footer>
 
 <script>
@@ -2868,24 +2868,16 @@ MONT_FOSSES.forEach((f, i) => {
 
 let montMareeSel = null;   // heure décimale de la pleine mer choisie
 
-// Pleines mers disponibles : celles d'aujourd'hui encore à venir, puis demain
+// Pleines mers du JOUR seulement
 function montMarees() {
   const t = state['021407']?.tides;
   if (!t || !t.today) return [];
-  const maintenant = new Date().getHours() + new Date().getMinutes() / 60;
-  const liste = [];
-  (t.today || []).forEach(m => {
-    if (m.type !== 'HM') return;
-    const [h, mi] = m.time.split(':').map(Number);
-    const dec = h + mi / 60;
-    if (dec >= maintenant - 1) liste.push({ dec, txt: m.time, jour: "auj.", m: m.value });
-  });
-  (t.tomorrow || []).forEach(m => {
-    if (m.type !== 'HM') return;
-    const [h, mi] = m.time.split(':').map(Number);
-    liste.push({ dec: h + mi / 60, txt: m.time, jour: 'demain', m: m.value });
-  });
-  return liste.slice(0, 4);
+  return t.today
+    .filter(m => m.type === 'HM')
+    .map(m => {
+      const [h, mi] = m.time.split(':').map(Number);
+      return { dec: h + mi / 60, txt: m.time, m: m.value };
+    });
 }
 
 const montHhmm = h => {
@@ -2915,7 +2907,15 @@ function montFenetre() {
 
 function ouvrirMontaison() {
   const dispo = montMarees();
-  montMareeSel = dispo.length ? dispo[0].dec : null;
+  // Par défaut : la prochaine pleine mer à venir ; si elles sont toutes
+  // passées, la dernière du jour.
+  if (dispo.length) {
+    const now = new Date().getHours() + new Date().getMinutes() / 60;
+    const suivante = dispo.find(m => m.dec >= now);
+    montMareeSel = (suivante || dispo[dispo.length - 1]).dec;
+  } else {
+    montMareeSel = null;
+  }
   document.getElementById('mont-ecran').classList.add('on');
   document.body.style.overflow = 'hidden';
   rendreMontaison();
@@ -2932,13 +2932,13 @@ function rendreMontaison() {
   let html = '';
 
   // Choix de la pleine mer
-  html += '<div class="mont-bloc"><div class="detail-label" style="margin-top:0">Pleine mer — Ste-Anne-des-Monts</div>';
+  html += '<div class="mont-bloc"><div class="detail-label" style="margin-top:0">Pleine mer du jour — Ste-Anne-des-Monts</div>';
   if (!dispo.length) {
     html += '<div class="mont-fenetre">Marées non disponibles. Reviens à la carte et actualise.</div>';
   } else {
     html += '<div class="mont-marees">' + dispo.map(m =>
       `<button class="${Math.abs(m.dec - montMareeSel) < 0.01 ? 'sel' : ''}"
-               onclick="choisirMaree(${m.dec})">${m.txt}<small>${m.jour} · ${m.m} m</small></button>`
+               onclick="choisirMaree(${m.dec})">${m.txt}<small>${m.m} m</small></button>`
     ).join('') + '</div>';
     if (fen) {
       html += `<div class="mont-fenetre">Lever ${montHhmm(fen.lever)} · coucher ${montHhmm(fen.coucher)}<br>`
@@ -3135,7 +3135,7 @@ function buildCards() {
             <div class="d-icon">🐟</div>
             <div style="font-size:0.8rem;color:var(--accent);letter-spacing:0.04em">Passage de la run</div>
           </div>
-          <div class="d-sublabel" style="margin-top:4px">Secteur aval · 14 fosses</div>
+          <div class="d-sublabel" style="margin-top:4px">Secteur aval</div>
         </div>` : ''}
         ${s.id === '021601' || s.id === 'MITIS' ? `
         <div class="detail-item dv-montaisons" style="margin-top:6px">
