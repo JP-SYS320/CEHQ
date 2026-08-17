@@ -713,7 +713,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.51</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.54</div>
 </footer>
 
 <script>
@@ -2815,43 +2815,92 @@ function filterStations(filter, btn) {
   });
 }
 
-// ─── MODULE MONTAISON (v1.50) ────────────────────────────────────────────────
-// Estime l'heure de passage de la run aux fosses du secteur aval de la
-// Sainte-Anne, à partir de l'heure de pleine mer.
+// ─── MODULE MONTAISON (v1.52) ────────────────────────────────────────────────
+// Estime l'heure de passage de la run aux fosses d'un secteur, à partir de
+// l'heure de pleine mer. Généralisé à plusieurs rivières : ajouter une rivière
+// ne demande qu'une entrée dans MONT_RIVIERES.
 //
-// Modèle, calibré sur deux observations :
-//   1. La run atteint la fosse aux Fers (10,9 km) à PM+1h — observé par JP sur
-//      les grandes marées.
-//   2. Elle met ~24 h à rejoindre la Grande-Fosse (27 km) — rapporté par les
-//      guides. Cette seconde borne, croisée avec la capacité de nage soutenue
-//      du saumon atlantique (0,9 à 1,7 longueur de corps/s), contraint la
-//      vitesse au-dessus de la fosse 24 à 0,98–1,13 km/h.
+// Principe commun : une fosse sert d'ANCRAGE — sa distance depuis l'embouchure
+// et l'heure d'arrivée de la run y sont connues par observation. Les autres
+// fosses sont calculées en remontant la chaîne à partir de cet ancrage, à une
+// vitesse encadrée par une borne haute et une borne basse.
 //
-// Les distances sont cumulées DE FOSSE EN FOSSE, pas à vol d'oiseau depuis
-// l'embouchure : la rivière décrit une boucle entre Cran Rapide (40) et Rets
-// (41), ce qui inversait leur ordre en ligne droite. La chaîne vaut 1,27× la
-// ligne droite et la vitesse est exprimée sur cette même base.
-const MONT_EMBOUCHURE = [49.12583, -66.50528];   // Sainte-Anne-des-Monts
-const MONT_ANCRAGE_KM = 10.9;                     // fosse aux Fers
-const MONT_ANCRAGE_H  = 1;                        // atteinte à PM+1h
-const MONT_V_RAPIDE   = 1.13;                     // km/h au-dessus de l'ancrage
-const MONT_V_LENTE    = 0.98;
-const MONT_FOSSES = [
-  {num:'24', nom:'Fosse aux Fers', lat:49.029769, lng:-66.476689, el:31, ancre:true},
-  {num:'25', nom:'Bouleau',        lat:49.022138, lng:-66.473829, el:32},
-  {num:'28', nom:'Pierre blanche', lat:49.015433, lng:-66.471760, el:34},
-  {num:'29', nom:'Patate',         lat:49.014763, lng:-66.468213, el:35},
-  {num:'31', nom:'Castor',         lat:49.011682, lng:-66.459676, el:38},
-  {num:'33', nom:'Low',            lat:49.006420, lng:-66.456998, el:42},
-  {num:'35', nom:'Beaumont',       lat:48.997853, lng:-66.449102, el:52},
-  {num:'37', nom:'La Roche',       lat:48.990699, lng:-66.446718, el:57},
-  {num:'38', nom:'Petit Islet',    lat:48.989644, lng:-66.438669, el:61},
-  {num:'39', nom:'Jean',           lat:48.985163, lng:-66.435659, el:62},
-  {num:'40', nom:'Cran Rapide',    lat:48.983428, lng:-66.432768, el:65},
-  {num:'41', nom:'Rets',           lat:48.984751, lng:-66.429393, el:68},
-  {num:'44', nom:'Pins',           lat:48.983517, lng:-66.414712, el:76},
-  {num:'45', nom:'Wilson',         lat:48.982076, lng:-66.411654, el:77},
-];
+// Les distances sont cumulées DE FOSSE EN FOSSE (chaîne), ce qui suit le tracé
+// réel du cours d'eau. Certains points servent uniquement à dessiner la chaîne
+// quand deux fosses pêchées sont éloignées : ils portent `trace: true` et
+// n'apparaissent pas dans le tableau.
+const MONT_RIVIERES = {
+  // ── SAINTE-ANNE — secteur aval ──────────────────────────────────────────
+  // Deux observations : la fosse aux Fers à PM+1h (JP, grandes marées) et la
+  // Grande-Fosse (27 km) rejointe en ~24 h (guides). Croisées avec la capacité
+  // de nage soutenue du saumon atlantique, elles contraignent la vitesse
+  // au-dessus de l'ancrage à 0,98–1,13 km/h — soit ±8 %.
+  '021407': {
+    nom: 'Sainte-Anne', secteur: 'Secteur aval',
+    mareeNom: 'Ste-Anne-des-Monts',
+    ancrageKm: 10.9, ancrageH: 1, vRapide: 1.13, vLente: 0.98,
+    fosses: [
+      {num:'24', nom:'Fosse aux Fers', lat:49.029769, lng:-66.476689, el:31, ancre:true},
+      {num:'25', nom:'Bouleau',        lat:49.022138, lng:-66.473829, el:32},
+      {num:'28', nom:'Pierre blanche', lat:49.015433, lng:-66.471760, el:34},
+      {num:'29', nom:'Patate',         lat:49.014763, lng:-66.468213, el:35},
+      {num:'31', nom:'Castor',         lat:49.011682, lng:-66.459676, el:38},
+      {num:'33', nom:'Low',            lat:49.006420, lng:-66.456998, el:42},
+      {num:'35', nom:'Beaumont',       lat:48.997853, lng:-66.449102, el:52},
+      {num:'37', nom:'La Roche',       lat:48.990699, lng:-66.446718, el:57},
+      {num:'38', nom:'Petit Islet',    lat:48.989644, lng:-66.438669, el:61},
+      {num:'39', nom:'Jean',           lat:48.985163, lng:-66.435659, el:62},
+      {num:'40', nom:'Cran Rapide',    lat:48.983428, lng:-66.432768, el:65},
+      {num:'41', nom:'Rets',           lat:48.984751, lng:-66.429393, el:68},
+      {num:'44', nom:'Pins',           lat:48.983517, lng:-66.414712, el:76},
+      {num:'45', nom:'Wilson',         lat:48.982076, lng:-66.411654, el:77},
+    ],
+    note: 'Ancrage : la run atteint la <b>fosse aux Fers à PM+1h</b>, observé sur '
+        + 'les grandes marées. Au-dessus, elle progresse à <b>0,98 à 1,13 km/h</b> — '
+        + 'plage déduite des 24 h que mettent les saumons à rejoindre la Grande-Fosse '
+        + '(27 km), et bornée par la capacité de nage soutenue du saumon atlantique.'
+  },
+
+  // ── PETITE CASCAPÉDIA — secteur B ───────────────────────────────────────
+  // UNE SEULE observation : la fosse Home à PM+1h. La vitesse s'en déduit
+  // directement — si la run part à PM+dep, elle vaut 9,95/(1−dep) — et elle
+  // se prolonge au-dessus, la pente ne changeant pas dans le secteur B
+  // (3,2 m/km, comparable au tronçon BAS de la Sainte-Anne, pas au haut).
+  // L'incertitude ne vient donc pas de la vitesse mais de l'heure de départ,
+  // bornée par la capacité de nage soutenue du saumon (1,7 à 4,0 km/h sur le
+  // fond) : départ entre PM−4h50 et PM−1h30, soit 1,70 à 3,32 km/h.
+  // Distances mesurées depuis la Pointe Taylor, entrée de la baie de New
+  // Richmond : la rivière débouche dans un large delta que les saumons doivent
+  // traverser avant d'atteindre le cours d'eau.
+  '010902': {
+    nom: 'Petite Cascapédia', secteur: 'Secteur B',
+    mareeNom: 'Carleton',
+    ancrageKm: 9.95, ancrageH: 1, vRapide: 3.32, vLente: 1.70,
+    fosses: [
+      {num:'B12', nom:'Mélançon',   lat:48.221508, lng:-65.764032, el:19},
+      {num:'B13', nom:'Home',       lat:48.222861, lng:-65.764666, el:20, ancre:true},
+      {num:'B18', nom:'Gagné',      lat:48.236204, lng:-65.727420, el:27},
+      {num:'B19', nom:'Mill Brook', lat:48.240406, lng:-65.721736, el:30},
+      {num:'B20', nom:'Dan',        lat:48.242584, lng:-65.720508, el:30},
+      {num:'B22', nom:'Edgar Cyr',  lat:48.246839, lng:-65.722928, el:32},
+      {num:'B23', nom:'Salmon',     lat:48.249832, lng:-65.714885, el:36},
+      // Points de tracé (secteur F) — invisibles, servent à suivre le cours
+      // d'eau entre Salmon et Big Eddy, séparées par 15 fosses non pêchées.
+      {num:'F29', lat:48.291866, lng:-65.720787, el:47, trace:true},
+      {num:'F31', lat:48.303361, lng:-65.732780, el:50, trace:true},
+      {num:'F34', lat:48.322889, lng:-65.735637, el:56, trace:true},
+      {num:'B39', nom:'Big Eddy',   lat:48.343908, lng:-65.748921, el:60},
+    ],
+    note: 'Ancrage : la run atteint la fosse <b>Home à PM+1h</b>, observé sur les '
+        + 'grandes marées. Cette observation donne directement la vitesse, qui se '
+        + 'prolonge au-dessus puisque la pente ne change pas dans le secteur '
+        + '(3,2 m/km — comparable au tronçon <i>bas</i> de la Sainte-Anne, pas au '
+        + 'haut). L\'écart affiché vient de l\'heure de départ, inconnue, bornée par '
+        + 'la capacité de nage du saumon : <b>1,70 à 3,32 km/h</b>.<br><br>Marées de <b>Carleton</b>, à ~30 km à l\'ouest : la '
+        + 'pleine mer y arrive une quinzaine de minutes après New Richmond. '
+        + 'Distances mesurées depuis la Pointe Taylor, entrée de la baie.'
+  },
+};
 
 // Distance entre deux points (km)
 function montEntre(la1, ln1, la2, ln2) {
@@ -2860,24 +2909,28 @@ function montEntre(la1, ln1, la2, ln2) {
   const a = Math.sin(dLa/2)**2 + Math.cos(rad(la1)) * Math.cos(rad(la2)) * Math.sin(dLn/2)**2;
   return 2 * R * Math.asin(Math.sqrt(a));
 }
-// Distances cumulées le long de la chaîne, calculées une seule fois
-MONT_FOSSES.forEach((f, i) => {
-  f.km = i === 0 ? MONT_ANCRAGE_KM
-       : MONT_FOSSES[i-1].km + montEntre(MONT_FOSSES[i-1].lat, MONT_FOSSES[i-1].lng, f.lat, f.lng);
+// Distances cumulées le long de la chaîne, ancrées sur la fosse de référence.
+// Calculé une seule fois au chargement.
+Object.values(MONT_RIVIERES).forEach(riv => {
+  const f = riv.fosses, iA = f.findIndex(x => x.ancre);
+  f[iA].km = riv.ancrageKm;
+  for (let i = iA + 1; i < f.length; i++)
+    f[i].km = f[i-1].km + montEntre(f[i-1].lat, f[i-1].lng, f[i].lat, f[i].lng);
+  for (let i = iA - 1; i >= 0; i--)
+    f[i].km = f[i+1].km - montEntre(f[i].lat, f[i].lng, f[i+1].lat, f[i+1].lng);
 });
 
+let montStation = null;    // id de la rivière ouverte
 let montMareeSel = null;   // heure décimale de la pleine mer choisie
 
-// Pleines mers du JOUR seulement
+// Pleines mers du JOUR pour la station ouverte
 function montMarees() {
-  const t = state['021407']?.tides;
+  const t = state[montStation]?.tides;
   if (!t || !t.today) return [];
-  return t.today
-    .filter(m => m.type === 'HM')
-    .map(m => {
-      const [h, mi] = m.time.split(':').map(Number);
-      return { dec: h + mi / 60, txt: m.time, m: m.value };
-    });
+  return t.today.filter(m => m.type === 'HM').map(m => {
+    const [h, mi] = m.time.split(':').map(Number);
+    return { dec: h + mi / 60, txt: m.time, m: m.value };
+  });
 }
 
 const montHhmm = h => {
@@ -2889,33 +2942,38 @@ const montHhmm = h => {
 const montDuree = h => Math.floor(h) + 'h' + String(Math.round((h - Math.floor(h)) * 60)).padStart(2,'0');
 
 // Écarts par rapport à la pleine mer, pour une fosse
-function montEcarts(f) {
-  if (f.km <= MONT_ANCRAGE_KM + 0.01) return [MONT_ANCRAGE_H, MONT_ANCRAGE_H];
-  const reste = f.km - MONT_ANCRAGE_KM;
-  return [MONT_ANCRAGE_H + reste / MONT_V_RAPIDE, MONT_ANCRAGE_H + reste / MONT_V_LENTE];
+function montEcarts(riv, f) {
+  const reste = f.km - riv.ancrageKm;
+  if (Math.abs(reste) < 0.01) return [riv.ancrageH, riv.ancrageH];
+  // Pour une fosse EN AMONT de l'ancrage, la vitesse rapide donne l'heure la
+  // plus précoce. Pour une fosse en AVAL, c'est l'inverse : la run y est passée
+  // plus récemment si elle nage vite. On trie donc les deux bornes.
+  const a = riv.ancrageH + reste / riv.vRapide;
+  const b = riv.ancrageH + reste / riv.vLente;
+  return a <= b ? [a, b] : [b, a];
 }
 
 // Fenêtre de pêche : d'une heure avant le lever à une heure après le coucher.
 // Lever et coucher viennent de l'état de la carte, déjà chargés par fetchWeather.
 function montFenetre() {
-  const st = state['021407'];
+  const st = state[montStation];
   if (!st?.sunrise || !st?.sunset) return null;
   const enH = s => { const [h, m] = s.split(':').map(Number); return h + m/60; };
   const lever = enH(st.sunrise), coucher = enH(st.sunset);
   return { lever, coucher, debut: lever - 1, fin: coucher + 1 };
 }
 
-function ouvrirMontaison() {
+function ouvrirMontaison(id) {
+  montStation = id;
+  const riv = MONT_RIVIERES[id];
   const dispo = montMarees();
-  // Par défaut : la prochaine pleine mer à venir ; si elles sont toutes
-  // passées, la dernière du jour.
+  // Par défaut : la prochaine pleine mer à venir ; sinon la dernière du jour.
   if (dispo.length) {
     const now = new Date().getHours() + new Date().getMinutes() / 60;
-    const suivante = dispo.find(m => m.dec >= now);
-    montMareeSel = (suivante || dispo[dispo.length - 1]).dec;
-  } else {
-    montMareeSel = null;
-  }
+    montMareeSel = (dispo.find(m => m.dec >= now) || dispo[dispo.length - 1]).dec;
+  } else montMareeSel = null;
+  document.querySelector('#mont-ecran h2').innerHTML =
+    'Passage de la <b>run</b><span>' + riv.nom + ' · ' + riv.secteur + '</span>';
   document.getElementById('mont-ecran').classList.add('on');
   document.body.style.overflow = 'hidden';
   rendreMontaison();
@@ -2927,12 +2985,13 @@ function fermerMontaison() {
 function choisirMaree(dec) { montMareeSel = dec; rendreMontaison(); }
 
 function rendreMontaison() {
+  const riv = MONT_RIVIERES[montStation];
   const dispo = montMarees();
   const fen = montFenetre();
   let html = '';
 
-  // Choix de la pleine mer
-  html += '<div class="mont-bloc"><div class="detail-label" style="margin-top:0">Pleine mer du jour — Ste-Anne-des-Monts</div>';
+  html += '<div class="mont-bloc"><div class="detail-label" style="margin-top:0">Pleine mer du jour — '
+        + riv.mareeNom + '</div>';
   if (!dispo.length) {
     html += '<div class="mont-fenetre">Marées non disponibles. Reviens à la carte et actualise.</div>';
   } else {
@@ -2940,48 +2999,43 @@ function rendreMontaison() {
       `<button class="${Math.abs(m.dec - montMareeSel) < 0.01 ? 'sel' : ''}"
                onclick="choisirMaree(${m.dec})">${m.txt}<small>${m.m} m</small></button>`
     ).join('') + '</div>';
-    if (fen) {
-      html += `<div class="mont-fenetre">Lever ${montHhmm(fen.lever)} · coucher ${montHhmm(fen.coucher)}<br>`
-            + `Pêche permise de <b>${montHhmm(fen.debut)} à ${montHhmm(fen.fin)}</b> — ☾ hors fenêtre, ◐ à cheval</div>`;
-    }
+    if (fen) html += `<div class="mont-fenetre">Lever ${montHhmm(fen.lever)} · coucher ${montHhmm(fen.coucher)}<br>`
+      + `Pêche permise de <b>${montHhmm(fen.debut)} à ${montHhmm(fen.fin)}</b> — ☾ hors fenêtre, ◐ à cheval</div>`;
   }
   html += '</div>';
 
-  // Fosses
   if (dispo.length && montMareeSel !== null) {
     const pm = montMareeSel;
     const dedans = h => { if (!fen) return true;
       const t = ((h % 24) + 24) % 24; return t >= fen.debut && t <= fen.fin; };
     html += '<div class="mont-bloc"><div class="detail-label" style="margin-top:0">Passage estimé de la run</div>';
-    html += MONT_FOSSES.map(f => {
-      const [a, b] = montEcarts(f);
+    html += riv.fosses.filter(f => !f.trace).map(f => {
+      const [a, b] = montEcarts(riv, f);
       const meme = Math.abs(a - b) < 0.02;
       const heure = meme ? montHhmm(pm + a) : montHhmm(pm + a) + ' – ' + montHhmm(pm + b);
+      // Marqueur de jour : au-delà de minuit, l'heure seule serait trompeuse
+      const jour  = (pm + a) >= 24 ? ' <span style="font-size:0.7em;color:var(--muted)">+1j</span>'
+                  : (pm + b) >= 24 ? ' <span style="font-size:0.7em;color:var(--muted)">→1j</span>' : '';
       const rel   = meme ? 'PM+' + montDuree(a) : 'PM+' + montDuree(a) + ' à ' + montDuree(b);
       const dA = dedans(pm + a), dB = dedans(pm + b);
       const cls = (!fen) ? '' : (dA && dB) ? '' : (dA || dB) ? ' partiel' : ' hors';
+      // Une fenêtre de plus de 3 h est trop large pour être actionnable
+      const large = (b - a) > 3 ? ' <span style="color:var(--muted);font-size:0.75em">±</span>' : '';
       return `<div class="mont-fosse${f.ancre ? ' ancre' : ''}${cls}">
         <div class="mont-num">${f.num}</div>
-        <div class="mont-nom"><b>${f.nom}</b><span>${f.km.toFixed(1)} km · ${f.el} m</span></div>
-        <div class="mont-h"><b>${heure}</b><span>${rel}</span></div>
+        <div class="mont-nom"><b>${f.nom}${large}</b><span>${f.km.toFixed(1)} km · ${f.el} m</span></div>
+        <div class="mont-h"><b>${heure}${jour}</b><span>${rel}</span></div>
       </div>`;
     }).join('');
     html += '</div>';
   }
 
-  // Note
   html += `<div class="mont-bloc"><div class="detail-label" style="margin-top:0">Comment c'est calculé</div>
-    <div class="mont-note" style="margin-top:6px">
-      Ancrage : la run atteint la <b>fosse aux Fers à PM+1h</b>, observé sur les
-      grandes marées. Au-dessus, elle progresse à <b>0,98 à 1,13 km/h</b> — plage
-      déduite des 24 h que mettent les saumons à rejoindre la Grande-Fosse (27 km),
-      et bornée par la capacité de nage soutenue du saumon atlantique.<br><br>
-      Distances cumulées de fosse en fosse. Élévations au modèle de terrain (±3 m).<br><br>
-      <b>Ce que le modèle ne sait pas :</b> vitesse supposée constante au-dessus de
-      la fosse 24, alors que le profil alterne plats et raidillons. Calibré sur les
-      marées de vive-eau. Repose sur deux observations seulement.<br><br>
-      <b>À vérifier sur l'eau :</b> note l'heure de passage à une fosse autre que la
-      24 — ce sera le premier test indépendant.
+    <div class="mont-note" style="margin-top:6px">${riv.note}<br><br>
+      Distances cumulées de fosse en fosse. Élévations au modèle de terrain (±3 m).
+      Le symbole ± signale une fenêtre de plus de 3 h, trop large pour être fiable.<br><br>
+      <b>Calibré sur les marées de vive-eau.</b> À vérifier sur l'eau : note l'heure de
+      passage à une fosse autre que l'ancrage — ce sera le premier test indépendant.
     </div></div>`;
 
   document.getElementById('mont-corps').innerHTML = html;
@@ -3128,14 +3182,14 @@ function buildCards() {
             </div>
           </div>
         </div>`}
-        ${s.id === '021407' ? `
+        ${MONT_RIVIERES[s.id] ? `
         <div class="detail-item" style="margin-top:6px;text-align:center;cursor:pointer"
-             onclick="event.stopPropagation(); ouvrirMontaison()">
+             onclick="event.stopPropagation(); ouvrirMontaison('${s.id}')">
           <div style="display:flex;align-items:center;justify-content:center;gap:7px">
             <div class="d-icon">🐟</div>
             <div style="font-size:0.8rem;color:var(--accent);letter-spacing:0.04em">Passage de la run</div>
           </div>
-          <div class="d-sublabel" style="margin-top:4px">Secteur aval</div>
+          <div class="d-sublabel" style="margin-top:4px">${MONT_RIVIERES[s.id].secteur}</div>
         </div>` : ''}
         ${s.id === '021601' || s.id === 'MITIS' ? `
         <div class="detail-item dv-montaisons" style="margin-top:6px">
