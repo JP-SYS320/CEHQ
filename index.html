@@ -713,7 +713,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.54</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.55</div>
 </footer>
 
 <script>
@@ -2832,13 +2832,16 @@ function filterStations(filter, btn) {
 const MONT_RIVIERES = {
   // ── SAINTE-ANNE — secteur aval ──────────────────────────────────────────
   // Deux observations : la fosse aux Fers à PM+1h (JP, grandes marées) et la
-  // Grande-Fosse (27 km) rejointe en ~24 h (guides). Croisées avec la capacité
-  // de nage soutenue du saumon atlantique, elles contraignent la vitesse
-  // au-dessus de l'ancrage à 0,98–1,13 km/h — soit ±8 %.
+  // Grande-Fosse (27 km) rejointe en ~24 h (guides). Croisées avec les vitesses
+  // de montaison réellement OBSERVÉES par télémétrie sur saumon atlantique
+  // adulte en rivière basse (Penobscot, Maine : 0,04 à 2,4 km/h, médiane 1,0),
+  // elles contraignent la vitesse au-dessus de l'ancrage à 1,05–1,16 km/h.
+  // Le plafond de 2,4 km/h vient de ce qui est observé, non de la capacité
+  // physiologique (~4 km/h) que les saumons n'utilisent pas en montaison.
   '021407': {
     nom: 'Sainte-Anne', secteur: 'Secteur aval',
     mareeNom: 'Ste-Anne-des-Monts',
-    ancrageKm: 10.9, ancrageH: 1, vRapide: 1.13, vLente: 0.98,
+    ancrageKm: 10.9, ancrageH: 1, vRapide: 1.16, vLente: 1.05,
     fosses: [
       {num:'24', nom:'Fosse aux Fers', lat:49.029769, lng:-66.476689, el:31, ancre:true},
       {num:'25', nom:'Bouleau',        lat:49.022138, lng:-66.473829, el:32},
@@ -2856,9 +2859,9 @@ const MONT_RIVIERES = {
       {num:'45', nom:'Wilson',         lat:48.982076, lng:-66.411654, el:77},
     ],
     note: 'Ancrage : la run atteint la <b>fosse aux Fers à PM+1h</b>, observé sur '
-        + 'les grandes marées. Au-dessus, elle progresse à <b>0,98 à 1,13 km/h</b> — '
+        + 'les grandes marées. Au-dessus, elle progresse à <b>1,05 à 1,16 km/h</b> — '
         + 'plage déduite des 24 h que mettent les saumons à rejoindre la Grande-Fosse '
-        + '(27 km), et bornée par la capacité de nage soutenue du saumon atlantique.'
+        + '(27 km), et recoupée avec les vitesses de montaison observées par télémétrie (Penobscot : 0,04 à 2,4 km/h, médiane 1,0).'
   },
 
   // ── PETITE CASCAPÉDIA — secteur B ───────────────────────────────────────
@@ -2867,15 +2870,16 @@ const MONT_RIVIERES = {
   // se prolonge au-dessus, la pente ne changeant pas dans le secteur B
   // (3,2 m/km, comparable au tronçon BAS de la Sainte-Anne, pas au haut).
   // L'incertitude ne vient donc pas de la vitesse mais de l'heure de départ,
-  // bornée par la capacité de nage soutenue du saumon (1,7 à 4,0 km/h sur le
-  // fond) : départ entre PM−4h50 et PM−1h30, soit 1,70 à 3,32 km/h.
+  // bornée par les vitesses de montaison OBSERVÉES en télémétrie sur saumon
+  // adulte en rivière basse (Penobscot, Maine : 0,04 à 2,4 km/h, médiane 1,0) :
+  // départ entre PM−4h55 et PM−3h05, soit 1,70 à 2,40 km/h.
   // Distances mesurées depuis la Pointe Taylor, entrée de la baie de New
   // Richmond : la rivière débouche dans un large delta que les saumons doivent
   // traverser avant d'atteindre le cours d'eau.
   '010902': {
     nom: 'Petite Cascapédia', secteur: 'Secteur B',
     mareeNom: 'Carleton',
-    ancrageKm: 9.95, ancrageH: 1, vRapide: 3.32, vLente: 1.70,
+    ancrageKm: 9.95, ancrageH: 1, vRapide: 2.40, vLente: 1.70,
     fosses: [
       {num:'B12', nom:'Mélançon',   lat:48.221508, lng:-65.764032, el:19},
       {num:'B13', nom:'Home',       lat:48.222861, lng:-65.764666, el:20, ancre:true},
