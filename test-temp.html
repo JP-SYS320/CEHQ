@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sonde dashboard</title>
+<title>Sonde 2</title>
 <style>
 body{background:#142230;color:#f0ede4;font-family:monospace;padding:14px;font-size:12px}
 h1{font-size:14px;color:#c9a84c}
@@ -12,7 +12,7 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:11px;
 </style>
 </head>
 <body>
-<h1>Sonde — dashboard Restigouche</h1>
+<h1>Canaux — Restigouche</h1>
 <pre id="out">Demarrage...</pre>
 
 <script>
@@ -20,33 +20,25 @@ var out = document.getElementById("out");
 function log(s){ out.textContent += "\n" + s; }
 window.onerror = function(m,f,l){ log("ERREUR ligne " + l + " : " + m); };
 
-var UUID = "b13ff345-faa4-434d-b91e-9581ad5c7fc7";
-var base = "https://www.licor.cloud";
-var cands = [
-  "/api/v2/dashboards/public/" + UUID,
-  "/api/v2/dashboards/" + UUID,
-  "/api/v1/dashboards/public/" + UUID,
-  "/api/v2/dashboard/public/" + UUID
-];
-
-cands.forEach(function(path){
-  fetch(base + path, { credentials: "omit", cache: "no-store" })
-  .then(function(r){
-    log("\n=== " + path + " → HTTP " + r.status);
-    return r.text();
-  })
-  .then(function(t){
-    var ids = t.match(/"channelUUID":"[0-9a-f-]+"/g);
-    if (ids) {
-      log("CANAUX TROUVES : " + ids.length);
-      ids.forEach(function(x){ log("  " + x); });
-    } else {
-      log("pas de channelUUID — extrait :");
-      log(t.substring(0,300));
-    }
-  })
-  .catch(function(e){ log("\n=== " + path + " → ECHEC : " + e.message); });
-});
+fetch("https://www.licor.cloud/api/v2/dashboards/b13ff345-faa4-434d-b91e-9581ad5c7fc7",
+      { credentials: "omit", cache: "no-store" })
+.then(function(r){ log("HTTP " + r.status); return r.text(); })
+.then(function(t){
+  log("Taille : " + t.length + " caracteres\n");
+  var re = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+  var vus = {}, m;
+  while ((m = re.exec(t)) !== null) {
+    if (vus[m[0]]) continue;
+    vus[m[0]] = 1;
+    var d = Math.max(0, m.index - 70);
+    log("--- " + m[0]);
+    log("    ..." + t.substring(d, m.index + 60).replace(/\s+/g," ") + "...");
+  }
+  log("\n=== SENSOR LABELS ===");
+  var re2 = /"[a-zA-Z]*[Ll]abel"\s*:\s*"[^"]{0,40}"/g, m2;
+  while ((m2 = re2.exec(t)) !== null) log("  " + m2[0]);
+})
+.catch(function(e){ log("ECHEC : " + e.message); });
 </script>
 </body>
 </html>
