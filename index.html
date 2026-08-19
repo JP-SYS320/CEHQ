@@ -715,7 +715,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.56</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.57</div>
 </footer>
 
 <script>
@@ -820,6 +820,26 @@ const STATIONS = [
       {label:'🌐 ZEC Nouvelle', url:'https://rivierenouvelle.com'}
     ]
   },
+  // Patapédia — AUCUNE station hydrométrique CEHQ. La hauteur d'eau est une
+  // saisie manuelle de la CGRMP (jauge en pieds, ex. « 5½ »), publiée sur la
+  // même page que les statistiques de pêche. Pas de débit, pas de prévision,
+  // pas de sparkline — comme Mitis. Pas de marées non plus : le confluent avec
+  // la Restigouche est trop en amont pour que la marée y monte.
+  // Coordonnées météo relevées sur Avenza (secteur fosse 70, 212 m).
+  // Température : station GINU de la RESTIGOUCHE (dashboard « Brandy Brook »),
+  // la Patapédia n'ayant pas de station propre. C'est le bassin récepteur, à
+  // ~2 °C sous la Matapédia en août 2026.
+  { id:'PATAPEDIA', name:'Patapédia', region:'gaspesie', lat:48.078735, lng:-67.632963,
+    cgrmp:true,
+    licorNom:'Restigouche',
+    licor:{dash:'b13ff345-faa4-434d-b91e-9581ad5c7fc7',
+           ch:['9a572aee-e741-45cc-9968-25fd98859837',
+               '4912163a-49ad-4261-8a38-91ec07443d61']},
+    links:[
+      {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=cgrmp'},
+      {label:'🌐 CGRMP', url:'https://rivierematapedia.com'}
+    ]
+  },
   { id:'010902', name:'Petite Cascapédia', region:'gaspesie', lat:48.5700, lng:-65.9200,
     iwlsCode:'02200', iwlsName:'Carleton',
     links:[
@@ -913,6 +933,7 @@ STATIONS.forEach(s => {
                   sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null,
                   tides:null, anglers:null, montaisons:null, rain:null, rainProb:null,
                   prevision:null, tempEau:null, tempAir:null, tempTs:null,
+                  pata:null,
                   _histCache: histCache };
 });
 
@@ -1046,7 +1067,7 @@ function queueHydration(stationId) {
 }
 
 async function hydrateHistoryIfNeeded(stationId) {
-  if (stationId === 'MITIS') return;
+  if (stationId === 'MITIS' || stationId === 'PATAPEDIA') return;
   if (HYDRATING.has(stationId)) return;
 
   try {
@@ -1245,7 +1266,7 @@ async function hydrateHistoryIfNeeded(stationId) {
 
 // ─── Débit + historique localStorage ─────────────────────────────────────────
 async function fetchDebit(stationId) {
-  if (stationId === 'MITIS')
+  if (stationId === 'MITIS' || stationId === 'PATAPEDIA')
     return { debit:null, trend:null, timestamp:null, var24h:null, max24h:null, min24h:null };
 
   await fetchAllStations(); // garantit que wfsIndex est prêt
@@ -1985,7 +2006,7 @@ async function fetchMontaisons(stationId) {
 //   (timeout partiel, sortie temporaire), on retentera au prochain refresh
 //   au lieu de cacher un état dégradé jusqu'à minuit.
 async function fetchPrevision(stationId) {
-  if (stationId === 'MITIS') return null;
+  if (stationId === 'MITIS' || stationId === 'PATAPEDIA') return null;
   const key = `prev_${stationId}_${todayStr}`;
   const cached = localStorage.getItem(key);
   if (cached) {
@@ -2091,6 +2112,123 @@ async function fetchPrevision(stationId) {
   } catch(e) {
     return null;
   }
+}
+
+// ─── Patapédia — hauteur d'eau + pêcheurs + captures par secteur (CGRMP) ─────
+// La page Statistiques de la CGRMP porte TROIS tableaux journaliers, dans
+// l'ordre Matapédia, Patapédia, Causapscal. Il ne faut surtout pas ancrer sur
+// le nom seul : « Rivière Patapédia » apparaît d'abord dans le MENU de
+// navigation, bien avant le contenu — piège vérifié le 19 août 2026, l'ancre
+// naïve tombait sur le tableau de la Matapédia.
+//
+// Méthode retenue (validée sur le HTML réel) : découper la page en <table>,
+// puis retenir celui dont le TEXTE contient « PÊCHEURS rivière Patapédia ».
+// Cette chaîne n'existe que dans la bonne ligne du bon tableau.
+//
+// Structure réelle des lignes (capture du 19 août 2026, données du 18) :
+//   [0] ["2026","18 août","TOTAL 2026","TOTAL 2025"]
+//   [1] ["PÊCHEURS rivière Patapédia","4","823","738"]
+//   [2] ["CAPTURES + RAE secteur 1","0","0+6","6"]
+//   [3] ["CAPTURES + RAE secteur 2","0","0+62","63"]
+//   [4] ["CAPTURES + RAE secteur 3","0","0+51","69"]
+// Les colonnes 2026 sont au format « prises+remises » ; 2025 tantôt « 0+147 »,
+// tantôt un entier seul. On garde le texte tel quel, sans tenter d'arithmétique.
+//
+// La hauteur d'eau est une saisie MANUELLE hors tableau (« HAUTEUR DE L'EAU 5½ »),
+// sans unité ni date. On la cherche EN ARRIÈRE depuis le début du tableau
+// Patapédia — elle précède toujours son tableau. Pour la Matapédia c'est un lien
+// vers CEHQ, pour la Causapscal le champ est parfois vide : les deux cas sont
+// absorbés (retour null, la carte affiche —).
+//
+// Cache 1 h, comme les montaisons : la CGRMP publie les chiffres de la veille
+// dans le courant de l'avant-midi.
+async function fetchPatapedia() {
+  const key = `pata_${todayStr}`;
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      try {
+        const p = JSON.parse(cached);
+        if (p && p._t && p.data && (Date.now() - p._t) < 3600 * 1000) return p.data;
+      } catch(e) {}
+      localStorage.removeItem(key);
+    }
+
+    const cible = 'https://rivierematapedia.com/peche-information/statistiques.html';
+    const ctrl = new AbortController();
+    const tmout = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(
+      `https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=${encodeURIComponent(cible)}`,
+      { cache: 'no-store', signal: ctrl.signal }
+    );
+    clearTimeout(tmout);
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    const nett = x => x.replace(/<[^>]*>/g, ' ')
+                       .replace(/&nbsp;/gi, ' ')
+                       .replace(/&#160;/g, ' ')
+                       .replace(/\s+/g, ' ')
+                       .trim();
+
+    const tables = html.match(/<table[\s\S]*?<\/table>/gi) || [];
+    let tbl = null, idx = -1;
+    for (const t of tables) {
+      if (/P[EÊ]CHEURS\s+rivi[eè]re\s+Patap[eé]dia/i.test(nett(t))) {
+        tbl = t; idx = html.indexOf(t); break;
+      }
+    }
+    if (!tbl) return null;
+
+    const lignes = (tbl.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || []).map(tr =>
+      (tr.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || []).map(nett)
+    );
+
+    let date = '', pecheurs = null;
+    const secteurs = [];
+    lignes.forEach(c => {
+      if (!c.length) return;
+      // Ligne d'en-tête : ["2026","18 août","TOTAL 2026","TOTAL 2025"]
+      if (/^\d{4}$/.test(c[0]) && c[1]) { date = c[1]; return; }
+      if (/P[EÊ]CHEURS/i.test(c[0])) {
+        pecheurs = { auj: c[1] || '—', a2026: c[2] || '—', a2025: c[3] || '—' };
+        return;
+      }
+      const ms = c[0].match(/secteur\s*(\d+)/i);
+      if (ms) {
+        secteurs.push({ num: ms[1], auj: c[1] || '—',
+                        a2026: c[2] || '—', a2025: c[3] || '—' });
+      }
+    });
+    if (!pecheurs && !secteurs.length) return null;
+
+    // Hauteur : en arrière depuis le début du tableau Patapédia.
+    // On prend la DERNIÈRE ancre « HAUTEUR ... EAU » avant le tableau, pas la
+    // première : la Matapédia a la sienne plus haut dans la page, et selon la
+    // longueur de sa liste de PDF elle peut tomber dans la fenêtre de recherche.
+    // Avec la première occurrence, on ramassait sa valeur (un lien vers CEHQ)
+    // au lieu de celle de la Patapédia — bug attrapé au banc d'essai.
+    let hauteur = null;
+    const avant = html.substring(Math.max(0, idx - 6000), idx);
+    const reH = /HAUTEUR[\s\S]{0,40}?EAU/gi;
+    let mH, iH = -1;
+    while ((mH = reH.exec(avant)) !== null) iH = mH.index;
+    if (iH >= 0) {
+      const brut = nett(avant.substring(iH))
+        .replace(/^[\s\S]*?EAU\s*:?\s*/i, '')
+        .replace(/&rsquo;|&#39;/gi, "'")
+        .replace(/&frac12;/gi, '½').replace(/&frac14;/gi, '¼').replace(/&frac34;/gi, '¾')
+        .trim();
+      // Une jauge tient en quelques caractères (« 5½ », « 6 », « 4 3/4 »).
+      // Au-delà, c'est qu'on a ramassé autre chose — on préfère ne rien montrer.
+      if (brut && brut.length <= 12) hauteur = brut;
+    }
+
+    const data = { date, hauteur, pecheurs, secteurs };
+    safeSetItem(key, JSON.stringify({ data, _t: Date.now() }));
+    return data;
+  } catch(e) {}
+  return null;
 }
 
 // ─── Pêcheurs — Manisoft standard + scraping CGRMP (Matapédia) ───────────────
@@ -2312,6 +2450,12 @@ async function loadStation(stationId) {
     }).catch(() => {});
   }
 
+  if (s.cgrmp) {
+    fetchPatapedia().then(p => {
+      if (p) { state[stationId].pata = p; scheduleRender(stationId); }
+    }).catch(() => {});
+  }
+
   if (s.licor) {
     fetchTempLicor(s).then(t => {
       if (t) {
@@ -2420,6 +2564,17 @@ function validateStationData(stationId) {
   if (!st || !s) return [];
   if (stationId === 'MITIS') return [];  // Station spéciale, pas de débit/hydratation
 
+  // Patapédia : aucune station hydrométrique ni marées. On ne surveille que ce
+  // qui existe réellement pour elle — météo, données CGRMP, température GINU.
+  if (stationId === 'PATAPEDIA') {
+    const m = [];
+    if (!st.sunrise || !st.sunset || st.rain === null || st.rain === undefined
+        || st.rainProb === null || st.rainProb === undefined) m.push('weather');
+    if (!st.pata) m.push('patapedia');
+    if (st.tempEau === null || st.tempEau === undefined) m.push('templicor');
+    return m;
+  }
+
   const missing = [];
 
   // Hydratation / tendance / sparkline : il faut avoir ≥12 mesures
@@ -2510,6 +2665,9 @@ async function retryMissingData(stationId, categories) {
           state[stationId].anglers = anglers;
           scheduleRender(stationId);
         }
+      } else if (cat === 'patapedia') {
+        const p = await fetchPatapedia();
+        if (p) { state[stationId].pata = p; scheduleRender(stationId); }
       } else if (cat === 'templicor') {
         const t = await fetchTempLicor(s);
         if (t) {
@@ -2753,9 +2911,16 @@ function renderCard(stationId) {
   // pas utilisées visuellement et ont été retirées de :root pour alléger le CSS.
   card.querySelector('.card-color-bar').style.background = 'var(--debit-color)';
 
-  // Débit
+  // Débit — ou hauteur d'eau pour les stations sans hydrométrie (Patapédia).
+  // La jauge CGRMP est un TEXTE (« 5½ »), pas un nombre : aucun toFixed, aucune
+  // unité ajoutée. On ne sait pas dans quelle unité la CGRMP la publie et on ne
+  // l'invente pas.
   const debitEl = card.querySelector('.debit-value');
-  if (st.status === 'loading') {
+  if (stationId === 'PATAPEDIA') {
+    const h = st.pata?.hauteur;
+    debitEl.textContent = h || (st.pata ? '—' : '···');
+    debitEl.style.color = h ? 'var(--debit-color)' : '#9ab5c7';
+  } else if (st.status === 'loading') {
     debitEl.textContent = '···';
     debitEl.style.color = '#9ab5c7';
   } else if (st.debit !== null) {
@@ -2800,8 +2965,15 @@ function renderCard(stationId) {
 
   // Message statut
   const msg = card.querySelector('.status-msg');
-  msg.textContent = st.msg || '';
-  msg.className = 'status-msg' + (st.status === 'ok' ? ' ok' : st.status === 'error' ? ' err' : '');
+  if (stationId === 'PATAPEDIA') {
+    msg.textContent = st.pata
+      ? (st.pata.date ? `Jauge CGRMP — en date du ${st.pata.date}` : 'Jauge CGRMP')
+      : 'Chargement...';
+    msg.className = 'status-msg' + (st.pata ? ' ok' : '');
+  } else {
+    msg.textContent = st.msg || '';
+    msg.className = 'status-msg' + (st.status === 'ok' ? ' ok' : st.status === 'error' ? ' err' : '');
+  }
 
   if (!st.expanded) return;
 
@@ -2877,6 +3049,39 @@ function renderCard(stationId) {
   const rainProbEl = card.querySelector('.dv-rain-prob');
   if (rainMmEl) rainMmEl.innerHTML = st.rain !== null ? st.rain.toFixed(1) : '—';
   if (rainProbEl) rainProbEl.innerHTML = st.rainProb !== null ? `${st.rainProb}%` : '—';
+
+  // Patapédia — pêcheurs (rivière entière) et captures/RAE par secteur.
+  // La CGRMP ne ventile PAS les pêcheurs par secteur : un seul chiffre pour la
+  // rivière. Ce sont les captures qui sont ventilées 1-2-3.
+  const pEl = card.querySelector('.dv-pata-pecheurs');
+  if (pEl) {
+    const p = st.pata;
+    const g = (o, k) => (o && o[k] != null && o[k] !== '') ? o[k] : '—';
+    card.querySelector('.dv-pata-auj').textContent   = g(p?.pecheurs, 'auj');
+    card.querySelector('.dv-pata-2026').textContent  = g(p?.pecheurs, 'a2026');
+    card.querySelector('.dv-pata-2025').textContent  = g(p?.pecheurs, 'a2025');
+
+    const secEl = card.querySelector('.dv-pata-secteurs');
+    if (secEl) {
+      if (p?.secteurs?.length) {
+        secEl.innerHTML = p.secteurs.map(x =>
+          `<div style="display:flex;align-items:baseline;gap:6px;padding:4px 0;
+                       border-bottom:1px solid rgba(201,168,76,0.12)">
+            <span style="font-size:0.6rem;color:var(--accent);font-weight:700;
+                         width:60px;flex-shrink:0">SECT. ${x.num}</span>
+            <span style="flex:1;text-align:center;font-size:0.85rem;
+                         font-weight:700;color:var(--text)">${x.auj}</span>
+            <span style="width:52px;text-align:right;font-size:0.72rem;
+                         color:var(--text)">${x.a2026}</span>
+            <span style="width:46px;text-align:right;font-size:0.68rem;
+                         color:var(--muted)">${x.a2025}</span>
+          </div>`
+        ).join('');
+      } else {
+        secEl.innerHTML = '<div style="font-size:0.7rem;color:var(--muted)">···</div>';
+      }
+    }
+  }
 
   // Température eau/air — GINU via LI-COR Cloud
   // Seuils saumon : thermoregulation des 17-19 °C (these Frechette,
@@ -3216,22 +3421,26 @@ function buildCards() {
         : '';
 
     const cehqUrl = `https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=${s.id}%20%20%20%20&Zone=&Secteur=`;
-    const nameHtml = s.id === 'MITIS'
+    const sansCehq = (s.id === 'MITIS' || s.id === 'PATAPEDIA');
+    const nameHtml = sansCehq
       ? s.name
       : `<a href="${cehqUrl}" target="_blank" onclick="event.stopPropagation()" style="color:inherit;text-decoration:none;border-bottom:1px solid #d8dee0">${s.name}</a>`;
+    const sousTitre = s.id === 'PATAPEDIA' ? "HAUTEUR D'EAU — CGRMP"
+                    : s.id === 'MITIS'     ? 'AUCUNE STATION CEHQ'
+                    :                        `STATION ${s.id}`;
 
     div.innerHTML = `
       <div class="card-color-bar"></div>
       <div class="card-header">
         <div>
           <div class="river-name">${nameHtml}</div>
-          <div class="station-id">${s.id === 'MITIS' ? 'AUCUNE STATION CEHQ' : `STATION ${s.id}`}</div>
+          <div class="station-id">${sousTitre}</div>
         </div>
         <div class="prevision-mini"></div>
         <div class="debit-main">
           <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:4px">
             <div class="debit-value" style="color:#9ab5c7">—</div>
-            <div class="debit-unit">m³/s</div>
+            <div class="debit-unit">${s.id === 'PATAPEDIA' ? '' : 'm³/s'}</div>
           </div>
           <div class="trend-badge trend-nd">N/D</div>
         </div>
@@ -3335,11 +3544,48 @@ function buildCards() {
             </div>
           </div>
         </div>`}
+        ${s.cgrmp ? `
+        <div class="detail-item" style="margin-top:6px">
+          <div class="d-section-head">
+            <div class="d-icon">🎣</div>
+            <div class="d-section-title">Pêcheurs — ${s.name}</div>
+          </div>
+          <div class="d-row dv-pata-pecheurs">
+            <div class="d-col">
+              <div class="d-sublabel">Auj.</div>
+              <div class="dv-pata-auj d-value" style="font-size:1.4rem;margin-top:3px">—</div>
+            </div>
+            <div class="d-divider-v"></div>
+            <div class="d-col">
+              <div class="d-sublabel">Total 2026</div>
+              <div class="dv-pata-2026 d-value-accent" style="font-size:1.4rem;margin-top:3px">—</div>
+            </div>
+            <div class="d-divider-v"></div>
+            <div class="d-col">
+              <div class="d-sublabel">Total 2025</div>
+              <div class="dv-pata-2025 d-value" style="font-size:1.4rem;margin-top:3px;color:var(--muted)">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-item" style="margin-top:6px">
+          <div class="d-section-head">
+            <div class="d-icon">🐟</div>
+            <div class="d-section-title">Captures + RAE par secteur</div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:6px;padding-bottom:3px;
+                      border-bottom:1px solid rgba(201,168,76,0.25)">
+            <span style="width:60px;flex-shrink:0"></span>
+            <span class="d-sublabel" style="flex:1;text-align:center">Auj.</span>
+            <span class="d-sublabel" style="width:52px;text-align:right">2026</span>
+            <span class="d-sublabel" style="width:46px;text-align:right">2025</span>
+          </div>
+          <div class="dv-pata-secteurs" style="margin-top:2px"></div>
+        </div>` : ''}
         ${s.licor ? `
         <div class="detail-item" style="margin-top:6px">
           <div class="d-section-head">
             <div class="d-icon">🌡️</div>
-            <div class="d-section-title">Température de l'eau</div>
+            <div class="d-section-title">Température de l'eau${s.licorNom ? ' — ' + s.licorNom : ''}</div>
           </div>
           <div class="d-row">
             <div class="d-col">
@@ -3392,9 +3638,16 @@ function buildCards() {
     // de statistiques 24h (Var. / Max / Min). On retire la rangée de stats
     // débit pour cette station uniquement — les autres détails (lever,
     // coucher, marées, montaisons) restent affichés.
-    if (s.id === 'MITIS') {
+    if (sansCehq) {
       const statsRow = div.querySelector('.debit-stats-row');
       if (statsRow) statsRow.style.display = 'none';
+    }
+    // Patapédia : la jauge CGRMP est une valeur ponctuelle saisie à la main.
+    // Aucun historique, donc aucune tendance à afficher — un badge « N/D »
+    // laisserait croire à une donnée manquante alors qu'elle n'existe pas.
+    if (s.id === 'PATAPEDIA') {
+      const tb = div.querySelector('.trend-badge');
+      if (tb) tb.style.display = 'none';
     }
     grid.appendChild(div);
   });
@@ -3414,7 +3667,8 @@ try {
     // jusqu'à 240 appels Open-Meteo par jour si l'app était ouverte 10x.
     // Maintenant : cache 30 min respecté, ~24 appels/jour pour 12 stations.
     if ((k.startsWith('weather_') || k.startsWith('montaisons_')
-         || k.startsWith('tides_') || k.startsWith('licor_'))
+         || k.startsWith('tides_') || k.startsWith('licor_')
+         || k.startsWith('pata_'))
         && !k.endsWith(todayStr)) {
       toRemove.push(k);
     }
