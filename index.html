@@ -92,6 +92,7 @@
 <link rel="dns-prefetch" href="https://api-iwls.dfo-mpo.gc.ca">
 <link rel="dns-prefetch" href="https://pav.manisoft.ca">
 <link rel="dns-prefetch" href="https://pavnew.manisoft.ca">
+<link rel="dns-prefetch" href="https://www.licor.cloud">
 
 <!-- Google Fonts — chargement bloquant volontaire.
      On a testé la technique preload + onload (LCP de 1.7→1.0s) mais ça
@@ -704,6 +705,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     Marées — Pêches et Océans Canada (IWLS / MPO)<br>
     Météo — Open-Meteo &amp; Environnement Canada (GEM)<br>
     Pêcheurs — Manisoft / Zecs participantes<br>
+    Température de l'eau — GINU / RivTemp<br>
     Statistiques sportives — MFFP, gouvernement du Québec
   </div>
   <br>
@@ -713,7 +715,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.55</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.56</div>
 </footer>
 
 <script>
@@ -803,6 +805,9 @@ const STATIONS = [
   { id:'011509', name:'Matapédia', region:'gaspesie', lat:48.3800, lng:-67.3700,
     iwlsCode:'02175', iwlsName:'Campbellton',
     anglersUrl:'https://rivierematapedia.com/peche-information/statistiques.html',
+    licor:{dash:'fe3a5fc5-c5e2-4e72-8420-238421f69b85',
+           ch:['5f91e09d-4093-431a-9495-e77ccc4b6773',
+               'a9694522-61aa-43b3-9d9d-965c5544e579']},
     links:[
       {label:'🎫 Acheter droits', url:'https://pavnew.manisoft.ca/login.php?idZec=cgrmp'},
       {label:'🌐 CGRMP', url:'https://rivierematapedia.com'}
@@ -907,7 +912,8 @@ STATIONS.forEach(s => {
   state[s.id] = { debit:null, trend:null, status:'idle', msg:'', expanded:false,
                   sunrise:null, sunset:null, var24h:null, max24h:null, min24h:null,
                   tides:null, anglers:null, montaisons:null, rain:null, rainProb:null,
-                  prevision:null, _histCache: histCache };
+                  prevision:null, tempEau:null, tempAir:null, tempTs:null,
+                  _histCache: histCache };
 });
 
 // ─── CSS var cache — résolution unique par variable ───────────────────────────
@@ -1734,6 +1740,86 @@ async function fetchTides(s) {
   }
 }
 
+// ─── Température de l'eau — LI-COR Cloud (GINU) ───────────────────────────────
+// Station RX3000 en aval de la Matapedia, maintenue par le Gespe'gewa'gi
+// Institute of Natural Understanding (GINU, Listuguj) avec l'ASCF, le RRWMC et
+// l'INRS. Publiee via le reseau RivTemp. Deux capteurs S-TMB : eau et air,
+// releves aux ~20 min.
+//
+// L'API est un POST JSON. Verifie en conditions reelles depuis github.io le
+// 18 aout 2026 : repond 200 sans cookie ni jeton, avec Access-Control-Allow-
+// Origin *. Aucun proxy necessaire — c'est la seule source de l'app appelee
+// en direct.
+//
+// Reponse : value.records[] ou chaque entree porte un sensorLabel ("Water" /
+// "Air") et datum.valid[0] = [timestampMs, valeur]. On se fie au LABEL, pas a
+// l'ordre des canaux : si GINU reordonne son tableau de bord, rien ne casse.
+//
+// Cache 15 min — la station publie aux 20 min, inutile de la marteler.
+async function fetchTempLicor(s) {
+  if (!s.licor) return null;
+  const key = `licor_${s.id}_${todayStr}`;
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      try {
+        const p = JSON.parse(cached);
+        if (p && p._t && p.data && (Date.now() - p._t) < 15 * 60 * 1000) return p.data;
+      } catch(e) {}
+      localStorage.removeItem(key);
+    }
+
+    const body = {
+      channels: s.licor.ch.map(u => ({
+        channelUUID: u,
+        channelType: 'dataChannel',
+        metricName: 'com.onset.sensordata.temperature_si',
+        aggregationFunction: 'avg',
+        aggregationInterval: { value: 1, unit: 'minutes' },
+        limit: 1,
+        order: 'desc'
+      })),
+      time: { relative: { last: 1, unit: 'days' } },
+      dashboardUUID: s.licor.dash
+    };
+
+    const ctrl = new AbortController();
+    const tmout = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch('https://www.licor.cloud/api/v2/timeseriesdata', {
+      method: 'POST',
+      credentials: 'omit',
+      cache: 'no-store',
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    clearTimeout(tmout);
+    if (!res.ok) return null;
+
+    let json;
+    try { json = await res.json(); } catch(e) { return null; }
+    const recs = json && json.value && json.value.records;
+    if (!Array.isArray(recs) || !recs.length) return null;
+
+    let eau = null, air = null, ts = null;
+    recs.forEach(r => {
+      const pt = r && r.datum && r.datum.valid && r.datum.valid[0];
+      if (!Array.isArray(pt) || pt.length < 2) return;
+      const t = pt[0], v = pt[1];
+      if (typeof v !== 'number' || isNaN(v)) return;
+      const lab = String(r.sensorLabel || '');
+      if (/water/i.test(lab))    { eau = v; ts = t; }
+      else if (/air/i.test(lab)) { air = v; if (ts === null) ts = t; }
+    });
+    if (eau === null && air === null) return null;
+
+    const data = { eau, air, ts };
+    safeSetItem(key, JSON.stringify({ data, _t: Date.now() }));
+    return data;
+  } catch(e) {}
+  return null;
+}
+
 // ─── Montaisons — cache localStorage par jour ─────────────────────────────────
 async function fetchMontaisons(stationId) {
   const key = `montaisons_${stationId}_${todayStr}`;
@@ -2226,6 +2312,17 @@ async function loadStation(stationId) {
     }).catch(() => {});
   }
 
+  if (s.licor) {
+    fetchTempLicor(s).then(t => {
+      if (t) {
+        state[stationId].tempEau = t.eau;
+        state[stationId].tempAir = t.air;
+        state[stationId].tempTs  = t.ts;
+        scheduleRender(stationId);
+      }
+    }).catch(() => {});
+  }
+
   fetchPrevision(stationId).then(prevision => {
     if (prevision) { state[stationId].prevision = prevision; scheduleRender(stationId); }
   }).catch(() => {});
@@ -2357,6 +2454,13 @@ function validateStationData(stationId) {
     }
   }
 
+  // Température GINU : seulement si la station en a
+  if (s.licor) {
+    if (st.tempEau === null || st.tempEau === undefined) {
+      missing.push('templicor');
+    }
+  }
+
   // Prévision : on tolère 2-4 points (CEHQ ne publie pas toujours 4 jours
   // pleins selon l'heure de la journée). On ne la considère "manquante" que
   // si elle est vide ou réduite à 1 point (pas assez pour une mini-courbe).
@@ -2404,6 +2508,14 @@ async function retryMissingData(stationId, categories) {
         const anglers = await fetchAnglers(s);
         if (anglers) {
           state[stationId].anglers = anglers;
+          scheduleRender(stationId);
+        }
+      } else if (cat === 'templicor') {
+        const t = await fetchTempLicor(s);
+        if (t) {
+          state[stationId].tempEau = t.eau;
+          state[stationId].tempAir = t.air;
+          state[stationId].tempTs  = t.ts;
           scheduleRender(stationId);
         }
       } else if (cat === 'prevision') {
@@ -2766,6 +2878,42 @@ function renderCard(stationId) {
   if (rainMmEl) rainMmEl.innerHTML = st.rain !== null ? st.rain.toFixed(1) : '—';
   if (rainProbEl) rainProbEl.innerHTML = st.rainProb !== null ? `${st.rainProb}%` : '—';
 
+  // Température eau/air — GINU via LI-COR Cloud
+  // Seuils saumon : thermoregulation des 17-19 °C (these Frechette,
+  // Sainte-Marguerite), stress severe a 23 °C (seuil suivi par GINU).
+  const tEauEl = card.querySelector('.dv-temp-eau');
+  if (tEauEl) {
+    const te = st.tempEau, ta = st.tempAir;
+    if (te !== null && te !== undefined) {
+      tEauEl.textContent = te.toFixed(1) + ' °C';
+      tEauEl.style.color = te >= 22 ? '#f06260'
+                         : te >= 19 ? '#f0a04c'
+                         : te >= 17 ? '#c9a84c'
+                         :            '#4ade9a';
+    } else {
+      tEauEl.textContent = '—';
+      tEauEl.style.color = 'var(--text)';
+    }
+    const tAirEl = card.querySelector('.dv-temp-air');
+    if (tAirEl) tAirEl.textContent = (ta !== null && ta !== undefined)
+      ? ta.toFixed(1) + ' °C' : '—';
+
+    const tDateEl = card.querySelector('.dv-temp-date');
+    if (tDateEl) {
+      if (st.tempTs) {
+        const d = new Date(st.tempTs);
+        if (!isNaN(d)) {
+          const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Toronto',
+            hour: '2-digit', minute: '2-digit', hour12: false
+          }).formatToParts(d);
+          const g = t => (parts.find(p => p.type === t) || {}).value || '';
+          tDateEl.textContent = `GINU · ${g('hour')}:${g('minute')}`;
+        } else tDateEl.textContent = 'GINU';
+      } else tDateEl.textContent = '';
+    }
+  }
+
   // Montaisons
   // Tant que rien n'est rentré (0/0/0 ou pas de réponse), on garde le label
   // "Saison 2026 — en attente". Dès qu'au moins 1 saumon est compté (total > 0),
@@ -2832,10 +2980,11 @@ function filterStations(filter, btn) {
 const MONT_RIVIERES = {
   // ── SAINTE-ANNE — secteur aval ──────────────────────────────────────────
   // Deux observations : la fosse aux Fers à PM+1h (JP, grandes marées) et la
-  // Grande-Fosse (27 km) rejointe en ~24 h (guides). Croisées avec les vitesses
-  // de montaison réellement OBSERVÉES par télémétrie sur saumon atlantique
-  // adulte en rivière basse (Penobscot, Maine : 0,04 à 2,4 km/h, médiane 1,0),
-  // elles contraignent la vitesse au-dessus de l'ancrage à 1,05–1,16 km/h.
+  // Grande-Fosse (26,4 km au-dessus de l'ancrage, soit 37,3 km de l'embouchure)
+  // rejointe en ~24 h (guides). Croisées avec les vitesses de montaison
+  // réellement OBSERVÉES par télémétrie sur saumon atlantique adulte en
+  // rivière basse (Penobscot, Maine : 0,04 à 2,4 km/h, médiane 1,0), elles
+  // contraignent la vitesse au-dessus de l'ancrage à 1,05–1,16 km/h.
   // Le plafond de 2,4 km/h vient de ce qui est observé, non de la capacité
   // physiologique (~4 km/h) que les saumons n'utilisent pas en montaison.
   '021407': {
@@ -2861,7 +3010,7 @@ const MONT_RIVIERES = {
     note: 'Ancrage : la run atteint la <b>fosse aux Fers à PM+1h</b>, observé sur '
         + 'les grandes marées. Au-dessus, elle progresse à <b>1,05 à 1,16 km/h</b> — '
         + 'plage déduite des 24 h que mettent les saumons à rejoindre la Grande-Fosse '
-        + '(27 km), et recoupée avec les vitesses de montaison observées par télémétrie (Penobscot : 0,04 à 2,4 km/h, médiane 1,0).'
+        + '(26 km au-dessus de l\'ancrage, 37 km de l\'embouchure), et recoupée avec les vitesses de montaison observées par télémétrie (Penobscot : 0,04 à 2,4 km/h, médiane 1,0).'
   },
 
   // ── PETITE CASCAPÉDIA — secteur B ───────────────────────────────────────
@@ -2900,7 +3049,7 @@ const MONT_RIVIERES = {
         + 'prolonge au-dessus puisque la pente ne change pas dans le secteur '
         + '(3,2 m/km — comparable au tronçon <i>bas</i> de la Sainte-Anne, pas au '
         + 'haut). L\'écart affiché vient de l\'heure de départ, inconnue, bornée par '
-        + 'la capacité de nage du saumon : <b>1,70 à 3,32 km/h</b>.<br><br>Marées de <b>Carleton</b>, à ~30 km à l\'ouest : la '
+        + 'la capacité de nage du saumon : <b>1,70 à 2,40 km/h</b>.<br><br>Marées de <b>Carleton</b>, à ~30 km à l\'ouest : la '
         + 'pleine mer y arrive une quinzaine de minutes après New Richmond. '
         + 'Distances mesurées depuis la Pointe Taylor, entrée de la baie.'
   },
@@ -3186,6 +3335,25 @@ function buildCards() {
             </div>
           </div>
         </div>`}
+        ${s.licor ? `
+        <div class="detail-item" style="margin-top:6px">
+          <div class="d-section-head">
+            <div class="d-icon">🌡️</div>
+            <div class="d-section-title">Température de l'eau</div>
+          </div>
+          <div class="d-row">
+            <div class="d-col">
+              <div class="d-sublabel">Eau</div>
+              <div class="dv-temp-eau d-value" style="font-size:1.4rem;margin-top:3px">—</div>
+            </div>
+            <div class="d-divider-v"></div>
+            <div class="d-col">
+              <div class="d-sublabel">Air</div>
+              <div class="dv-temp-air d-value" style="font-size:1.4rem;margin-top:3px">—</div>
+            </div>
+          </div>
+          <div class="dv-temp-date" style="font-size:0.5rem;color:#9ab5c7;margin-top:5px;text-align:right"></div>
+        </div>` : ''}
         ${MONT_RIVIERES[s.id] ? `
         <div class="detail-item" style="margin-top:6px;text-align:center;cursor:pointer"
              onclick="event.stopPropagation(); ouvrirMontaison('${s.id}')">
@@ -3240,12 +3408,13 @@ try {
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (!k) continue;
-    // weather_, montaisons_, tides_ : purgés si pas du jour courant.
+    // weather_, montaisons_, tides_, licor_ : purgés si pas du jour courant.
     // Pour weather_, le cache de 30 min interne à fetchWeather() gère la
     // fraîcheur. Pas besoin de purger à chaque démarrage — ça causait
     // jusqu'à 240 appels Open-Meteo par jour si l'app était ouverte 10x.
     // Maintenant : cache 30 min respecté, ~24 appels/jour pour 12 stations.
-    if ((k.startsWith('weather_') || k.startsWith('montaisons_') || k.startsWith('tides_'))
+    if ((k.startsWith('weather_') || k.startsWith('montaisons_')
+         || k.startsWith('tides_') || k.startsWith('licor_'))
         && !k.endsWith(todayStr)) {
       toRemove.push(k);
     }
