@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sonde 3</title>
+<title>Sonde 4</title>
 <style>
 body{background:#142230;color:#f0ede4;font-family:monospace;padding:14px;font-size:12px}
 h1{font-size:14px;color:#c9a84c}
@@ -12,7 +12,7 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:11px;
 </style>
 </head>
 <body>
-<h1>Valeurs — Restigouche</h1>
+<h1>Parser CGRMP — Patapédia</h1>
 <pre id="out">Demarrage...</pre>
 
 <script>
@@ -20,46 +20,51 @@ var out = document.getElementById("out");
 function log(s){ out.textContent += "\n" + s; }
 window.onerror = function(m,f,l){ log("ERREUR ligne " + l + " : " + m); };
 
-var UUIDS = [
-  "9a572aee-e741-45cc-9968-25fd98859837",
-  "4912163a-49ad-4261-8a38-91ec07443d61",
-  "5f96b027-404e-4e01-b776-0636e032d06e"
-];
+var cible = "https://rivierematapedia.com/peche-information/statistiques.html";
+var url = "https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=" + encodeURIComponent(cible);
 
-var body = {
-  channels: UUIDS.map(function(u){
-    return {
-      channelUUID: u,
-      channelType: "dataChannel",
-      metricName: "com.onset.sensordata.temperature_si",
-      aggregationFunction: "avg",
-      aggregationInterval: { value: 1, unit: "minutes" },
-      limit: 1,
-      order: "desc"
-    };
-  }),
-  time: { relative: { last: 1, unit: "days" } },
-  dashboardUUID: "b13ff345-faa4-434d-b91e-9581ad5c7fc7"
-};
+fetch(url, { cache: "no-store" })
+.then(function(r){ log("HTTP " + r.status); return r.text(); })
+.then(function(h){
+  log("Taille : " + h.length + "\n");
 
-fetch("https://www.licor.cloud/api/v2/timeseriesdata", {
-  method: "POST", credentials: "omit",
-  headers: {"Content-Type":"application/json"},
-  body: JSON.stringify(body)
-})
-.then(function(r){ log("HTTP " + r.status); return r.json(); })
-.then(function(j){
-  var recs = j && j.value && j.value.records;
-  if (!recs) { log("pas de records"); log(JSON.stringify(j).substring(0,800)); return; }
-  log("Records : " + recs.length + "\n");
-  recs.forEach(function(r){
-    var pt = r.datum && r.datum.valid && r.datum.valid[0];
-    log("LABEL   : " + r.sensorLabel);
-    log("VALEUR  : " + (pt ? pt[1] : "aucune"));
-    log("HEURE   : " + (pt ? new Date(pt[0]).toLocaleString("fr-CA") : "-"));
-    log("UNITE   : " + r.metricUnits + "   canal " + r.channelUUID.substring(0,8));
-    log("");
+  var iPata = h.search(/rivi[eè]re\s+Patap[eé]dia/i);
+  log("Ancre PÊCHEURS Patapedia a l index : " + iPata);
+  if (iPata < 0) { log("ANCRE INTROUVABLE"); return; }
+
+  // --- Hauteur : chercher en ARRIERE depuis l ancre
+  var avant = h.substring(Math.max(0, iPata - 4000), iPata);
+  var iH = avant.search(/HAUTEUR\s*DE\s*L\s*['\u2019]?\s*EAU/i);
+  if (iH < 0) { log("HAUTEUR : ancre introuvable"); }
+  else {
+    var seg = avant.substring(iH);
+    seg = seg.replace(/HAUTEUR\s*DE\s*L\s*['\u2019]?\s*EAU\s*:?/i, "");
+    seg = seg.replace(/<[^>]*>/g, " ")
+             .replace(/&nbsp;/gi, " ").replace(/&#160;/g, " ")
+             .replace(/\s+/g, " ").trim();
+    log("HAUTEUR brute : [" + seg.substring(0,60) + "]");
+  }
+
+  // --- Tableau Patapedia
+  var fin = h.indexOf("</table>", iPata);
+  var tbl = h.substring(iPata, fin < 0 ? iPata + 4000 : fin);
+  var lignes = tbl.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+  log("\nLignes du tableau : " + lignes.length);
+
+  function cells(tr){
+    var c = tr.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [];
+    return c.map(function(x){
+      return x.replace(/<[^>]*>/g," ").replace(/&nbsp;/gi," ")
+              .replace(/&#160;/g," ").replace(/\s+/g," ").trim();
+    });
+  }
+  lignes.forEach(function(tr,i){
+    log("  [" + i + "] " + JSON.stringify(cells(tr)));
   });
+
+  // --- Premiere valeur numerique apres l ancre (pecheurs du jour)
+  var m = h.substring(iPata).match(/<td[^>]*>\s*(\d+)\s*<\/td>/i);
+  log("\nPECHEURS auj. : " + (m ? m[1] : "introuvable"));
 })
 .catch(function(e){ log("ECHEC : " + e.message); });
 </script>
