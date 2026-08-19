@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sonde 4</title>
+<title>Sonde 5</title>
 <style>
 body{background:#142230;color:#f0ede4;font-family:monospace;padding:14px;font-size:12px}
 h1{font-size:14px;color:#c9a84c}
@@ -12,7 +12,7 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:11px;
 </style>
 </head>
 <body>
-<h1>Parser CGRMP — Patapédia</h1>
+<h1>Parser CGRMP — Patapédia v2</h1>
 <pre id="out">Demarrage...</pre>
 
 <script>
@@ -23,48 +23,47 @@ window.onerror = function(m,f,l){ log("ERREUR ligne " + l + " : " + m); };
 var cible = "https://rivierematapedia.com/peche-information/statistiques.html";
 var url = "https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=" + encodeURIComponent(cible);
 
+function nett(x){
+  return x.replace(/<[^>]*>/g," ").replace(/&nbsp;/gi," ")
+          .replace(/&#160;/g," ").replace(/\s+/g," ").trim();
+}
+
 fetch(url, { cache: "no-store" })
 .then(function(r){ log("HTTP " + r.status); return r.text(); })
 .then(function(h){
-  log("Taille : " + h.length + "\n");
+  log("Taille : " + h.length);
 
-  var iPata = h.search(/rivi[eè]re\s+Patap[eé]dia/i);
-  log("Ancre PÊCHEURS Patapedia a l index : " + iPata);
-  if (iPata < 0) { log("ANCRE INTROUVABLE"); return; }
+  // Toutes les tables de la page
+  var tables = h.match(/<table[\s\S]*?<\/table>/gi) || [];
+  log("Tables sur la page : " + tables.length + "\n");
 
-  // --- Hauteur : chercher en ARRIERE depuis l ancre
-  var avant = h.substring(Math.max(0, iPata - 4000), iPata);
-  var iH = avant.search(/HAUTEUR\s*DE\s*L\s*['\u2019]?\s*EAU/i);
-  if (iH < 0) { log("HAUTEUR : ancre introuvable"); }
-  else {
-    var seg = avant.substring(iH);
-    seg = seg.replace(/HAUTEUR\s*DE\s*L\s*['\u2019]?\s*EAU\s*:?/i, "");
-    seg = seg.replace(/<[^>]*>/g, " ")
-             .replace(/&nbsp;/gi, " ").replace(/&#160;/g, " ")
-             .replace(/\s+/g, " ").trim();
-    log("HAUTEUR brute : [" + seg.substring(0,60) + "]");
-  }
-
-  // --- Tableau Patapedia
-  var fin = h.indexOf("</table>", iPata);
-  var tbl = h.substring(iPata, fin < 0 ? iPata + 4000 : fin);
-  var lignes = tbl.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-  log("\nLignes du tableau : " + lignes.length);
-
-  function cells(tr){
-    var c = tr.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [];
-    return c.map(function(x){
-      return x.replace(/<[^>]*>/g," ").replace(/&nbsp;/gi," ")
-              .replace(/&#160;/g," ").replace(/\s+/g," ").trim();
-    });
-  }
-  lignes.forEach(function(tr,i){
-    log("  [" + i + "] " + JSON.stringify(cells(tr)));
+  var tblPata = null, idxPata = -1;
+  tables.forEach(function(t, i){
+    var txt = nett(t);
+    var estPata = /P[EÊ]CHEURS\s+rivi[eè]re\s+Patap[eé]dia/i.test(txt);
+    log("[table " + i + "] " + (estPata ? ">>> PATAPEDIA <<<" : "") );
+    log("   " + txt.substring(0,110) + "...");
+    if (estPata && !tblPata) { tblPata = t; idxPata = h.indexOf(t); }
   });
 
-  // --- Premiere valeur numerique apres l ancre (pecheurs du jour)
-  var m = h.substring(iPata).match(/<td[^>]*>\s*(\d+)\s*<\/td>/i);
-  log("\nPECHEURS auj. : " + (m ? m[1] : "introuvable"));
+  if (!tblPata) { log("\nTABLE PATAPEDIA INTROUVABLE"); return; }
+
+  log("\n=== TABLE PATAPEDIA ===");
+  var lignes = tblPata.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+  lignes.forEach(function(tr,i){
+    var c = (tr.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || []).map(nett);
+    log("  [" + i + "] " + JSON.stringify(c));
+  });
+
+  // Hauteur : en arriere depuis le debut de CETTE table
+  log("\n=== HAUTEUR ===");
+  var avant = h.substring(Math.max(0, idxPata - 3000), idxPata);
+  var iH = avant.search(/HAUTEUR[\s\S]{0,40}?EAU/i);
+  if (iH < 0) { log("ancre introuvable"); log("contexte : " + nett(avant.slice(-400))); }
+  else {
+    var seg = nett(avant.substring(iH));
+    log("brut : [" + seg.substring(0,80) + "]");
+  }
 })
 .catch(function(e){ log("ECHEC : " + e.message); });
 </script>
