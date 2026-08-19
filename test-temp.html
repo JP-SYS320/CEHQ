@@ -1,1 +1,35 @@
 
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test temp Matapédia</title>
+<style>
+body{background:#142230;color:#f0ede4;font-family:'SF Mono',monospace;
+     padding:16px;margin:0;font-size:13px;line-height:1.5}
+h1{font-size:15px;color:#c9a84c;margin:0 0 12px}
+.b{background:#1b2d3e;border:1px solid rgba(201,168,76,.25);
+   border-radius:8px;padding:12px;margin-bottom:12px}
+.t{color:#c9a84c;font-size:11px;letter-spacing:.1em;margin-bottom:8px}
+.ok{color:#4ade9a}.err{color:#f06260}
+pre{white-space:pre-wrap;word-break:break-all;font-size:11px;margin:0}
+.big{font-size:22px;font-weight:700;color:#88b8d4}
+</style>
+</head>
+<body>
+<h1>Test API licor.cloud — Matapédia</h1>
+<div class="b"><div class="t">TEST A — SANS COOKIE</div><div id="a">···</div></div>
+<div class="b"><div class="t">TEST B — AVEC COOKIE</div><div id="b">···</div></div>
+
+<script>
+const URL_API = 'https://www.licor.cloud/api/v2/timeseriesdata';
+const CH = uuid => ({
+  channelUUID: uuid, channelType:'dataChannel',
+  metricName:'com.onset.sensordata.temperature_si',
+  aggregationFunction:'avg',
+  aggregationInterval:{value:1,unit:'minutes'},
+  limit:1, order:'desc'
+});
+const BODY = {
+  channels:[ CH('5f91e09d-4093-431a-9495-e77
