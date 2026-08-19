@@ -3,66 +3,49 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Test temp</title>
+<title>Sonde dashboard</title>
 <style>
-body{background:#142230;color:#f0ede4;font-family:monospace;padding:16px;font-size:13px}
-h1{font-size:15px;color:#c9a84c}
+body{background:#142230;color:#f0ede4;font-family:monospace;padding:14px;font-size:12px}
+h1{font-size:14px;color:#c9a84c}
 pre{white-space:pre-wrap;word-break:break-all;font-size:11px;
-    background:#1b2d3e;padding:10px;border-radius:6px}
+    background:#1b2d3e;padding:9px;border-radius:6px}
 </style>
 </head>
 <body>
-<h1>Test API licor.cloud</h1>
+<h1>Sonde — dashboard Restigouche</h1>
 <pre id="out">Demarrage...</pre>
 
 <script>
 var out = document.getElementById("out");
 function log(s){ out.textContent += "\n" + s; }
+window.onerror = function(m,f,l){ log("ERREUR ligne " + l + " : " + m); };
 
-window.onerror = function(m,f,l){ log("ERREUR JS ligne " + l + " : " + m); };
+var UUID = "b13ff345-faa4-434d-b91e-9581ad5c7fc7";
+var base = "https://www.licor.cloud";
+var cands = [
+  "/api/v2/dashboards/public/" + UUID,
+  "/api/v2/dashboards/" + UUID,
+  "/api/v1/dashboards/public/" + UUID,
+  "/api/v2/dashboard/public/" + UUID
+];
 
-log("Script demarre OK");
-
-var ch = function(u){
-  return {
-    channelUUID: u,
-    channelType: "dataChannel",
-    metricName: "com.onset.sensordata.temperature_si",
-    aggregationFunction: "avg",
-    aggregationInterval: {value:1, unit:"minutes"},
-    limit: 1,
-    order: "desc"
-  };
-};
-
-var body = {
-  channels: [
-    ch("5f91e09d-4093-431a-9495-e77ccc4b6773"),
-    ch("a9694522-61aa-43b3-9d9d-965c5544e579")
-  ],
-  time: {relative:{last:1, unit:"days"}},
-  dashboardUUID: "fe3a5fc5-c5e2-4e72-8420-238421f69b85"
-};
-
-log("Body construit OK");
-log("Envoi de la requete...");
-
-fetch("https://www.licor.cloud/api/v2/timeseriesdata", {
-  method: "POST",
-  credentials: "omit",
-  headers: {"Content-Type":"application/json"},
-  body: JSON.stringify(body)
-})
-.then(function(r){
-  log("REPONSE HTTP " + r.status);
-  return r.text();
-})
-.then(function(t){
-  log("--- CONTENU ---");
-  log(t.substring(0,4000));
-})
-.catch(function(e){
-  log("ECHEC : " + e.message);
+cands.forEach(function(path){
+  fetch(base + path, { credentials: "omit", cache: "no-store" })
+  .then(function(r){
+    log("\n=== " + path + " → HTTP " + r.status);
+    return r.text();
+  })
+  .then(function(t){
+    var ids = t.match(/"channelUUID":"[0-9a-f-]+"/g);
+    if (ids) {
+      log("CANAUX TROUVES : " + ids.length);
+      ids.forEach(function(x){ log("  " + x); });
+    } else {
+      log("pas de channelUUID — extrait :");
+      log(t.substring(0,300));
+    }
+  })
+  .catch(function(e){ log("\n=== " + path + " → ECHEC : " + e.message); });
 });
 </script>
 </body>
