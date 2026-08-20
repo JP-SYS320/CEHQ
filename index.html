@@ -715,7 +715,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.57</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.58</div>
 </footer>
 
 <script>
@@ -957,8 +957,21 @@ async function fetchAllStations() {
   if (wfsPending) return wfsPending;
 
   wfsPending = (async () => {
+    // v1.58 : garde de temps. C'était le SEUL appel réseau du fichier sans
+    // AbortController — les huit autres en ont un (8 s, 20 s pour l'hydratation).
+    // Sans lui, un serveur qui accepte la connexion mais ne répond jamais laisse
+    // la promesse pendante ; comme wfsPending est PARTAGÉE par les 16 stations,
+    // le `finally` ne s'exécute pas et tous les refresh suivants se raccrochent
+    // au même appel mort. Safari finit par trancher de lui-même (~60 s), donc le
+    // blocage se résorbe seul — mais 10 s suffisent largement pour MSP et rendent
+    // la main bien plus vite. Le timeout laisse le fetch rejeter normalement :
+    // le finally libère wfsPending, wfsCache reste null, et le fallback CEHQ
+    // prend le relais station par station.
+    const ctrl = new AbortController();
+    const tmout = setTimeout(() => ctrl.abort(), 10000);
     try {
-      const res = await fetch(WFS_URL, { cache: 'no-store' });
+      const res = await fetch(WFS_URL, { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(tmout);
       if (!res.ok) throw new Error('API MSP indisponible');
       // v1.21 : MSP renvoie parfois un HTTP 200 avec un corps non-JSON (page
       // d'erreur HTML, XML de service WFS indisponible, réponse tronquée).
@@ -981,6 +994,7 @@ async function fetchAllStations() {
       );
       return wfsCache;
     } finally {
+      clearTimeout(tmout);
       wfsPending = null;
     }
   })();
@@ -2867,9 +2881,31 @@ function buildSpark(history, trend) {
   // (~12 m³/s, 0.2 = 1.7%) mais pas pour Matane (~33 m³/s, 0.2 = 0.6% = bruit
   // alors qu'on aurait voulu le seuil plus haut). Avec 0.5% de la médiane,
   // chaque rivière a son propre seuil proportionnel à son débit.
+  //
+  // v1.58 : critère DOUBLE. Le seuil relatif seul laissait passer un cas réel —
+  // Bonaventure à l'étiage d'août 2026 : 96 mesures propres aux 15 min, mais
+  // seulement 2 valeurs distinctes (9,88 et 9,94). Amplitude 0,060 m³/s sur une
+  // médiane de 9,88, soit 0,607 % — juste au-dessus du seuil de 0,500 %, qu'elle
+  // franchissait d'un dixième de point. L'échelle adaptative étirait donc ces
+  // 6 cl/s sur toute la hauteur : deux paliers à 20 % et 90 %, l'écart visuel
+  // maximal possible, pour une variation invisible sur l'eau.
+  //
+  // À bas débit, le capteur quantifie : il ne sort plus qu'une poignée de
+  // valeurs. Peu de valeurs distinctes est donc le signe d'une résolution
+  // grossière, pas d'un signal. Mais ce critère ne peut pas agir SEUL : la
+  // Dartmouth à 1,8 m³/s n'a elle aussi que 2 valeurs distinctes (1,8 / 1,9)
+  // alors que son amplitude atteint 5,6 % — là c'est une vraie variation.
+  // D'où la conjonction : peu de valeurs ET amplitude sous 2 %.
+  //
+  // Vérifié sur six profils : seule Bonaventure s'aplatit. Matapédia (2,4 %),
+  // Cascapédia (3,5 %), crue franche (91 %), baisse lente (1,5 % sur 24 paliers)
+  // et Dartmouth restent rendues comme avant.
   const sorted = [...history].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)] || 1;
-  const isNoise = range / median < 0.005;
+  const amplitude = range / median;
+  const distinctes = new Set(history).size;
+  const isNoise = amplitude < 0.005
+               || (distinctes < 5 && amplitude < 0.02);
   const real = history.map((v, i) => {
     let pct;
     if (isNoise) {
@@ -3661,18 +3697,27 @@ try {
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (!k) continue;
-    // weather_, montaisons_, tides_, licor_ : purgés si pas du jour courant.
-    // Pour weather_, le cache de 30 min interne à fetchWeather() gère la
-    // fraîcheur. Pas besoin de purger à chaque démarrage — ça causait
+    // weather_, montaisons_, tides_, licor_, pata_, prev_ : purgés si pas du
+    // jour courant. Pour weather_, le cache de 30 min interne à fetchWeather()
+    // gère la fraîcheur. Pas besoin de purger à chaque démarrage — ça causait
     // jusqu'à 240 appels Open-Meteo par jour si l'app était ouverte 10x.
     // Maintenant : cache 30 min respecté, ~24 appels/jour pour 12 stations.
+    //
+    // v1.58 : prev_ ajouté. fetchPrevision écrivait `prev_{station}_{date}`
+    // depuis v1.29 sans que rien ne l'efface jamais — une clé par station et
+    // par jour s'accumulait indéfiniment (15 stations × 365 jours ≈ 5 500 clés
+    // au bout d'un an). Chacune est minuscule, mais c'était la seule vraie fuite
+    // du fichier et un candidat direct au QuotaExceededError que safeSetItem
+    // absorbe en silence. Vérifié par simulation de cette boucle même.
     if ((k.startsWith('weather_') || k.startsWith('montaisons_')
          || k.startsWith('tides_') || k.startsWith('licor_')
-         || k.startsWith('pata_'))
+         || k.startsWith('pata_') || k.startsWith('prev_'))
         && !k.endsWith(todayStr)) {
       toRemove.push(k);
     }
-    // Les UUIDs IWLS (iwls_uuid_*) et l'historique (hist_*) sont permanents
+    // Permanents et voulus tels quels : hist_* (historique des débits),
+    // iwls_uuid_* (résolution de station, ne change jamais), anglers_hist_*
+    // (valeur d'hier pour la Matapédia, auto-nettoyé à 14 jours en interne).
   }
   toRemove.forEach(k => localStorage.removeItem(k));
 } catch(e) {}
