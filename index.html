@@ -715,7 +715,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.58</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.59</div>
 </footer>
 
 <script>
@@ -821,7 +821,7 @@ const STATIONS = [
     ]
   },
   // Patapédia — AUCUNE station hydrométrique CEHQ. La hauteur d'eau est une
-  // saisie manuelle de la CGRMP (jauge en pieds, ex. « 5½ »), publiée sur la
+  // saisie manuelle de la CGRMP (jauge en POUCES, ex. « 5½ »), publiée sur la
   // même page que les statistiques de pêche. Pas de débit, pas de prévision,
   // pas de sparkline — comme Mitis. Pas de marées non plus : le confluent avec
   // la Restigouche est trop en amont pour que la marée y monte.
@@ -2128,6 +2128,43 @@ async function fetchPrevision(stationId) {
   }
 }
 
+// ─── Jauge CGRMP : texte → nombre (v1.59) ─────────────────────────────────────
+// La CGRMP publie la hauteur d'eau de la Patapédia en POUCES, saisie à la main,
+// au demi-pouce près. Le texte varie dans sa forme : « 5½ », « 5 1/2 », « 5.5 »,
+// « 6 ». Pour comparer deux relevés il faut un nombre.
+//
+// Retourne null si rien d'exploitable — le champ est parfois laissé vide (cas
+// observé sur la Causapscal), et une jauge absente ne doit pas devenir un zéro
+// qui simulerait un effondrement du niveau.
+function jaugeEnNombre(txt) {
+  if (!txt) return null;
+  let s = String(txt).trim()
+    .replace(/½/g, ' 1/2').replace(/¼/g, ' 1/4').replace(/¾/g, ' 3/4')
+    .replace(/⅓/g, ' 1/3').replace(/⅔/g, ' 2/3')
+    .replace(/,/g, '.');
+  // « 5 1/2 » ou « 5 1/2 po » → entier + fraction
+  let m = s.match(/(\d+)\s+(\d+)\s*\/\s*(\d+)/);
+  if (m) {
+    const d = parseFloat(m[3]);
+    if (d > 0) return parseFloat(m[1]) + parseFloat(m[2]) / d;
+  }
+  // Fraction seule (« 1/2 »)
+  m = s.match(/^\s*(\d+)\s*\/\s*(\d+)/);
+  if (m) {
+    const d = parseFloat(m[2]);
+    if (d > 0) return parseFloat(m[1]) / d;
+  }
+  // Décimal ou entier
+  m = s.match(/(\d+(?:\.\d+)?)/);
+  if (m) {
+    const v = parseFloat(m[1]);
+    // Garde-fou : une jauge de rivière tient entre 0 et 200 pouces. Au-delà,
+    // on a ramassé autre chose (une année, un numéro de téléphone).
+    if (!isNaN(v) && v >= 0 && v <= 200) return v;
+  }
+  return null;
+}
+
 // ─── Patapédia — hauteur d'eau + pêcheurs + captures par secteur (CGRMP) ─────
 // La page Statistiques de la CGRMP porte TROIS tableaux journaliers, dans
 // l'ordre Matapédia, Patapédia, Causapscal. Il ne faut surtout pas ancrer sur
@@ -2239,6 +2276,57 @@ async function fetchPatapedia() {
     }
 
     const data = { date, hauteur, pecheurs, secteurs };
+
+    // ─── Historique de la jauge (v1.59) ───────────────────────────────────
+    // La CGRMP ne publie QUE la valeur du jour. Pour donner une tendance, on
+    // conserve nous-mêmes les relevés précédents — même principe que
+    // `anglers_hist_` pour les pêcheurs de la Matapédia.
+    //
+    // On indexe sur la DATE PUBLIÉE par la CGRMP (« 18 août »), pas sur la date
+    // du jour : si la page reste figée une fin de semaine, on n'enregistre pas
+    // trois fois le même relevé et on ne fabrique pas une fausse stabilité.
+    //
+    // La comparaison se fait sur la valeur NUMÉRIQUE (jaugeNum), pas sur le
+    // texte : « 5½ » et « 5 1/2 » sont le même niveau écrit différemment.
+    try {
+      const hk = 'pata_jauge_hist';
+      let hist = {};
+      try { hist = JSON.parse(localStorage.getItem(hk) || '{}'); } catch(e) {}
+
+      // Relevé le plus récent AUTRE que celui d'aujourd'hui = « précédent ».
+      // On trie par horodatage d'enregistrement, pas par le libellé de date
+      // (« 18 août » ne se trie pas tout seul, et l'ordre alphabétique
+      // placerait avril avant septembre).
+      let prec = null;
+      Object.keys(hist).forEach(d => {
+        if (d === date) return;
+        const e = hist[d];
+        if (!e || e.num == null) return;
+        if (!prec || e._t > prec._t) prec = { ...e, date: d };
+      });
+
+      if (hauteur && date) {
+        const num = jaugeEnNombre(hauteur);
+        if (num != null && (!hist[date] || hist[date].num !== num)) {
+          hist[date] = { txt: hauteur, num, _t: Date.now() };
+          // Ne garder que les 30 derniers relevés — inutile d'accumuler.
+          const cles = Object.keys(hist).sort((a, b) => hist[a]._t - hist[b]._t);
+          while (cles.length > 30) delete hist[cles.shift()];
+          safeSetItem(hk, JSON.stringify(hist));
+        }
+        data.jaugeNum = num;
+      }
+
+      if (prec) {
+        data.prec = { txt: prec.txt, num: prec.num, date: prec.date };
+        if (data.jaugeNum != null && prec.num != null) {
+          data.tendance = data.jaugeNum > prec.num ? 'up'
+                        : data.jaugeNum < prec.num ? 'down'
+                        :                            'stable';
+        }
+      }
+    } catch(e) {}
+
     safeSetItem(key, JSON.stringify({ data, _t: Date.now() }));
     return data;
   } catch(e) {}
@@ -2969,7 +3057,18 @@ function renderCard(stationId) {
 
   // Tendance
   const tb = card.querySelector('.trend-badge');
-  if (st.trend === 'up')        { tb.className = 'trend-badge trend-up';   tb.textContent = 'Montante'; }
+  if (stationId === 'PATAPEDIA') {
+    // Jauge manuelle au demi-pouce : contrairement au débit, deux relevés
+    // identiques sont FRÉQUENTS et parfaitement réels — pas du bruit de
+    // capteur. « Stable » est donc une information, pas un pis-aller, et
+    // afficher Montante ou Descendante à sa place serait faux.
+    const t = st.pata?.tendance;
+    tb.style.display = t ? '' : 'none';
+    if (t === 'up')          { tb.className = 'trend-badge trend-up';   tb.textContent = 'Montante'; }
+    else if (t === 'down')   { tb.className = 'trend-badge trend-down'; tb.textContent = 'Descendante'; }
+    else if (t === 'stable') { tb.className = 'trend-badge trend-nd';   tb.textContent = 'Stable'; }
+  }
+  else if (st.trend === 'up')   { tb.className = 'trend-badge trend-up';   tb.textContent = 'Montante'; }
   else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.textContent = 'Descendante'; }
   else                          { tb.className = 'trend-badge trend-nd';   tb.textContent = 'N/D'; }
 
@@ -3002,9 +3101,13 @@ function renderCard(stationId) {
   // Message statut
   const msg = card.querySelector('.status-msg');
   if (stationId === 'PATAPEDIA') {
-    msg.textContent = st.pata
-      ? (st.pata.date ? `Jauge CGRMP — en date du ${st.pata.date}` : 'Jauge CGRMP')
-      : 'Chargement...';
+    if (st.pata) {
+      let t = st.pata.date ? `Jauge CGRMP — en date du ${st.pata.date}` : 'Jauge CGRMP';
+      if (st.pata.prec) t += ` · ${st.pata.prec.date} : ${st.pata.prec.txt} po`;
+      msg.textContent = t;
+    } else {
+      msg.textContent = 'Chargement...';
+    }
     msg.className = 'status-msg' + (st.pata ? ' ok' : '');
   } else {
     msg.textContent = st.msg || '';
@@ -3476,7 +3579,7 @@ function buildCards() {
         <div class="debit-main">
           <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:4px">
             <div class="debit-value" style="color:#9ab5c7">—</div>
-            <div class="debit-unit">${s.id === 'PATAPEDIA' ? '' : 'm³/s'}</div>
+            <div class="debit-unit">${s.id === 'PATAPEDIA' ? 'po' : 'm³/s'}</div>
           </div>
           <div class="trend-badge trend-nd">N/D</div>
         </div>
@@ -3679,8 +3782,12 @@ function buildCards() {
       if (statsRow) statsRow.style.display = 'none';
     }
     // Patapédia : la jauge CGRMP est une valeur ponctuelle saisie à la main.
-    // Aucun historique, donc aucune tendance à afficher — un badge « N/D »
-    // laisserait croire à une donnée manquante alors qu'elle n'existe pas.
+    // v1.59 : la Patapédia a maintenant une tendance, calculée en comparant la
+    // jauge du jour au relevé précédent conservé dans `pata_jauge_hist`. Le
+    // badge est donc piloté par renderCard. On le masque seulement au départ :
+    // au tout premier lancement il n'existe aucun relevé antérieur, et un
+    // « N/D » laisserait croire à une donnée manquante alors qu'elle n'existe
+    // pas encore. Il apparaîtra dès le deuxième jour de consultation.
     if (s.id === 'PATAPEDIA') {
       const tb = div.querySelector('.trend-badge');
       if (tb) tb.style.display = 'none';
