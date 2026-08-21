@@ -715,7 +715,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.59</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.60</div>
 </footer>
 
 <script>
@@ -2165,6 +2165,28 @@ function jaugeEnNombre(txt) {
   return null;
 }
 
+// ─── Jauge : nombre → texte normalisé (v1.60) ─────────────────────────────────
+// La CGRMP saisit la hauteur à la main et la forme CHANGE d'un jour à l'autre :
+// « 5½ » le 18 août, « 5 1/2 » le 19, « 5 pouces » le 20. Afficher le texte brut
+// donnait donc une carte à l'allure variable, et le 20 août un doublon d'unité
+// (« 5 pouces po ») qui débordait sur deux lignes.
+//
+// On affiche désormais la valeur NUMÉRIQUE reformatée : peu importe comment la
+// CGRMP l'écrit, la carte rend toujours pareil. L'unité « po » est ajoutée par
+// la carte, jamais par cette fonction.
+//
+// Si jaugeEnNombre n'a rien compris, on retourne null et la carte montre « — ».
+// Choix assumé : mieux vaut avouer qu'on n'a pas su lire que d'afficher un
+// texte incompréhensible en gros caractères.
+function jaugeTexte(n) {
+  if (n == null || isNaN(n)) return null;
+  const ent = Math.floor(n), frac = n - ent;
+  const FR = [[0.25, '¼'], [0.5, '½'], [0.75, '¾'], [0.333, '⅓'], [0.667, '⅔']];
+  const f = FR.find(([v]) => Math.abs(frac - v) < 0.02);
+  if (f) return (ent || '') + f[1];
+  return String(Math.round(n * 100) / 100).replace('.', ',');
+}
+
 // ─── Patapédia — hauteur d'eau + pêcheurs + captures par secteur (CGRMP) ─────
 // La page Statistiques de la CGRMP porte TROIS tableaux journaliers, dans
 // l'ordre Matapédia, Patapédia, Causapscal. Il ne faut surtout pas ancrer sur
@@ -2270,12 +2292,21 @@ async function fetchPatapedia() {
         .replace(/&rsquo;|&#39;/gi, "'")
         .replace(/&frac12;/gi, '½').replace(/&frac14;/gi, '¼').replace(/&frac34;/gi, '¾')
         .trim();
-      // Une jauge tient en quelques caractères (« 5½ », « 6 », « 4 3/4 »).
-      // Au-delà, c'est qu'on a ramassé autre chose — on préfère ne rien montrer.
-      if (brut && brut.length <= 12) hauteur = brut;
+      // La jauge tient en quelques caractères, mais la CGRMP écrit parfois
+      // l'unité (« 5 pouces », « 5 1/2 pouces » = 12 caractères). On tolère
+      // jusqu'à 20 : au-delà on a ramassé autre chose. L'unité est de toute
+      // façon retirée à l'affichage, jaugeTexte reformatant depuis le nombre.
+      if (brut && brut.length <= 20) hauteur = brut;
     }
 
     const data = { date, hauteur, pecheurs, secteurs };
+
+    // v1.60 : normaliser la valeur affichée AVANT toute autre logique, et sans
+    // dépendre de la date. Si on le faisait seulement dans le bloc d'historique
+    // (qui exige une date), un jour où la CGRMP omettrait la date ferait
+    // ressortir le texte brut — donc le doublon d'unité qu'on vient de corriger.
+    const numJauge = jaugeEnNombre(hauteur);
+    if (numJauge != null) data.hauteur = jaugeTexte(numJauge);
 
     // ─── Historique de la jauge (v1.59) ───────────────────────────────────
     // La CGRMP ne publie QUE la valeur du jour. Pour donner une tendance, on
@@ -2306,7 +2337,7 @@ async function fetchPatapedia() {
       });
 
       if (hauteur && date) {
-        const num = jaugeEnNombre(hauteur);
+        const num = numJauge;
         if (num != null && (!hist[date] || hist[date].num !== num)) {
           hist[date] = { txt: hauteur, num, _t: Date.now() };
           // Ne garder que les 30 derniers relevés — inutile d'accumuler.
@@ -2318,7 +2349,8 @@ async function fetchPatapedia() {
       }
 
       if (prec) {
-        data.prec = { txt: prec.txt, num: prec.num, date: prec.date };
+        data.prec = { txt: jaugeTexte(prec.num) || prec.txt,
+                      num: prec.num, date: prec.date };
         if (data.jaugeNum != null && prec.num != null) {
           data.tendance = data.jaugeNum > prec.num ? 'up'
                         : data.jaugeNum < prec.num ? 'down'
