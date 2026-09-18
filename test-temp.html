@@ -3,45 +3,50 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diag hist</title>
+<title>Test Open-Meteo</title>
 <style>
 body{background:#142230;color:#f0ede4;font-family:monospace;padding:14px;font-size:12px}
 h1{font-size:14px;color:#c9a84c}
-pre{white-space:pre-wrap;font-size:11px;background:#1b2d3e;padding:9px;border-radius:6px}
+pre{white-space:pre-wrap;word-break:break-all;font-size:11px;
+    background:#1b2d3e;padding:9px;border-radius:6px}
 </style>
 </head>
 <body>
-<h1>Historique — Bonaventure</h1>
-<pre id="out">Lecture...</pre>
+<h1>Test Open-Meteo — Bonaventure</h1>
+<pre id="out">Demarrage...</pre>
 
 <script>
 var out = document.getElementById("out");
 function log(s){ out.textContent += "\n" + s; }
 window.onerror = function(m,f,l){ log("ERREUR ligne " + l + " : " + m); };
 
-var h = [];
-try { h = JSON.parse(localStorage.getItem("hist_010802") || "[]"); }
-catch(e){ log("lecture impossible : " + e.message); }
+var base = "https://api.open-meteo.com/v1/forecast?latitude=48.6280&longitude=-65.5240"
+         + "&past_days=1&forecast_days=1&timezone=America%2FToronto";
+var urlGem  = base + "&hourly=precipitation&models=gem_seamless";
+var urlProb = base + "&daily=sunrise,sunset,precipitation_probability_max";
 
-log("Points en memoire : " + h.length);
-if (!h.length) { log("VIDE — ouvre l app d abord, puis reviens ici"); }
-else {
-  var d0 = new Date(h[0].ts), d1 = new Date(h[h.length-1].ts);
-  log("Etendue : " + ((d1-d0)/3600000).toFixed(1) + " h");
-  log("Attendu si 15 min : " + ((h.length-1)*0.25).toFixed(1) + " h\n");
-  log("Les 30 derniers (heure locale | ecart min | debit) :");
-  var prev = null;
-  h.slice(-30).forEach(function(e){
-    var d = new Date(e.ts);
-    var ec = prev ? Math.round((d - prev)/60000) : 0;
-    prev = d;
-    log("  " + d.toLocaleTimeString("fr-CA") +
-        "  " + String(ec).padStart(4) + " min  " + e.debit);
+function essai(nom, url){
+  log("\n=== " + nom + " ===");
+  var ctrl = new AbortController();
+  var tmout = setTimeout(function(){ ctrl.abort(); }, 8000);
+  var t0 = Date.now();
+  fetch(url, { cache: "no-store", signal: ctrl.signal })
+  .then(function(r){
+    clearTimeout(tmout);
+    log("HTTP " + r.status + "  (" + (Date.now()-t0) + " ms)");
+    return r.text();
+  })
+  .then(function(t){
+    log(t.substring(0,600));
+  })
+  .catch(function(e){
+    clearTimeout(tmout);
+    log("ECHEC apres " + (Date.now()-t0) + " ms : " + e.name + " - " + e.message);
   });
-  var dbl = {}, n = 0;
-  h.forEach(function(e){ if (dbl[e.debit]) n++; dbl[e.debit] = 1; });
-  log("\nValeurs distinctes : " + Object.keys(dbl).length + " sur " + h.length);
 }
+
+essai("GEM (pluie)", urlGem);
+essai("PROB (lever/coucher/prob)", urlProb);
 </script>
 </body>
 </html>
