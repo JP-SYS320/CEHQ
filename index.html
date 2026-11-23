@@ -715,7 +715,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.60</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.61</div>
 </footer>
 
 <script>
@@ -1683,9 +1683,19 @@ async function resolveIwlsUuid(code) {
   const stored = localStorage.getItem(`iwls_uuid_${code}`);
   if (stored) { iwlsUuidCache[code] = stored; return stored; }
   try {
-    const res = await fetch(`https://api-iwls.dfo-mpo.gc.ca/api/v1/stations?code=${code}`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const data = await res.json();
+    // v1.61 : garde de temps. Le timer reste actif jusqu'a la fin de la lecture
+    // du corps (res.json), pas seulement jusqu'aux en-tetes : un serveur qui
+    // repond puis cesse d'envoyer pendrait sinon indefiniment.
+    const ctrl = new AbortController();
+    const tmout = setTimeout(() => ctrl.abort(), 10000);
+    let data;
+    try {
+      const res = await fetch(`https://api-iwls.dfo-mpo.gc.ca/api/v1/stations?code=${code}`, { cache: 'no-store', signal: ctrl.signal });
+      if (!res.ok) return null;
+      data = await res.json();
+    } finally {
+      clearTimeout(tmout);
+    }
     if (data?.[0]?.id) {
       iwlsUuidCache[code] = data[0].id;
       safeSetItem(`iwls_uuid_${code}`, data[0].id);
@@ -1719,12 +1729,20 @@ async function fetchTides(s) {
     const from = fromDate.toISOString().substring(0, 19) + 'Z';
     const to   = toDate.toISOString().substring(0, 19) + 'Z';
 
-    const res = await fetch(
-      `https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/${uuid}/data?time-series-code=wlp-hilo&from=${from}&to=${to}`,
-      { cache: 'no-store' }
-    );
-    if (!res.ok) return { error: true };
-    const data = await res.json();
+    // v1.61 : meme garde de temps que resolveIwlsUuid (10 s, corps inclus).
+    const ctrlT = new AbortController();
+    const tmoutT = setTimeout(() => ctrlT.abort(), 10000);
+    let data;
+    try {
+      const res = await fetch(
+        `https://api-iwls.dfo-mpo.gc.ca/api/v1/stations/${uuid}/data?time-series-code=wlp-hilo&from=${from}&to=${to}`,
+        { cache: 'no-store', signal: ctrlT.signal }
+      );
+      if (!res.ok) return { error: true };
+      data = await res.json();
+    } finally {
+      clearTimeout(tmoutT);
+    }
     if (!data?.length) return { unavailable: true };
 
     const values = data.map(t => t.value);
@@ -2320,7 +2338,7 @@ async function fetchPatapedia() {
     // La comparaison se fait sur la valeur NUMÉRIQUE (jaugeNum), pas sur le
     // texte : « 5½ » et « 5 1/2 » sont le même niveau écrit différemment.
     try {
-      const hk = 'pata_jauge_hist';
+      const hk = 'jauge_pata_hist';
       let hist = {};
       try { hist = JSON.parse(localStorage.getItem(hk) || '{}'); } catch(e) {}
 
@@ -3815,7 +3833,7 @@ function buildCards() {
     }
     // Patapédia : la jauge CGRMP est une valeur ponctuelle saisie à la main.
     // v1.59 : la Patapédia a maintenant une tendance, calculée en comparant la
-    // jauge du jour au relevé précédent conservé dans `pata_jauge_hist`. Le
+    // jauge du jour au relevé précédent conservé dans `jauge_pata_hist`. Le
     // badge est donc piloté par renderCard. On le masque seulement au départ :
     // au tout premier lancement il n'existe aucun relevé antérieur, et un
     // « N/D » laisserait croire à une donnée manquante alors qu'elle n'existe
