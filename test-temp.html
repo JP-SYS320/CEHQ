@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Test Open-Meteo</title>
+<title>Test Dartmouth</title>
 <style>
 body{background:#142230;color:#f0ede4;font-family:monospace;padding:14px;font-size:12px}
 h1{font-size:14px;color:#c9a84c}
@@ -12,41 +12,105 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:11px;
 </style>
 </head>
 <body>
-<h1>Test Open-Meteo — Bonaventure</h1>
+<h1>Test CEHQ - Dartmouth (020602)</h1>
 <pre id="out">Demarrage...</pre>
 
 <script>
 var out = document.getElementById("out");
-function log(s){ out.textContent += "\n" + s; }
-window.onerror = function(m,f,l){ log("ERREUR ligne " + l + " : " + m); };
+var T0 = Date.now();
+function log(s){ out.textContent += "\n[" + ((Date.now() - T0) / 1000).toFixed(1) + " s] " + s; }
+window.onerror = function(m, f, l){ log("ERREUR ligne " + l + " : " + m); };
 
-var base = "https://api.open-meteo.com/v1/forecast?latitude=48.6280&longitude=-65.5240"
-         + "&past_days=1&forecast_days=1&timezone=America%2FToronto";
-var urlGem  = base + "&hourly=precipitation&models=gem_seamless";
-var urlProb = base + "&daily=sunrise,sunset,precipitation_probability_max";
-
-function essai(nom, url){
-  log("\n=== " + nom + " ===");
-  var ctrl = new AbortController();
-  var tmout = setTimeout(function(){ ctrl.abort(); }, 8000);
-  var t0 = Date.now();
-  fetch(url, { cache: "no-store", signal: ctrl.signal })
-  .then(function(r){
-    clearTimeout(tmout);
-    log("HTTP " + r.status + "  (" + (Date.now()-t0) + " ms)");
-    return r.text();
-  })
-  .then(function(t){
-    log(t.substring(0,600));
-  })
-  .catch(function(e){
-    clearTimeout(tmout);
-    log("ECHEC apres " + (Date.now()-t0) + " ms : " + e.name + " - " + e.message);
-  });
+var PROXY = "https://currentrun-proxy.jptremblay18-cc2.workers.dev/?url=";
+function urlCehq(id){
+  return PROXY + encodeURIComponent(
+    "https://www.cehq.gouv.qc.ca/suivihydro/tableau.asp?NoStation=" + id + "%20%20%20%20");
 }
 
-essai("GEM (pluie)", urlGem);
-essai("PROB (lever/coucher/prob)", urlProb);
+function nett(h){
+  return h.replace(/&nbsp;/gi, " ").replace(/&#160;/g, " ")
+          .replace(/&#xa0;/gi, " ").replace(/<[^>]*>/g, " ");
+}
+
+function analyser(nom, html){
+  var txt = nett(html);
+  var re = /(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):\d{2}/g;
+  var m, total = 0, retenues = 0, dernier = -Infinity;
+  while ((m = re.exec(txt)) !== null) {
+    total++;
+    var d = m[1].split("-"), t = m[2].split(":");
+    var ms = Date.UTC(+d[0], +d[1] - 1, +d[2], +t[0] + 5, +t[1], 0);
+    var age = (Date.now() - ms) / 3600000;
+    if (ms > dernier) dernier = ms;
+    if (age >= -2 && age <= 30) retenues++;
+  }
+  log(nom + " lignes date+heure trouvees : " + total);
+  log(nom + " lignes dans la fenetre de 30 h (retenues par l app) : " + retenues);
+  if (dernier > -Infinity) {
+    var ageH = (Date.now() - dernier) / 3600000;
+    log(nom + " mesure la plus recente : il y a " + ageH.toFixed(1) + " h");
+  } else {
+    log(nom + " aucune mesure lisible dans la page");
+  }
+  return retenues;
+}
+
+function essai(nom, id, maxT){
+  var tent = 0;
+  var tDebut = Date.now();
+  function fin(msg){
+    log(nom + " FIN : " + msg + " - temps total " + ((Date.now() - tDebut) / 1000).toFixed(1) + " s");
+  }
+  function echecOuReprise(raison){
+    tent++;
+    if (tent < maxT) {
+      log(nom + " " + raison + " -> pause 3 s puis nouvelle tentative");
+      setTimeout(une, 3000);
+    } else {
+      fin("abandon apres " + tent + " tentative(s), " + raison);
+    }
+  }
+  function une(){
+    var ctrl = new AbortController();
+    var t0 = Date.now();
+    var tm = setTimeout(function(){ ctrl.abort(); }, 20000);
+    log(nom + " tentative " + (tent + 1) + " : requete envoyee");
+    fetch(urlCehq(id), { cache: "no-store", signal: ctrl.signal })
+    .then(function(r){
+      clearTimeout(tm);
+      log(nom + " HTTP " + r.status + " apres " + ((Date.now() - t0) / 1000).toFixed(1) + " s");
+      return r.text().then(function(t){ return { ok: r.ok, t: t }; });
+    })
+    .then(function(x){
+      log(nom + " corps recu : " + x.t.length + " caracteres (" +
+          ((Date.now() - t0) / 1000).toFixed(1) + " s)");
+      if (!x.ok || x.t.length < 10000) {
+        if (x.t.length < 400) log("   contenu : " + x.t.replace(/\s+/g, " ").substring(0, 300));
+        echecOuReprise("ECHEC aux yeux de l app (HTTP non OK ou moins de 10000 caracteres)");
+        return;
+      }
+      var r = analyser(nom, x.t);
+      if (r === 0) {
+        fin("reponse recue mais AUCUNE ligne exploitable (l app abandonne en silence)");
+      } else {
+        fin("succes");
+      }
+    })
+    .catch(function(e){
+      clearTimeout(tm);
+      log(nom + " ECHEC apres " + ((Date.now() - t0) / 1000).toFixed(1) + " s : " + e.name + " - " + e.message);
+      echecOuReprise(e.name === "AbortError" ? "delai de 20 s depasse" : "erreur reseau");
+    });
+  }
+  une();
+}
+
+essai("DARTMOUTH", "020602", 2);
+essai("TEMOIN Bonaventure", "010802", 2);
+
+setTimeout(function(){
+  log("60 s ecoulees : si une ligne FIN manque, cette requete pend encore");
+}, 60000);
 </script>
 </body>
 </html>
