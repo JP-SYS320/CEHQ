@@ -715,7 +715,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.61</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.62</div>
 </footer>
 
 <script>
@@ -746,6 +746,17 @@ Object.defineProperty(globalThis, 'todayStr', { get: _computeTodayStr });
 // portée globale. Voir le commentaire v1.49 à sa définition.
 
 const MOIS = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
+
+// v1.62 : seuil d'âge au-delà duquel une station est déclarée HORS SERVICE.
+// CEHQ publie aux 15 à 30 minutes : un trou d'une journée complète n'est plus
+// une lenteur. Avant, la carte d'une station morte (Dartmouth, dernière mesure
+// le 6 octobre) affichait ce dernier débit en grand avec un badge Montante, car
+// le secours CEHQ renvoie le dernier point de l'historique sans plafond d'âge.
+const HORS_SERVICE_H = 24;
+function jourCourtFr(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? '—' : `${d.getDate()} ${MOIS[d.getMonth()]}`;
+}
 const MOON = {
   new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
          '2026-06-15','2026-07-14','2026-08-12','2026-09-11','2026-10-10',
@@ -2524,6 +2535,9 @@ async function loadStation(stationId) {
           debit: fb.debit, trend: fb.trend,
           var24h: fb.var24h, max24h: fb.max24h, min24h: fb.min24h,
           status: 'ok',
+          // v1.62 : sans _shownIso, une station morte atteinte par ce chemin (MSP a
+          // échoué, l'hydratation CEHQ arrive ensuite) échapperait au mode hors service.
+          _shownIso: fb._iso || null,
           msg: fb.timestamp ? `Mesure : ${fb.timestamp}` : 'Données reçues'
         });
         scheduleRender(stationId);
@@ -3085,6 +3099,13 @@ function renderCard(stationId) {
   // pas utilisées visuellement et ont été retirées de :root pour alléger le CSS.
   card.querySelector('.card-color-bar').style.background = 'var(--debit-color)';
 
+  // v1.62 : station hors service = la mesure AFFICHEE (_shownIso) date de plus de
+  // HORS_SERVICE_H heures. Aucun effet tant que la carte charge, ni sur les
+  // stations sans débit (Mitis, Patapédia) qui n'ont pas de _shownIso.
+  // Une date illisible donne NaN, et NaN > 24 est faux : on n'invente rien.
+  const horsService = st.status === 'ok' && !!st._shownIso
+    && (Date.now() - new Date(st._shownIso).getTime()) / 3600000 > HORS_SERVICE_H;
+
   // Débit — ou hauteur d'eau pour les stations sans hydrométrie (Patapédia).
   // La jauge CGRMP est un TEXTE (« 5½ »), pas un nombre : aucun toFixed, aucune
   // unité ajoutée. On ne sait pas dans quelle unité la CGRMP la publie et on ne
@@ -3099,7 +3120,7 @@ function renderCard(stationId) {
     debitEl.style.color = '#9ab5c7';
   } else if (st.debit !== null) {
     debitEl.textContent = st.debit.toFixed(1);
-    debitEl.style.color = 'var(--debit-color)';
+    debitEl.style.color = horsService ? '#9ab5c7' : 'var(--debit-color)';
   } else {
     debitEl.textContent = '—';
     debitEl.style.color = '#9ab5c7';
@@ -3118,6 +3139,7 @@ function renderCard(stationId) {
     else if (t === 'down')   { tb.className = 'trend-badge trend-down'; tb.textContent = 'Descendante'; }
     else if (t === 'stable') { tb.className = 'trend-badge trend-nd';   tb.textContent = 'Stable'; }
   }
+  else if (horsService)         { tb.className = 'trend-badge trend-nd';   tb.textContent = 'Hors service'; }
   else if (st.trend === 'up')   { tb.className = 'trend-badge trend-up';   tb.textContent = 'Montante'; }
   else if (st.trend === 'down') { tb.className = 'trend-badge trend-down'; tb.textContent = 'Descendante'; }
   else                          { tb.className = 'trend-badge trend-nd';   tb.textContent = 'N/D'; }
@@ -3135,7 +3157,7 @@ function renderCard(stationId) {
       `<div class="spark-bar" style="height:8%;background:rgba(201,168,76,0.06)"></div>`
     ).join('');
   } else {
-    sparkEl.innerHTML = buildSpark(vals.length ? vals : [st.debit], st.trend);
+    sparkEl.innerHTML = buildSpark(vals.length ? vals : [st.debit], horsService ? null : st.trend);
   }
 
   // Mini-graphique prévision 4 jours (à gauche du débit dans l'en-tête)
@@ -3146,7 +3168,7 @@ function renderCard(stationId) {
   const prevEl = card.querySelector('.prevision-mini');
   const debitForPrev = st.debit !== null ? st.debit
                       : (vals.length ? vals[vals.length - 1] : null);
-  if (prevEl) prevEl.innerHTML = buildPrevisionMini(debitForPrev, st.trend, st.prevision);
+  if (prevEl) prevEl.innerHTML = buildPrevisionMini(debitForPrev, horsService ? null : st.trend, st.prevision);
 
   // Message statut
   const msg = card.querySelector('.status-msg');
@@ -3159,6 +3181,9 @@ function renderCard(stationId) {
       msg.textContent = 'Chargement...';
     }
     msg.className = 'status-msg' + (st.pata ? ' ok' : '');
+  } else if (horsService) {
+    msg.textContent = `Aucune mesure depuis le ${jourCourtFr(st._shownIso)}`;
+    msg.className = 'status-msg';
   } else {
     msg.textContent = st.msg || '';
     msg.className = 'status-msg' + (st.status === 'ok' ? ' ok' : st.status === 'error' ? ' err' : '');
@@ -3169,15 +3194,21 @@ function renderCard(stationId) {
   // ── Détail ──
   const fmt = v => v !== null ? v.toFixed(1) + '<span style="font-size:0.55rem;color:var(--muted);margin-left:2px;font-weight:400">m³/s</span>' : 'N/D';
 
+  // v1.62 : hors service, ces trois chiffres décriraient des mesures vieilles de
+  // plusieurs semaines sous une étiquette « 24h » : on les remplace par N/D.
+  const var24h = horsService ? null : st.var24h;
+  const max24h = horsService ? null : st.max24h;
+  const min24h = horsService ? null : st.min24h;
+
   const varEl = card.querySelector('.dv-var');
-  if (st.var24h !== null) {
+  if (var24h !== null) {
     // On se base sur la valeur ARRONDIE (1 décimale) pour décider du signe et
     // de la couleur, afin d'éviter l'incohérence « +0.0 % » en vert (ou
     // « -0.0 % » en rouge) : une micro-variation brute non nulle mais qui
     // s'affiche 0.0 ne doit pas paraître directionnelle. Si l'affichage est
     // 0.0, on montre un « 0.0 % » neutre (gris). Sinon, vert si positif,
     // rouge si négatif (aligné sur la logique Montante/Descendante).
-    const rounded = Math.round(st.var24h * 10) / 10;
+    const rounded = Math.round(var24h * 10) / 10;
     if (rounded === 0) {
       varEl.textContent = '0.0 %';
       varEl.style.color = '#9ab5c7';
@@ -3190,8 +3221,8 @@ function renderCard(stationId) {
     varEl.textContent = 'N/D';
     varEl.style.color = '#9ab5c7';
   }
-  card.querySelector('.dv-max24').innerHTML = fmt(st.max24h);
-  card.querySelector('.dv-min24').innerHTML = fmt(st.min24h);
+  card.querySelector('.dv-max24').innerHTML = fmt(max24h);
+  card.querySelector('.dv-min24').innerHTML = fmt(min24h);
 
   card.querySelector('.dv-sunrise').textContent = st.sunrise || 'N/D';
   card.querySelector('.dv-sunset').textContent  = st.sunset  || 'N/D';
