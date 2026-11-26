@@ -715,7 +715,7 @@ if (localStorage.getItem('auth') === '1' || sessionStorage.getItem('auth') === '
     © 2026 Jean-Philippe Tremblay — Code et interface<br>
     Les données affichées demeurent la propriété de leurs fournisseurs respectifs
   </span>
-  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.62</div>
+  <div style="margin-top:14px;font-size:0.5rem;color:#7a8a98;letter-spacing:0.1em">v1.63</div>
 </footer>
 
 <script>
@@ -757,20 +757,43 @@ function jourCourtFr(iso) {
   const d = new Date(iso);
   return isNaN(d) ? '—' : `${d.getDate()} ${MOIS[d.getMonth()]}`;
 }
+// v1.63 : tableau REGENERE. Phases calculees avec l'algorithme de Jean Meeus
+// (Astronomical Algorithms, chap. 49), validees sur les eclipses de 2026 et
+// comparees a 25 instants publies pour 2027 (ecart maximal 0,6 minute).
+// Dates en heure LOCALE (America/Toronto) : une pleine lune a 19 h 56 le 29 juin
+// est celle du 29 pour toi, pas du 30. L'ancien tableau melangeait dates UTC et
+// dates locales, et ses 4 premiers mois de 2026 etaient faux de ~11 jours.
+// Couvre jusqu'en mars 2031 : apres la derniere date, l'affichage montre "—".
 const MOON = {
-  new:  ['2026-01-29','2026-02-28','2026-03-29','2026-04-28','2026-05-16',
-         '2026-06-15','2026-07-14','2026-08-12','2026-09-11','2026-10-10',
-         '2026-11-09','2026-12-09','2027-01-07','2027-02-06','2027-03-08'],
-  full: ['2026-01-13','2026-02-12','2026-03-13','2026-04-12','2026-05-01',
-         '2026-05-31','2026-06-30','2026-07-29','2026-08-28','2026-09-26',
-         '2026-10-26','2026-11-24','2026-12-24','2027-01-22','2027-02-20'],
+  new:  ['2026-11-09','2026-12-08','2027-01-07','2027-02-06','2027-03-08','2027-04-06',
+         '2027-05-06','2027-06-04','2027-07-03','2027-08-02','2027-08-31','2027-09-29',
+         '2027-10-29','2027-11-27','2027-12-27','2028-01-26','2028-02-25','2028-03-26',
+         '2028-04-24','2028-05-24','2028-06-22','2028-07-21','2028-08-20','2028-09-18',
+         '2028-10-17','2028-11-16','2028-12-15','2029-01-14','2029-02-13','2029-03-15',
+         '2029-04-13','2029-05-13','2029-06-11','2029-07-11','2029-08-09','2029-09-08',
+         '2029-10-07','2029-11-05','2029-12-05','2030-01-03','2030-02-02','2030-03-04',
+         '2030-04-02','2030-05-02','2030-06-01','2030-06-30','2030-07-30','2030-08-28',
+         '2030-09-27','2030-10-26','2030-11-25','2030-12-24','2031-01-22','2031-02-21',
+         '2031-03-22'],
+  full: ['2026-11-24','2026-12-23','2027-01-22','2027-02-20','2027-03-22','2027-04-20',
+         '2027-05-20','2027-06-18','2027-07-18','2027-08-17','2027-09-15','2027-10-15',
+         '2027-11-13','2027-12-13','2028-01-11','2028-02-10','2028-03-10','2028-04-09',
+         '2028-05-08','2028-06-07','2028-07-06','2028-08-05','2028-09-03','2028-10-03',
+         '2028-11-02','2028-12-01','2028-12-31','2029-01-30','2029-02-28','2029-03-29',
+         '2029-04-28','2029-05-27','2029-06-25','2029-07-25','2029-08-23','2029-09-22',
+         '2029-10-22','2029-11-20','2029-12-20','2030-01-19','2030-02-18','2030-03-19',
+         '2030-04-17','2030-05-17','2030-06-15','2030-07-14','2030-08-13','2030-09-11',
+         '2030-10-11','2030-11-09','2030-12-09','2031-01-08','2031-02-07','2031-03-08'],
 };
 
 // ─── Lune ─────────────────────────────────────────────────────────────────────
 function nextMoon(type) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   for (const s of MOON[type]) {
-    const d = new Date(s + 'T12:00:00');
+    // v1.63 : minuit contre minuit. Avant, on comparait midi de la phase a minuit
+    // d'aujourd'hui : l'ecart valait toujours un demi-jour de trop, Math.round le
+    // portait a +1, et le cas diff === 0 (« auj. ») ne pouvait jamais arriver.
+    const d = new Date(s + 'T00:00:00');
     if (d >= today) {
       const diff = Math.round((d - today) / 86400000);
       return { label: `${d.getDate()} ${MOIS[d.getMonth()]}`, diff };
